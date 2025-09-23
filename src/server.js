@@ -1,11 +1,30 @@
+// Add error handling at the top
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+  console.error('Stack:', error.stack);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  process.exit(1);
+});
+
+console.log('Loading dependencies...');
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { join } from 'node:path';
+console.log('Basic dependencies loaded');
+
+console.log('Loading database modules...');
 import { initDatabase, getDb } from './db.js';
 import { requireAuth, seedAdminUser, signToken } from './auth.js';
+console.log('Database modules loaded');
+
+console.log('Loading route modules...');
 import candidatesRouter from './routes/candidates-new.js';
 import dashboardRouter from './routes/dashboard.js';
 import clientsRouter from './routes/clients.js';
@@ -25,6 +44,7 @@ import alertsRouter from './routes/alerts.js';
 import licensingRouter from './routes/licensing.js';
 import eventsRouter from './routes/events.js';
 // import updatesRouter from './routes/updates.js';
+console.log('Route modules loaded');
 
 const app = express();
 
