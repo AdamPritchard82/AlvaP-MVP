@@ -36,13 +36,26 @@ const server = http.createServer((req, res) => {
       result: result,
       platform: process.platform
     }));
+  } else if (req.url === '/api/candidates/parse-cv' && req.method === 'POST') {
+    console.log('CV parse requested');
+    res.writeHead(200);
+    res.end(JSON.stringify({ 
+      success: true,
+      message: 'CV parsing endpoint is working!',
+      timestamp: new Date().toISOString(),
+      note: 'This is a test response - full CV parsing will be implemented next'
+    }));
   } else if (req.url === '/') {
     console.log('Root route requested');
     res.writeHead(200);
     res.end(JSON.stringify({ 
       message: 'Simple Server is running!',
       timestamp: new Date().toISOString(),
-      status: 'success'
+      status: 'success',
+      endpoints: {
+        health: '/health',
+        cvParse: '/api/candidates/parse-cv (POST)'
+      }
     }));
   } else {
     console.log('404 - Route not found:', req.url);
