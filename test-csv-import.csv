@@ -1,0 +1,11 @@
+FIRST NAME,LAST NAME,EMAIL,COMMUNICATIONS,CAMPAIGNS,POLICY,PUBLIC AFFAIRS,SALARY_MIN,SALARY_MAX
+Alice,Ng,alice@example.com,x,,x,,
+Bob,Smith,bob@test.com,x,x,,,45000,55000
+Charlie,Brown,invalid-email,,x,x,x,60000,50000
+Diana,Prince,,x,x,x,x,70000,
+Eve,Wilson,eve@company.co.uk,,,,,30000,40000
+
+
+
+
+
