@@ -1,5 +1,5 @@
 // Ultra-simple route test to identify the exact failing import
-console.log('=== SIMPLE ROUTE TEST STARTING ===');
+console.log('=== SIMPLE ROUTE TEST STARTING (v2) ===');
 
 async function testOneRoute() {
   try {
