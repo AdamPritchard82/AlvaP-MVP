@@ -5,7 +5,7 @@
   "main": "src/server.js",
   "scripts": {
     "dev": "node src/server.js",
-    "start": "node simple-route-test.js",
+    "start": "node ultra-simple-test.js",
     "minimal": "node minimal-server.js",
     "test": "node test-server.js",
     "run:digest": "node src/tasks/runDigest.js"
