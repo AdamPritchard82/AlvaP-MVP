@@ -1,11 +1,11 @@
 {
   "name": "alvap-backend",
   "version": "1.0.0",
-  "type": "module",
+  "type": "commonjs",
   "main": "src/server.js",
   "scripts": {
     "dev": "node src/server.js",
-    "start": "node hello-world.js",
+    "start": "node simple-server.js",
     "minimal": "node minimal-server.js",
     "test": "node test-server.js",
     "run:digest": "node src/tasks/runDigest.js"
