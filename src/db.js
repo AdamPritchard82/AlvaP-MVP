@@ -11,7 +11,7 @@ export function getDb() {
 }
 
 export function initDatabase() {
-  const dataDir = join(process.cwd(), '..', 'data');
+  const dataDir = join(process.cwd(), 'data');
   mkdirSync(dataDir, { recursive: true });
   const file = join(dataDir, 'app.db');
   db = new sqlite3.Database(file);

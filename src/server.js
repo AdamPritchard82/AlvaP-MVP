@@ -96,25 +96,32 @@ async function startServer() {
     
     console.log('=== DOOR 10 MVP BACKEND STARTING ===');
     console.log(`Port: ${PORT}`);
+    console.log(`Working Directory: ${process.cwd()}`);
     console.log(`DB File: ${dbFile}`);
     console.log(`CORS Origins: http://localhost:3000, http://localhost:5173`);
     
-    // Candidates router loaded via import
-    
+    // Initialize database
+    console.log('Initializing database...');
     initDatabase();
+    console.log('Database initialized successfully');
+    
     // Wait a moment for tables to be created
     await new Promise(resolve => setTimeout(resolve, 1000));
-    seedAdminUser();
     
-    app.listen(PORT, () => {
+    console.log('Seeding admin user...');
+    seedAdminUser();
+    console.log('Admin user seeded');
+    
+    app.listen(PORT, '0.0.0.0', () => {
       console.log('=== BACKEND STARTED SUCCESSFULLY ===');
-      console.log(`✅ Server listening on http://localhost:${PORT}`);
-      console.log(`✅ Health check: http://localhost:${PORT}/health`);
-      console.log(`✅ CV Parse: http://localhost:${PORT}/api/candidates/parse-cv`);
+      console.log(`✅ Server listening on 0.0.0.0:${PORT}`);
+      console.log(`✅ Health check: http://0.0.0.0:${PORT}/health`);
+      console.log(`✅ CV Parse: http://0.0.0.0:${PORT}/api/candidates/parse-cv`);
       console.log('=====================================');
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);
+    console.error('Error details:', error.stack);
     process.exit(1);
   }
 }
