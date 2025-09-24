@@ -5,13 +5,15 @@
   "main": "src/server.js",
   "scripts": {
     "dev": "node src/server.js",
-    "start": "node simple-server.js",
+    "start": "node production-server.js",
+    "simple": "node simple-server.js",
     "main": "node main-server.js",
     "minimal": "node minimal-server.js",
     "test": "node test-server.js",
     "run:digest": "node src/tasks/runDigest.js"
   },
   "dependencies": {
+    "bcrypt": "^5.1.1",
     "cheerio": "1.0.0-rc.12",
     "compromise": "^14.14.4",
     "cookie-parser": "1.4.6",
@@ -32,6 +34,7 @@
     "node-nlp": "^5.0.0-alpha.5",
     "nodemailer": "6.9.13",
     "pdf-parse": "1.1.1",
+    "pg": "^8.11.3",
     "resume-parser": "^1.1.0",
     "sqlite3": "^5.1.6",
     "textract": "^2.5.0",
