@@ -15,7 +15,61 @@ console.log('Message:', message);
 // Create a basic HTTP server without Express
 console.log('Creating HTTP server...');
 const http = require('http');
+const fs = require('fs');
+const path = require('path');
 const PORT = process.env.PORT || 3001;
+
+// Simple CV parsing function
+function parseCVContent(text) {
+  console.log('Parsing CV content...');
+  
+  // Extract basic information using regex
+  const emailMatch = text.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+  const phoneMatch = text.match(/(\+?[\d\s\-\(\)]{10,})/);
+  
+  // Extract name from first line
+  const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+  let firstName = '';
+  let lastName = '';
+  
+  if (lines.length > 0) {
+    const firstLine = lines[0];
+    const words = firstLine.split(/\s+/);
+    if (words.length >= 2) {
+      firstName = words[0];
+      lastName = words.slice(1).join(' ');
+    } else if (words.length === 1) {
+      firstName = words[0];
+    }
+  }
+  
+  // Extract skills based on keywords
+  const textLower = text.toLowerCase();
+  const skills = {
+    communications: /communications?|comms?|media|press|pr|public relations|marketing/i.test(textLower),
+    campaigns: /campaigns?|advocacy|engagement|grassroots|activism|outreach/i.test(textLower),
+    policy: /policy|policies|briefing|consultation|legislative|regulatory|government/i.test(textLower),
+    publicAffairs: /public affairs|government affairs|parliamentary|stakeholder relations|lobbying/i.test(textLower)
+  };
+  
+  // Generate tags
+  const tags = [];
+  if (skills.communications) tags.push('communications');
+  if (skills.campaigns) tags.push('campaigns');
+  if (skills.policy) tags.push('policy');
+  if (skills.publicAffairs) tags.push('public-affairs');
+  
+  return {
+    firstName,
+    lastName,
+    email: emailMatch ? emailMatch[1] : '',
+    phone: phoneMatch ? phoneMatch[1] : '',
+    skills,
+    tags,
+    notes: text.substring(0, 200) + (text.length > 200 ? '...' : ''),
+    confidence: 0.8
+  };
+}
 
 const server = http.createServer((req, res) => {
   console.log('Request received:', req.method, req.url);
@@ -38,12 +92,70 @@ const server = http.createServer((req, res) => {
     }));
   } else if (req.url === '/api/candidates/parse-cv' && req.method === 'POST') {
     console.log('CV parse requested');
+    
+    // Handle file upload
+    let body = '';
+    req.on('data', chunk => {
+      body += chunk.toString();
+    });
+    
+    req.on('end', () => {
+      try {
+        // Simple text parsing (for now - can be enhanced for file uploads)
+        const parsedData = parseCVContent(body);
+        
+        res.writeHead(200);
+        res.end(JSON.stringify({ 
+          success: true,
+          data: parsedData,
+          timestamp: new Date().toISOString(),
+          message: 'CV parsed successfully'
+        }));
+      } catch (error) {
+        console.error('CV parsing error:', error);
+        res.writeHead(500);
+        res.end(JSON.stringify({ 
+          success: false,
+          error: 'Failed to parse CV',
+          message: error.message
+        }));
+      }
+    });
+  } else if (req.url === '/test-cv' && req.method === 'GET') {
+    console.log('Test CV parsing requested');
+    
+    // Test with sample CV data
+    const sampleCV = `John Smith
+Senior Communications Manager
+john.smith@email.com
++44 20 7123 4567
+
+EXPERIENCE
+Senior Communications Manager at ABC Company (2020-2023)
+- Led strategic communications campaigns
+- Managed public relations and media outreach
+- Developed policy briefings for government stakeholders
+
+Communications Officer at XYZ Agency (2018-2020)
+- Coordinated advocacy campaigns
+- Managed stakeholder relations
+- Developed public affairs strategies
+
+SKILLS
+- Strategic communications
+- Public relations
+- Policy development
+- Stakeholder engagement
+- Campaign management`;
+
+    const parsedData = parseCVContent(sampleCV);
+    
     res.writeHead(200);
     res.end(JSON.stringify({ 
       success: true,
-      message: 'CV parsing endpoint is working!',
+      data: parsedData,
       timestamp: new Date().toISOString(),
-      note: 'This is a test response - full CV parsing will be implemented next'
+      message: 'Sample CV parsed successfully'
     }));
   } else if (req.url === '/') {
     console.log('Root route requested');
@@ -54,7 +166,8 @@ const server = http.createServer((req, res) => {
       status: 'success',
       endpoints: {
         health: '/health',
-        cvParse: '/api/candidates/parse-cv (POST)'
+        cvParse: '/api/candidates/parse-cv (POST)',
+        testCV: '/test-cv (GET)'
       }
     }));
   } else {
