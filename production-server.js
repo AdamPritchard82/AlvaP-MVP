@@ -33,7 +33,7 @@ if (usePostgres) {
   initDatabase();
 } else {
   console.log('📁 Using SQLite database (development)');
-  const { getDb, initDatabase } = require('./src/db');
+  const { getDb, initDatabase } = require('./src/db-commonjs');
   db = getDb;
   initDatabase();
 }
@@ -174,7 +174,7 @@ const server = http.createServer((req, res) => {
       body += chunk.toString();
     });
     
-    req.on('end', async () => {
+    req.on('end', () => {
       try {
         const parsedData = parseCVContent(body);
         
@@ -184,7 +184,7 @@ const server = http.createServer((req, res) => {
             const { query } = require('./src/db-postgres');
             const candidateId = require('nanoid').nanoid();
             
-            await query(`
+            query(`
               INSERT INTO candidates (id, full_name, email, phone, skills, tags, notes, parse_status, created_by, created_at, updated_at)
               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
             `, [
@@ -197,12 +197,17 @@ const server = http.createServer((req, res) => {
               parsedData.notes,
               'parsed',
               'system' // Default created_by
-            ]);
-            
-            console.log(`✅ Candidate saved to database: ${candidateId}`);
+            ])
+            .then(() => {
+              console.log(`✅ Candidate saved to database: ${candidateId}`);
+            })
+            .catch(dbError => {
+              console.error('Database save error:', dbError);
+              // Continue with response even if DB save fails
+            });
           } catch (dbError) {
-            console.error('Database save error:', dbError);
-            // Continue with response even if DB save fails
+            console.error('Database setup error:', dbError);
+            // Continue with response even if DB setup fails
           }
         }
         
@@ -230,20 +235,30 @@ const server = http.createServer((req, res) => {
     if (usePostgres) {
       try {
         const { query } = require('./src/db-postgres');
-        const result = await query('SELECT * FROM candidates ORDER BY created_at DESC LIMIT 50');
-        
-        res.writeHead(200);
-        res.end(JSON.stringify({
-          success: true,
-          candidates: result.rows,
-          total: result.rows.length
-        }));
+        query('SELECT * FROM candidates ORDER BY created_at DESC LIMIT 50')
+          .then(result => {
+            res.writeHead(200);
+            res.end(JSON.stringify({
+              success: true,
+              candidates: result.rows,
+              total: result.rows.length
+            }));
+          })
+          .catch(error => {
+            console.error('Database query error:', error);
+            res.writeHead(500);
+            res.end(JSON.stringify({ 
+              success: false,
+              error: 'Database error',
+              message: error.message
+            }));
+          });
       } catch (error) {
-        console.error('Database query error:', error);
+        console.error('Database setup error:', error);
         res.writeHead(500);
         res.end(JSON.stringify({ 
           success: false,
-          error: 'Database error',
+          error: 'Database setup error',
           message: error.message
         }));
       }
