@@ -1,4 +1,7 @@
-const API_BASE = '/api';
+// Environment-aware API base
+const API_BASE = import.meta.env.PROD 
+  ? 'https://alvap-mvp-production.up.railway.app/api'
+  : '/api';
 
 export interface User {
   id: string;
