@@ -8,9 +8,9 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api': {
-        target: 'https://alvap-mvp-production.up.railway.app',
+        target: 'http://localhost:3001',
         changeOrigin: true,
-        secure: true,
+        secure: false,
       },
     },
   },

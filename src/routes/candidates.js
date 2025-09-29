@@ -21,28 +21,46 @@ const upload = multer({
     fileSize: 20 * 1024 * 1024, // 20MB limit
   },
   fileFilter: (req, file, cb) => {
-    // For now, only accept text files to avoid dependency issues
-    if (file.mimetype === 'text/plain') {
-      cb(null, true);
-    } else {
-      cb(new Error('Only text files (.txt) are supported for now. Please convert your CV to a .txt file.'), false);
-    }
+    // Accept all file types - we'll handle parsing in the function
+    cb(null, true);
   }
 });
 
-// Ultra-simple CV parsing - TEXT FILES ONLY for now
+// Simple CV parsing - works with any text-based file
 async function parseCVContent(filePath, mimetype) {
   try {
     console.log('=== CV PARSING START ===');
     console.log('File path:', filePath);
     console.log('MIME type:', mimetype);
     
-    // For now, only support text files to avoid dependency issues
-    if (mimetype !== 'text/plain') {
-      throw new Error('Only text files (.txt) are supported for now. Please convert your CV to a .txt file.');
+    let text = '';
+    
+    // Try to read as text first (works for TXT files)
+    try {
+      text = fs.readFileSync(filePath, 'utf8');
+      console.log('Read as text file');
+    } catch (textError) {
+      // If that fails, try to read as binary and extract text
+      console.log('Text read failed, trying binary extraction...');
+      try {
+        const textract = require('textract');
+        text = await new Promise((resolve, reject) => {
+          textract.fromFileWithPath(filePath, (error, extractedText) => {
+            if (error) reject(error);
+            else resolve(extractedText);
+          });
+        });
+        console.log('Extracted text using textract');
+      } catch (extractError) {
+        console.error('Text extraction failed:', extractError.message);
+        throw new Error('Could not extract text from file. Please try a different format.');
+      }
     }
     
-    const text = fs.readFileSync(filePath, 'utf8');
+    if (!text || text.trim().length === 0) {
+      throw new Error('No text could be extracted from the file.');
+    }
+    
     console.log('Extracted text length:', text.length);
     console.log('First 200 chars:', text.substring(0, 200));
     

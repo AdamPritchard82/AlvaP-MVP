@@ -167,24 +167,199 @@ const server = http.createServer((req, res) => {
     }));
     
   } else if (req.url === '/api/candidates/parse-cv' && req.method === 'POST') {
-    console.log('CV parse requested');
+    console.log('[parse-cv] Route started');
     
-    let body = '';
-    req.on('data', chunk => {
-      body += chunk.toString();
+    // Handle multipart form data for file uploads
+    const formidable = require('formidable');
+    const form = formidable({
+      uploadDir: uploadsDir,
+      keepExtensions: true,
+      maxFileSize: 20 * 1024 * 1024 // 20MB limit
     });
     
-    req.on('end', () => {
+    form.parse(req, async (err, fields, files) => {
+      const startTime = Date.now();
+      
+      if (err) {
+        console.error('[parse-cv] Form parsing error:', err);
+        res.writeHead(400);
+        res.end(JSON.stringify({ 
+          success: false,
+          error: 'Failed to parse form data',
+          message: err.message
+        }));
+        return;
+      }
+      
       try {
-        const parsedData = parseCVContent(body);
+        const file = files.file || files.cv;
+        if (!file) {
+          res.writeHead(400);
+          res.end(JSON.stringify({ 
+            success: false,
+            error: 'No file uploaded',
+            message: 'Please upload a file'
+          }));
+          return;
+        }
         
-        // Save to database if PostgreSQL is available
+        const filePath = file.filepath;
+        const fileName = file.originalFilename || 'unknown';
+        const fileExtension = path.extname(fileName).toLowerCase();
+        const fileSize = fs.statSync(filePath).size;
+        
+        console.log(`[parse-cv] ext=${fileExtension.toUpperCase()} size=${fileSize} bytes`);
+        
+        // Check file type support
+        const supportedExtensions = ['.txt', '.pdf', '.docx'];
+        if (!supportedExtensions.includes(fileExtension)) {
+          console.log(`[parse-cv] Unsupported file type: ${fileExtension}`);
+          res.writeHead(400);
+          res.end(JSON.stringify({ 
+            success: false,
+            error: 'Only .txt, .pdf, and .docx files are supported.',
+            message: `File type ${fileExtension} is not supported`
+          }));
+          return;
+        }
+        
+        // Read file into buffer
+        const buffer = fs.readFileSync(filePath);
+        let extractedText = '';
+        let parserUsed = '';
+        let parseSuccess = false;
+        
+        // 1. If TXT → just read buffer.toString("utf8")
+        if (fileExtension === '.txt') {
+          try {
+            const parseStart = Date.now();
+            extractedText = buffer.toString('utf8');
+            const parseTime = Date.now() - parseStart;
+            
+            if (extractedText && extractedText.trim().length > 0) {
+              parserUsed = 'TXT';
+              parseSuccess = true;
+              console.log(`[parse-cv] ok via TXT in ${parseTime}ms, chars=${extractedText.length}`);
+            }
+          } catch (txtError) {
+            console.log('[parse-cv] TXT parser failed:', txtError.message);
+          }
+        }
+        
+        // 2. If PDF → try pdf-parse
+        if (!parseSuccess && fileExtension === '.pdf') {
+          try {
+            const parseStart = Date.now();
+            const pdfParse = require('pdf-parse');
+            const result = await pdfParse(buffer);
+            const parseTime = Date.now() - parseStart;
+            
+            if (result.text && result.text.trim().length > 0) {
+              extractedText = result.text;
+              parserUsed = 'PDF-parse';
+              parseSuccess = true;
+              console.log(`[parse-cv] ok via PDF-parse in ${parseTime}ms, chars=${extractedText.length}`);
+            }
+          } catch (pdfError) {
+            console.log('[parse-cv] PDF-parse failed:', pdfError.message);
+          }
+        }
+        
+        // 3. If DOCX → try mammoth
+        if (!parseSuccess && fileExtension === '.docx') {
+          try {
+            const parseStart = Date.now();
+            const mammoth = require('mammoth');
+            const result = await mammoth.extractRawText({ buffer });
+            const parseTime = Date.now() - parseStart;
+            
+            if (result.value && result.value.trim().length > 0) {
+              extractedText = result.value;
+              parserUsed = 'Mammoth';
+              parseSuccess = true;
+              console.log(`[parse-cv] ok via Mammoth in ${parseTime}ms, chars=${extractedText.length}`);
+            }
+          } catch (docxError) {
+            console.log('[parse-cv] Mammoth failed:', docxError.message);
+          }
+        }
+        
+        // 4. If everything else or if the above fail → try textract
+        if (!parseSuccess) {
+          try {
+            const parseStart = Date.now();
+            const textract = require('textract');
+            const parseTime = Date.now() - parseStart;
+            
+            extractedText = await new Promise((resolve, reject) => {
+              textract.fromBufferWithMime(`application/${fileExtension.slice(1)}`, buffer, (error, text) => {
+                if (error) reject(error);
+                else resolve(text);
+              });
+            });
+            
+            if (extractedText && extractedText.trim().length > 0) {
+              parserUsed = 'Textract';
+              parseSuccess = true;
+              console.log(`[parse-cv] ok via Textract in ${parseTime}ms, chars=${extractedText.length}`);
+            }
+          } catch (textractError) {
+            console.log('[parse-cv] Textract failed:', textractError.message);
+          }
+        }
+        
+        // 5. As a last resort → tesseract.js for OCR
+        if (!parseSuccess) {
+          try {
+            const parseStart = Date.now();
+            const { createWorker } = require('tesseract.js');
+            const worker = await createWorker();
+            const { data: { text } } = await worker.recognize(buffer);
+            await worker.terminate();
+            const parseTime = Date.now() - parseStart;
+            
+            if (text && text.trim().length > 0) {
+              extractedText = text;
+              parserUsed = 'Tesseract OCR';
+              parseSuccess = true;
+              console.log(`[parse-cv] ok via Tesseract OCR in ${parseTime}ms, chars=${extractedText.length}`);
+            }
+          } catch (ocrError) {
+            console.log('[parse-cv] Tesseract OCR failed:', ocrError.message);
+          }
+        }
+        
+        // Check if any parser succeeded
+        if (!parseSuccess || !extractedText || extractedText.trim().length === 0) {
+          console.log('[parse-cv] All parsers failed');
+          res.writeHead(422);
+          res.end(JSON.stringify({ 
+            success: false,
+            error: 'Could not parse file. Supported: .txt, .pdf, .docx',
+            message: 'No text could be extracted from the file'
+          }));
+          return;
+        }
+        
+        // Parse the extracted text using existing logic
+        const parsedData = parseCVContent(extractedText);
+        parsedData.parserUsed = parserUsed;
+        parsedData.fileName = fileName;
+        
+        console.log(`[parse-cv] CV parsed successfully:`, {
+          name: `${parsedData.firstName} ${parsedData.lastName}`,
+          email: parsedData.email,
+          phone: parsedData.phone,
+          skills: Object.keys(parsedData.skills).filter(k => parsedData.skills[k])
+        });
+        
+        // Save to database (existing logic)
         if (usePostgres) {
           try {
             const { query } = require('./src/db-postgres');
             const candidateId = require('nanoid').nanoid();
             
-            query(`
+            await query(`
               INSERT INTO candidates (id, full_name, email, phone, skills, tags, notes, parse_status, created_by, created_at, updated_at)
               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
             `, [
@@ -193,33 +368,69 @@ const server = http.createServer((req, res) => {
               parsedData.email,
               parsedData.phone,
               JSON.stringify(parsedData.skills),
-              parsedData.tags,
+              JSON.stringify(parsedData.tags),
               parsedData.notes,
               'parsed',
-              'system' // Default created_by
-            ])
-            .then(() => {
-              console.log(`✅ Candidate saved to database: ${candidateId}`);
-            })
-            .catch(dbError => {
-              console.error('Database save error:', dbError);
-              // Continue with response even if DB save fails
-            });
+              'system'
+            ]);
+            
+            console.log(`[parse-cv] Candidate saved to PostgreSQL: ${candidateId}`);
           } catch (dbError) {
-            console.error('Database setup error:', dbError);
-            // Continue with response even if DB setup fails
+            console.error('[parse-cv] Database save error:', dbError);
+          }
+        } else {
+          try {
+            const { getDb } = require('./src/db-commonjs');
+            const db = getDb();
+            const candidateId = require('nanoid').nanoid();
+            
+            const stmt = db.prepare(`
+              INSERT INTO candidates (id, full_name, email, phone, skills, tags, notes, parse_status, created_by, created_at, updated_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+            `);
+            
+            stmt.run(
+              candidateId,
+              `${parsedData.firstName} ${parsedData.lastName}`,
+              parsedData.email,
+              parsedData.phone,
+              JSON.stringify(parsedData.skills),
+              JSON.stringify(parsedData.tags),
+              parsedData.notes,
+              'parsed',
+              'system'
+            );
+            
+            console.log(`[parse-cv] Candidate saved to SQLite: ${candidateId}`);
+          } catch (dbError) {
+            console.error('[parse-cv] SQLite save error:', dbError);
           }
         }
+        
+        // Clean up uploaded file
+        try {
+          fs.unlinkSync(filePath);
+          console.log('[parse-cv] Cleaned up uploaded file');
+        } catch (cleanupError) {
+          console.warn('[parse-cv] Could not clean up file:', cleanupError.message);
+        }
+        
+        const totalTime = Date.now() - startTime;
+        console.log(`[parse-cv] Total processing time: ${totalTime}ms`);
         
         res.writeHead(200);
         res.end(JSON.stringify({ 
           success: true,
           data: parsedData,
           timestamp: new Date().toISOString(),
-          message: 'CV parsed and saved successfully'
+          message: `CV parsed successfully using ${parserUsed}`,
+          parserUsed: parserUsed,
+          fileName: fileName,
+          processingTime: totalTime
         }));
+        
       } catch (error) {
-        console.error('CV parsing error:', error);
+        console.error('[parse-cv] Unexpected error:', error);
         res.writeHead(500);
         res.end(JSON.stringify({ 
           success: false,
@@ -367,3 +578,4 @@ process.on('SIGINT', () => {
     process.exit(0);
   });
 });
+

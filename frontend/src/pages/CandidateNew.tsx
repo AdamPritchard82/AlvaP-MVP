@@ -262,9 +262,10 @@ export default function CandidateNew() {
     toast.loading('Parsing CV...', { id: 'cv-parse' });
     
     try {
-      // Validate file type - only text files for now
-      if (file.type !== 'text/plain') {
-        toast.error('Only text files (.txt) are supported for now. Please convert your CV to a .txt file.', { id: 'cv-parse' });
+      // Validate file type - accept common CV formats
+      const allowedTypes = ['text/plain', 'application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+      if (!allowedTypes.includes(file.type)) {
+        toast.error('Please upload a .txt, .pdf, or .docx file.', { id: 'cv-parse' });
         return;
       }
       
