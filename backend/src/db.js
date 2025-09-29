@@ -1,22 +1,22 @@
-const sqlite3 = require('sqlite3');
-const { Pool } = require('pg');
-const { join } = require('path');
-const { mkdirSync } = require('fs');
-const { promisify } = require('util');
+import sqlite3 from 'sqlite3';
+import { Pool } from 'pg';
+import { join } from 'node:path';
+import { mkdirSync } from 'node:fs';
+import { promisify } from 'util';
 
 let db;
 let isPostgreSQL = false;
 
-function getDb() {
+export function getDb() {
   if (!db) throw new Error('Database not initialized');
   return db;
 }
 
-function isPostgres() {
+export function isPostgres() {
   return isPostgreSQL;
 }
 
-function initDatabase() {
+export function initDatabase() {
   // Check if DATABASE_URL is provided for PostgreSQL
   if (process.env.DATABASE_URL) {
     console.log('DATABASE_URL found, connecting to PostgreSQL...');
@@ -748,4 +748,4 @@ function seedDefaultPlans() {
   console.log('Plans seeding completed');
 }
 
-module.exports = { getDb, isPostgres, initDatabase };
+// Module exports are handled by export statements above

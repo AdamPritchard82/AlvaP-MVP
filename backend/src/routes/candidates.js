@@ -29,11 +29,11 @@ const upload = multer({
 
 // Enhanced CV parsing with fallback parsers
 async function parseCVContent(filePath, mimetype) {
-  console.log('=== CV PARSING START ===');
-  console.log('File path:', filePath);
-  console.log('MIME type:', mimetype);
-  
-  let text = '';
+    console.log('=== CV PARSING START ===');
+    console.log('File path:', filePath);
+    console.log('MIME type:', mimetype);
+    
+    let text = '';
   let parserUsed = '';
   let parseSuccess = false;
   
@@ -94,13 +94,13 @@ async function parseCVContent(filePath, mimetype) {
   if (!parseSuccess) {
     try {
       console.log('Trying textract fallback...');
-      const textract = require('textract');
-      text = await new Promise((resolve, reject) => {
+        const textract = require('textract');
+        text = await new Promise((resolve, reject) => {
         textract.fromBufferWithMime(mimetype || `application/${fileExtension}`, buffer, (error, extractedText) => {
-          if (error) reject(error);
-          else resolve(extractedText);
+            if (error) reject(error);
+            else resolve(extractedText);
+          });
         });
-      });
       if (text && text.trim().length > 0) {
         parserUsed = 'textract';
         parseSuccess = true;
@@ -137,8 +137,8 @@ async function parseCVContent(filePath, mimetype) {
   }
   
   console.log(`✅ Text extraction successful using ${parserUsed}: ${text.length} characters`);
-  console.log('First 200 chars:', text.substring(0, 200));
-  
+    console.log('First 200 chars:', text.substring(0, 200));
+    
   // Clean and parse the extracted text
   const cleanText = text
     .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') // Remove control chars
@@ -149,71 +149,71 @@ async function parseCVContent(filePath, mimetype) {
     .trim();
   
   const lines = cleanText.split('\n').map(line => line.trim()).filter(line => line.length > 0);
-  
-  // Extract name from first line
-  let firstName = '';
-  let lastName = '';
-  if (lines.length > 0) {
-    const firstLine = lines[0];
-    const words = firstLine.split(/\s+/);
-    if (words.length >= 2) {
-      firstName = words[0];
-      lastName = words.slice(1).join(' ');
-    } else if (words.length === 1) {
-      firstName = words[0];
+    
+    // Extract name from first line
+    let firstName = '';
+    let lastName = '';
+    if (lines.length > 0) {
+      const firstLine = lines[0];
+      const words = firstLine.split(/\s+/);
+      if (words.length >= 2) {
+        firstName = words[0];
+        lastName = words.slice(1).join(' ');
+      } else if (words.length === 1) {
+        firstName = words[0];
+      }
     }
-  }
-  
-  // Extract email
+    
+    // Extract email
   const emailMatch = cleanText.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
-  const email = emailMatch ? emailMatch[1] : '';
-  
-  // Extract phone
+    const email = emailMatch ? emailMatch[1] : '';
+    
+    // Extract phone
   const phoneMatch = cleanText.match(/(\+?[\d\s\-\(\)]{10,})/);
-  const phone = phoneMatch ? phoneMatch[1] : '';
-  
+    const phone = phoneMatch ? phoneMatch[1] : '';
+    
   // Extract current title and employer
-  let currentTitle = '';
-  let currentEmployer = '';
-  
-  for (let i = 0; i < Math.min(10, lines.length); i++) {
-    const line = lines[i];
+    let currentTitle = '';
+    let currentEmployer = '';
     
-    // Look for job titles
-    if (!currentTitle && line.length > 5 && line.length < 60 && 
-        /^[A-Z]/.test(line) && !line.includes('@') && !line.match(/\d{4}/)) {
-      const jobKeywords = ['manager', 'director', 'officer', 'specialist', 'coordinator', 
-                         'executive', 'analyst', 'consultant', 'advisor', 'associate'];
-      if (jobKeywords.some(keyword => line.toLowerCase().includes(keyword))) {
-        currentTitle = line;
+    for (let i = 0; i < Math.min(10, lines.length); i++) {
+      const line = lines[i];
+      
+      // Look for job titles
+      if (!currentTitle && line.length > 5 && line.length < 60 && 
+          /^[A-Z]/.test(line) && !line.includes('@') && !line.match(/\d{4}/)) {
+        const jobKeywords = ['manager', 'director', 'officer', 'specialist', 'coordinator', 
+                           'executive', 'analyst', 'consultant', 'advisor', 'associate'];
+        if (jobKeywords.some(keyword => line.toLowerCase().includes(keyword))) {
+          currentTitle = line;
+        }
+      }
+      
+      // Look for companies
+      if (!currentEmployer && line.length > 3 && line.length < 80 && 
+          /^[A-Z]/.test(line) && !line.includes('@') && !line.match(/\d{4}/)) {
+        const companyKeywords = ['Ltd', 'Inc', 'Corp', 'Company', 'Group', 'Associates', 'Partners'];
+        if (companyKeywords.some(keyword => line.includes(keyword))) {
+          currentEmployer = line;
+        }
       }
     }
     
-    // Look for companies
-    if (!currentEmployer && line.length > 3 && line.length < 80 && 
-        /^[A-Z]/.test(line) && !line.includes('@') && !line.match(/\d{4}/)) {
-      const companyKeywords = ['Ltd', 'Inc', 'Corp', 'Company', 'Group', 'Associates', 'Partners'];
-      if (companyKeywords.some(keyword => line.includes(keyword))) {
-        currentEmployer = line;
-      }
-    }
-  }
-  
   // Extract skills based on keyword matching
   const textLower = cleanText.toLowerCase();
-  const skills = {
-    communications: /communications?|comms?|media|press|pr|public relations|marketing/i.test(textLower),
-    campaigns: /campaigns?|advocacy|engagement|grassroots|activism|outreach/i.test(textLower),
-    policy: /policy|policies|briefing|consultation|legislative|regulatory|government/i.test(textLower),
-    publicAffairs: /public affairs|government affairs|parliamentary|stakeholder relations|lobbying/i.test(textLower)
-  };
-  
-  // Generate tags
-  const tags = [];
-  if (skills.communications) tags.push('communications');
-  if (skills.campaigns) tags.push('campaigns');
-  if (skills.policy) tags.push('policy');
-  if (skills.publicAffairs) tags.push('public-affairs');
+    const skills = {
+      communications: /communications?|comms?|media|press|pr|public relations|marketing/i.test(textLower),
+      campaigns: /campaigns?|advocacy|engagement|grassroots|activism|outreach/i.test(textLower),
+      policy: /policy|policies|briefing|consultation|legislative|regulatory|government/i.test(textLower),
+      publicAffairs: /public affairs|government affairs|parliamentary|stakeholder relations|lobbying/i.test(textLower)
+    };
+    
+    // Generate tags
+    const tags = [];
+    if (skills.communications) tags.push('communications');
+    if (skills.campaigns) tags.push('campaigns');
+    if (skills.policy) tags.push('policy');
+    if (skills.publicAffairs) tags.push('public-affairs');
   
   // Calculate confidence based on text length and extracted data
   let confidence = Math.min(1, cleanText.length / 8000);
@@ -224,36 +224,36 @@ async function parseCVContent(filePath, mimetype) {
   const skillCount = Object.values(skills).filter(Boolean).length;
   confidence += skillCount * 0.05;
   confidence = Math.min(confidence, 1.0);
-  
-  const parsedData = {
-    firstName,
-    lastName,
-    email,
-    phone,
-    currentTitle,
-    currentEmployer,
-    skills,
-    experience: currentTitle && currentEmployer ? [{
-      title: currentTitle,
-      employer: currentEmployer,
-      startDate: '',
-      endDate: ''
-    }] : [],
-    tags,
+    
+    const parsedData = {
+      firstName,
+      lastName,
+      email,
+      phone,
+      currentTitle,
+      currentEmployer,
+      skills,
+      experience: currentTitle && currentEmployer ? [{
+        title: currentTitle,
+        employer: currentEmployer,
+        startDate: '',
+        endDate: ''
+      }] : [],
+      tags,
     notes: cleanText.substring(0, 200) + (cleanText.length > 200 ? '...' : ''),
     source: parserUsed,
     confidence: Math.round(confidence * 100) / 100
-  };
-  
-  console.log('=== CV PARSING RESULT ===');
+    };
+    
+    console.log('=== CV PARSING RESULT ===');
   console.log('Parser used:', parserUsed);
   console.log('Confidence:', confidence);
   console.log('Name:', `${firstName} ${lastName}`);
   console.log('Email:', email);
   console.log('Skills detected:', Object.keys(skills).filter(k => skills[k]));
-  console.log('=== CV PARSING END ===');
-  
-  return parsedData;
+    console.log('=== CV PARSING END ===');
+    
+    return parsedData;
 }
 
 
@@ -523,9 +523,9 @@ router.post('/parse-cv', upload.single('file'), async (req, res) => {
     if (error.message.includes('Could not extract text') || 
         error.message.includes('Supported formats')) {
       return res.status(422).json({ 
-        success: false,
-        error: { 
-          code: 'PARSE_FAILED', 
+      success: false, 
+      error: { 
+        code: 'PARSE_FAILED', 
           message: error.message,
           details: 'Please try uploading a different file format (TXT, PDF, or DOCX)'
         }
