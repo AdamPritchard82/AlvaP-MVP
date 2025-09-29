@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { mkdirSync } from 'node:fs';
 import { nanoid } from 'nanoid';
 import { getDb } from '../db.js';
+import { query, queryOne, queryAll, execute, transaction, generateId, getCurrentTimestamp, parseJsonFields, formatJsonFields } from '../db-utils.js';
 import csv from 'csv-parser';
 import { createReadStream } from 'node:fs';
 // Simple CV parsing - no external dependencies
@@ -21,149 +22,238 @@ const upload = multer({
     fileSize: 20 * 1024 * 1024, // 20MB limit
   },
   fileFilter: (req, file, cb) => {
-    // For now, only accept text files to avoid dependency issues
-    if (file.mimetype === 'text/plain') {
-      cb(null, true);
-    } else {
-      cb(new Error('Only text files (.txt) are supported for now. Please convert your CV to a .txt file.'), false);
-    }
+    // Accept all file types - we'll handle parsing in the function
+    cb(null, true);
   }
 });
 
-// Ultra-simple CV parsing - TEXT FILES ONLY for now
+// Enhanced CV parsing with fallback parsers
 async function parseCVContent(filePath, mimetype) {
-  try {
-    console.log('=== CV PARSING START ===');
-    console.log('File path:', filePath);
-    console.log('MIME type:', mimetype);
-    
-    // For now, only support text files to avoid dependency issues
-    if (mimetype !== 'text/plain') {
-      throw new Error('Only text files (.txt) are supported for now. Please convert your CV to a .txt file.');
-    }
-    
-    const text = fs.readFileSync(filePath, 'utf8');
-    console.log('Extracted text length:', text.length);
-    console.log('First 200 chars:', text.substring(0, 200));
-    
-    // Simple parsing - just extract basic info
-    const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
-    
-    // Extract name from first line
-    let firstName = '';
-    let lastName = '';
-    if (lines.length > 0) {
-      const firstLine = lines[0];
-      const words = firstLine.split(/\s+/);
-      if (words.length >= 2) {
-        firstName = words[0];
-        lastName = words.slice(1).join(' ');
-      } else if (words.length === 1) {
-        firstName = words[0];
+  console.log('=== CV PARSING START ===');
+  console.log('File path:', filePath);
+  console.log('MIME type:', mimetype);
+  
+  let text = '';
+  let parserUsed = '';
+  let parseSuccess = false;
+  
+  // Read file buffer for all parsers
+  const buffer = fs.readFileSync(filePath);
+  const fileExtension = filePath.split('.').pop().toLowerCase();
+  
+  // 1. Try TXT parsing first (for .txt files)
+  if (fileExtension === 'txt' || mimetype === 'text/plain') {
+    try {
+      console.log('Trying TXT parser...');
+      text = buffer.toString('utf8');
+      if (text && text.trim().length > 0) {
+        parserUsed = 'TXT';
+        parseSuccess = true;
+        console.log(`✅ TXT parser succeeded: ${text.length} characters`);
       }
+    } catch (txtError) {
+      console.log('❌ TXT parser failed:', txtError.message);
     }
-    
-    // Extract email
-    const emailMatch = text.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
-    const email = emailMatch ? emailMatch[1] : '';
-    
-    // Extract phone
-    const phoneMatch = text.match(/(\+?[\d\s\-\(\)]{10,})/);
-    const phone = phoneMatch ? phoneMatch[1] : '';
-    
-    // Extract current title and employer (simple approach)
-    let currentTitle = '';
-    let currentEmployer = '';
-    
-    for (let i = 0; i < Math.min(10, lines.length); i++) {
-      const line = lines[i];
-      
-      // Look for job titles
-      if (!currentTitle && line.length > 5 && line.length < 60 && 
-          /^[A-Z]/.test(line) && !line.includes('@') && !line.match(/\d{4}/)) {
-        const jobKeywords = ['manager', 'director', 'officer', 'specialist', 'coordinator', 
-                           'executive', 'analyst', 'consultant', 'advisor', 'associate'];
-        if (jobKeywords.some(keyword => line.toLowerCase().includes(keyword))) {
-          currentTitle = line;
-        }
-      }
-      
-      // Look for companies
-      if (!currentEmployer && line.length > 3 && line.length < 80 && 
-          /^[A-Z]/.test(line) && !line.includes('@') && !line.match(/\d{4}/)) {
-        const companyKeywords = ['Ltd', 'Inc', 'Corp', 'Company', 'Group', 'Associates', 'Partners'];
-        if (companyKeywords.some(keyword => line.includes(keyword))) {
-          currentEmployer = line;
-        }
-      }
-    }
-    
-    // Extract skills based on simple keyword matching
-    const textLower = text.toLowerCase();
-    const skills = {
-      communications: /communications?|comms?|media|press|pr|public relations|marketing/i.test(textLower),
-      campaigns: /campaigns?|advocacy|engagement|grassroots|activism|outreach/i.test(textLower),
-      policy: /policy|policies|briefing|consultation|legislative|regulatory|government/i.test(textLower),
-      publicAffairs: /public affairs|government affairs|parliamentary|stakeholder relations|lobbying/i.test(textLower)
-    };
-    
-    // Generate tags
-    const tags = [];
-    if (skills.communications) tags.push('communications');
-    if (skills.campaigns) tags.push('campaigns');
-    if (skills.policy) tags.push('policy');
-    if (skills.publicAffairs) tags.push('public-affairs');
-    
-    const parsedData = {
-      firstName,
-      lastName,
-      email,
-      phone,
-      currentTitle,
-      currentEmployer,
-      skills,
-      experience: currentTitle && currentEmployer ? [{
-        title: currentTitle,
-        employer: currentEmployer,
-        startDate: '',
-        endDate: ''
-      }] : [],
-      tags,
-      notes: text.substring(0, 200) + (text.length > 200 ? '...' : ''),
-      source: 'text-file',
-      confidence: 0.8
-    };
-    
-    console.log('=== CV PARSING RESULT ===');
-    console.log('Parsed data:', JSON.stringify(parsedData, null, 2));
-    console.log('=== CV PARSING END ===');
-    
-    return parsedData;
-  } catch (error) {
-    console.error('=== CV PARSING ERROR ===');
-    console.error('Error:', error);
-    console.log('=== CV PARSING END ===');
-    
-    return {
-      firstName: '',
-      lastName: '',
-      email: '',
-      phone: '',
-      currentTitle: '',
-      currentEmployer: '',
-      skills: {
-        communications: false,
-        campaigns: false,
-        policy: false,
-        publicAffairs: false
-      },
-      experience: [],
-      tags: [],
-      notes: '',
-      source: 'error',
-      confidence: 0.0
-    };
   }
+  
+  // 2. Try PDF parsing with pdf-parse
+  if (!parseSuccess && (fileExtension === 'pdf' || mimetype === 'application/pdf')) {
+    try {
+      console.log('Trying PDF parser (pdf-parse)...');
+      const pdfParse = require('pdf-parse');
+      const result = await pdfParse(buffer);
+      if (result.text && result.text.trim().length > 0) {
+        text = result.text;
+        parserUsed = 'pdf-parse';
+        parseSuccess = true;
+        console.log(`✅ PDF parser (pdf-parse) succeeded: ${text.length} characters`);
+      }
+    } catch (pdfError) {
+      console.log('❌ PDF parser (pdf-parse) failed:', pdfError.message);
+    }
+  }
+  
+  // 3. Try DOCX parsing with mammoth
+  if (!parseSuccess && (fileExtension === 'docx' || mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')) {
+    try {
+      console.log('Trying DOCX parser (mammoth)...');
+      const mammoth = require('mammoth');
+      const result = await mammoth.extractRawText({ buffer });
+      if (result.value && result.value.trim().length > 0) {
+        text = result.value;
+        parserUsed = 'mammoth';
+        parseSuccess = true;
+        console.log(`✅ DOCX parser (mammoth) succeeded: ${text.length} characters`);
+      }
+    } catch (docxError) {
+      console.log('❌ DOCX parser (mammoth) failed:', docxError.message);
+    }
+  }
+  
+  // 4. Try textract as fallback for any file type
+  if (!parseSuccess) {
+    try {
+      console.log('Trying textract fallback...');
+      const textract = require('textract');
+      text = await new Promise((resolve, reject) => {
+        textract.fromBufferWithMime(mimetype || `application/${fileExtension}`, buffer, (error, extractedText) => {
+          if (error) reject(error);
+          else resolve(extractedText);
+        });
+      });
+      if (text && text.trim().length > 0) {
+        parserUsed = 'textract';
+        parseSuccess = true;
+        console.log(`✅ Textract fallback succeeded: ${text.length} characters`);
+      }
+    } catch (textractError) {
+      console.log('❌ Textract fallback failed:', textractError.message);
+    }
+  }
+  
+  // 5. Try tesseract.js OCR as last resort
+  if (!parseSuccess) {
+    try {
+      console.log('Trying Tesseract OCR...');
+      const { createWorker } = require('tesseract.js');
+      const worker = await createWorker();
+      const { data: { text: ocrText } } = await worker.recognize(buffer);
+      await worker.terminate();
+      if (ocrText && ocrText.trim().length > 0) {
+        text = ocrText;
+        parserUsed = 'tesseract-ocr';
+        parseSuccess = true;
+        console.log(`✅ Tesseract OCR succeeded: ${text.length} characters`);
+      }
+    } catch (ocrError) {
+      console.log('❌ Tesseract OCR failed:', ocrError.message);
+    }
+  }
+  
+  // If all parsers failed, throw error
+  if (!parseSuccess || !text || text.trim().length === 0) {
+    console.log('❌ All parsers failed');
+    throw new Error('Could not extract text from file. Supported formats: TXT, PDF, DOCX');
+  }
+  
+  console.log(`✅ Text extraction successful using ${parserUsed}: ${text.length} characters`);
+  console.log('First 200 chars:', text.substring(0, 200));
+  
+  // Clean and parse the extracted text
+  const cleanText = text
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') // Remove control chars
+    .replace(/\r\n/g, '\n') // Normalize newlines
+    .replace(/\r/g, '\n')
+    .replace(/\n{3,}/g, '\n\n') // Collapse multiple newlines
+    .replace(/\s+/g, ' ') // Collapse whitespace
+    .trim();
+  
+  const lines = cleanText.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+  
+  // Extract name from first line
+  let firstName = '';
+  let lastName = '';
+  if (lines.length > 0) {
+    const firstLine = lines[0];
+    const words = firstLine.split(/\s+/);
+    if (words.length >= 2) {
+      firstName = words[0];
+      lastName = words.slice(1).join(' ');
+    } else if (words.length === 1) {
+      firstName = words[0];
+    }
+  }
+  
+  // Extract email
+  const emailMatch = cleanText.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+  const email = emailMatch ? emailMatch[1] : '';
+  
+  // Extract phone
+  const phoneMatch = cleanText.match(/(\+?[\d\s\-\(\)]{10,})/);
+  const phone = phoneMatch ? phoneMatch[1] : '';
+  
+  // Extract current title and employer
+  let currentTitle = '';
+  let currentEmployer = '';
+  
+  for (let i = 0; i < Math.min(10, lines.length); i++) {
+    const line = lines[i];
+    
+    // Look for job titles
+    if (!currentTitle && line.length > 5 && line.length < 60 && 
+        /^[A-Z]/.test(line) && !line.includes('@') && !line.match(/\d{4}/)) {
+      const jobKeywords = ['manager', 'director', 'officer', 'specialist', 'coordinator', 
+                         'executive', 'analyst', 'consultant', 'advisor', 'associate'];
+      if (jobKeywords.some(keyword => line.toLowerCase().includes(keyword))) {
+        currentTitle = line;
+      }
+    }
+    
+    // Look for companies
+    if (!currentEmployer && line.length > 3 && line.length < 80 && 
+        /^[A-Z]/.test(line) && !line.includes('@') && !line.match(/\d{4}/)) {
+      const companyKeywords = ['Ltd', 'Inc', 'Corp', 'Company', 'Group', 'Associates', 'Partners'];
+      if (companyKeywords.some(keyword => line.includes(keyword))) {
+        currentEmployer = line;
+      }
+    }
+  }
+  
+  // Extract skills based on keyword matching
+  const textLower = cleanText.toLowerCase();
+  const skills = {
+    communications: /communications?|comms?|media|press|pr|public relations|marketing/i.test(textLower),
+    campaigns: /campaigns?|advocacy|engagement|grassroots|activism|outreach/i.test(textLower),
+    policy: /policy|policies|briefing|consultation|legislative|regulatory|government/i.test(textLower),
+    publicAffairs: /public affairs|government affairs|parliamentary|stakeholder relations|lobbying/i.test(textLower)
+  };
+  
+  // Generate tags
+  const tags = [];
+  if (skills.communications) tags.push('communications');
+  if (skills.campaigns) tags.push('campaigns');
+  if (skills.policy) tags.push('policy');
+  if (skills.publicAffairs) tags.push('public-affairs');
+  
+  // Calculate confidence based on text length and extracted data
+  let confidence = Math.min(1, cleanText.length / 8000);
+  if (firstName && lastName) confidence += 0.1;
+  if (email) confidence += 0.1;
+  if (phone) confidence += 0.05;
+  if (currentTitle) confidence += 0.1;
+  const skillCount = Object.values(skills).filter(Boolean).length;
+  confidence += skillCount * 0.05;
+  confidence = Math.min(confidence, 1.0);
+  
+  const parsedData = {
+    firstName,
+    lastName,
+    email,
+    phone,
+    currentTitle,
+    currentEmployer,
+    skills,
+    experience: currentTitle && currentEmployer ? [{
+      title: currentTitle,
+      employer: currentEmployer,
+      startDate: '',
+      endDate: ''
+    }] : [],
+    tags,
+    notes: cleanText.substring(0, 200) + (cleanText.length > 200 ? '...' : ''),
+    source: parserUsed,
+    confidence: Math.round(confidence * 100) / 100
+  };
+  
+  console.log('=== CV PARSING RESULT ===');
+  console.log('Parser used:', parserUsed);
+  console.log('Confidence:', confidence);
+  console.log('Name:', `${firstName} ${lastName}`);
+  console.log('Email:', email);
+  console.log('Skills detected:', Object.keys(skills).filter(k => skills[k]));
+  console.log('=== CV PARSING END ===');
+  
+  return parsedData;
 }
 
 
@@ -248,9 +338,8 @@ Door 10 Team`;
 // POST /candidates - Create new candidate
 router.post('/', upload.single('cv'), async (req, res) => {
   try {
-    const db = getDb();
-    const id = nanoid();
-    const now = new Date().toISOString();
+    const id = generateId() || nanoid();
+    const now = getCurrentTimestamp();
 
     const {
       firstName,
@@ -308,34 +397,37 @@ router.post('/', upload.single('cv'), async (req, res) => {
       updatedAt: now
     };
 
+    // Format data for database storage
+    const formattedData = formatJsonFields(candidateData, ['tags', 'skills']);
+
     // Insert into database
-    const stmt = db.prepare(`
+    await execute(`
       INSERT INTO candidates (
         id, full_name, email, phone, current_title, current_employer,
         salary_min, salary_max, seniority, tags, notes, skills,
         cv_original_path, email_ok, unsubscribe_token, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    stmt.run(
-      candidateData.id,
-      `${candidateData.firstName} ${candidateData.lastName}`.trim(),
-      candidateData.email,
-      candidateData.phone,
-      candidateData.currentTitle,
-      candidateData.currentEmployer,
-      candidateData.salaryMin,
-      candidateData.salaryMax,
-      candidateData.seniority,
-      JSON.stringify(candidateData.tags),
-      candidateData.notes,
-      JSON.stringify(candidateData.skills),
-      candidateData.cvPath,
-      candidateData.emailOk ? 1 : 0,
-      candidateData.unsubscribeToken,
-      candidateData.createdAt,
-      candidateData.updatedAt
-    );
+      ) VALUES (@id, @full_name, @email, @phone, @current_title, @current_employer,
+        @salary_min, @salary_max, @seniority, @tags, @notes, @skills,
+        @cv_original_path, @email_ok, @unsubscribe_token, @created_at, @updated_at)
+    `, {
+      id: formattedData.id,
+      full_name: `${formattedData.firstName} ${formattedData.lastName}`.trim(),
+      email: formattedData.email,
+      phone: formattedData.phone,
+      current_title: formattedData.currentTitle,
+      current_employer: formattedData.currentEmployer,
+      salary_min: formattedData.salaryMin,
+      salary_max: formattedData.salaryMax,
+      seniority: formattedData.seniority,
+      tags: formattedData.tags,
+      notes: formattedData.notes,
+      skills: formattedData.skills,
+      cv_original_path: formattedData.cvPath,
+      email_ok: formattedData.emailOk ? 1 : 0,
+      unsubscribe_token: formattedData.unsubscribeToken,
+      created_at: formattedData.createdAt,
+      updated_at: formattedData.updatedAt
+    });
 
     // Send welcome email if email is provided and email_ok is true
     if (candidateData.email && candidateData.emailOk) {
@@ -351,8 +443,10 @@ router.post('/', upload.single('cv'), async (req, res) => {
         await sendWelcomeEmail(emailCandidateData, unsubscribeToken);
         
         // Update welcome_sent_at timestamp
-        db.prepare('UPDATE candidates SET welcome_sent_at = ? WHERE id = ?')
-          .run(now, id);
+        await execute('UPDATE candidates SET welcome_sent_at = @welcome_sent_at WHERE id = @id', {
+          welcome_sent_at: now,
+          id: id
+        });
         
         console.log('Welcome email sent to:', candidateData.email);
       } catch (error) {
@@ -425,11 +519,25 @@ router.post('/parse-cv', upload.single('file'), async (req, res) => {
       });
     }
     
+    // Handle parsing errors with 422 status
+    if (error.message.includes('Could not extract text') || 
+        error.message.includes('Supported formats')) {
+      return res.status(422).json({ 
+        success: false,
+        error: { 
+          code: 'PARSE_FAILED', 
+          message: error.message,
+          details: 'Please try uploading a different file format (TXT, PDF, or DOCX)'
+        }
+      });
+    }
+    
+    // Handle other errors with 500 status
     res.status(500).json({ 
       success: false, 
       error: { 
-        code: 'PARSE_FAILED', 
-        message: 'Failed to parse CV' 
+        code: 'INTERNAL_ERROR', 
+        message: 'An unexpected error occurred while processing the file' 
       },
       details: error.message 
     });
@@ -438,9 +546,8 @@ router.post('/parse-cv', upload.single('file'), async (req, res) => {
 });
 
 // GET /candidates - List candidates with advanced filters
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
-    const db = getDb();
     const { 
       search, 
       tags, 
@@ -452,13 +559,13 @@ router.get('/', (req, res) => {
       limit = 50 
     } = req.query;
 
-    let query = 'SELECT * FROM candidates';
+    let sql = 'SELECT * FROM candidates';
     const conditions = [];
-    const params = [];
+    const params = {};
 
     if (search) {
-      conditions.push('(full_name LIKE ? OR notes LIKE ? OR current_title LIKE ? OR current_employer LIKE ?)');
-      params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
+      conditions.push('(full_name LIKE @search OR notes LIKE @search OR current_title LIKE @search OR current_employer LIKE @search)');
+      params.search = `%${search}%`;
     }
 
     if (tags) {
@@ -466,54 +573,62 @@ router.get('/', (req, res) => {
       if (tagList.length > 0) {
         if (mode === 'AND') {
           // All tags must be present
-          const tagConditions = tagList.map(() => 'tags LIKE ?');
+          const tagConditions = tagList.map((tag, index) => `tags LIKE @tag${index}`);
           conditions.push(`(${tagConditions.join(' AND ')})`);
-          tagList.forEach(tag => params.push(`%"${tag}"%`));
+          tagList.forEach((tag, index) => {
+            params[`tag${index}`] = `%"${tag}"%`;
+          });
         } else {
           // Any tag can be present (OR mode)
-          const tagConditions = tagList.map(() => 'tags LIKE ?');
+          const tagConditions = tagList.map((tag, index) => `tags LIKE @tag${index}`);
           conditions.push(`(${tagConditions.join(' OR ')})`);
-          tagList.forEach(tag => params.push(`%"${tag}"%`));
+          tagList.forEach((tag, index) => {
+            params[`tag${index}`] = `%"${tag}"%`;
+          });
         }
       }
     }
 
     if (salaryMin) {
-      conditions.push('(salary_min >= ? OR salary_max >= ?)');
-      params.push(Number(salaryMin), Number(salaryMin));
+      conditions.push('(salary_min >= @salaryMin OR salary_max >= @salaryMin)');
+      params.salaryMin = Number(salaryMin);
     }
 
     if (salaryMax) {
-      conditions.push('(salary_max <= ? OR salary_min <= ?)');
-      params.push(Number(salaryMax), Number(salaryMax));
+      conditions.push('(salary_max <= @salaryMax OR salary_min <= @salaryMax)');
+      params.salaryMax = Number(salaryMax);
     }
 
     if (skills) {
       const skillList = Array.isArray(skills) ? skills : skills.split(',');
       if (skillList.length > 0) {
-        const skillConditions = skillList.map(skill => {
+        const skillConditions = skillList.map((skill, index) => {
           const skillKey = skill.toLowerCase().replace(/\s+/g, '');
-          return `JSON_EXTRACT(skills, '$.${skillKey}') >= 3`;
+          return `JSON_EXTRACT(skills, '$.${skillKey}') >= @skill${index}`;
         });
         conditions.push(`(${skillConditions.join(' AND ')})`);
+        skillList.forEach((skill, index) => {
+          params[`skill${index}`] = 3;
+        });
       }
     }
 
     if (conditions.length) {
-      query += ' WHERE ' + conditions.join(' AND ');
+      sql += ' WHERE ' + conditions.join(' AND ');
     }
 
     // Get total count
-    const countQuery = query.replace('SELECT *', 'SELECT COUNT(*) as count');
-    const countResult = db.prepare(countQuery).get(params);
+    const countSql = sql.replace('SELECT *', 'SELECT COUNT(*) as count');
+    const countResult = await queryOne(countSql, params);
     const total = countResult ? countResult.count : 0;
 
     // Add pagination
     const offset = (parseInt(page) - 1) * parseInt(limit);
-    query += ' ORDER BY updated_at DESC LIMIT ? OFFSET ?';
-    params.push(parseInt(limit), offset);
+    sql += ' ORDER BY updated_at DESC LIMIT @limit OFFSET @offset';
+    params.limit = parseInt(limit);
+    params.offset = offset;
 
-    const candidates = db.prepare(query).all(params) || [];
+    const candidates = await queryAll(sql, params);
     
     // Ensure candidates is an array
     const candidatesArray = Array.isArray(candidates) ? candidates : [];
@@ -521,11 +636,7 @@ router.get('/', (req, res) => {
     // Parse JSON fields and filter out null candidates
     const parsedCandidates = candidatesArray
       .filter(candidate => candidate !== null)
-      .map(candidate => ({
-        ...candidate,
-        tags: JSON.parse(candidate.tags || '[]'),
-        skills: JSON.parse(candidate.skills || '{}')
-      }));
+      .map(candidate => parseJsonFields(candidate, ['tags', 'skills']));
 
     res.json({
       success: true,
@@ -547,12 +658,11 @@ router.get('/', (req, res) => {
 });
 
 // GET /candidates/:id - Get single candidate
-router.get('/:id', (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
-    const db = getDb();
     const { id } = req.params;
 
-    const candidate = db.prepare('SELECT * FROM candidates WHERE id = ?').get(id);
+    const candidate = await queryOne('SELECT * FROM candidates WHERE id = @id', { id });
     
     if (!candidate) {
       return res.status(404).json({ 
@@ -562,11 +672,7 @@ router.get('/:id', (req, res) => {
     }
 
     // Parse JSON fields
-    const parsedCandidate = {
-      ...candidate,
-      tags: JSON.parse(candidate.tags || '[]'),
-      skills: JSON.parse(candidate.skills || '{}')
-    };
+    const parsedCandidate = parseJsonFields(candidate, ['tags', 'skills']);
 
     res.json({ success: true, candidate: parsedCandidate });
 
@@ -581,13 +687,12 @@ router.get('/:id', (req, res) => {
 });
 
 // PATCH /candidates/:id - Update candidate
-router.patch('/:id', (req, res) => {
+router.patch('/:id', async (req, res) => {
   try {
-    const db = getDb();
     const { id } = req.params;
-    const now = new Date().toISOString();
+    const now = getCurrentTimestamp();
 
-    const candidate = db.prepare('SELECT * FROM candidates WHERE id = ?').get(id);
+    const candidate = await queryOne('SELECT * FROM candidates WHERE id = @id', { id });
     if (!candidate) {
       return res.status(404).json({ 
         success: false, 
@@ -620,34 +725,35 @@ router.patch('/:id', (req, res) => {
       salary_min: salaryMin !== undefined ? (salaryMin ? Number(salaryMin) : null) : candidate.salary_min,
       salary_max: salaryMax !== undefined ? (salaryMax ? Number(salaryMax) : null) : candidate.salary_max,
       seniority: seniority !== undefined ? seniority : candidate.seniority,
-      tags: tags !== undefined ? JSON.stringify(Array.isArray(tags) ? tags : []) : candidate.tags,
+      tags: tags !== undefined ? (Array.isArray(tags) ? tags : []) : candidate.tags,
       notes: notes !== undefined ? notes : candidate.notes,
-      skills: skills !== undefined ? JSON.stringify(skills) : candidate.skills,
+      skills: skills !== undefined ? skills : candidate.skills,
       updated_at: now
     };
 
-    const stmt = db.prepare(`
-      UPDATE candidates SET
-        full_name = ?, email = ?, phone = ?, current_title = ?, current_employer = ?,
-        salary_min = ?, salary_max = ?, seniority = ?, tags = ?, notes = ?, skills = ?, updated_at = ?
-      WHERE id = ?
-    `);
+    // Format JSON fields for database storage
+    const formattedData = formatJsonFields(updatedData, ['tags', 'skills']);
 
-    stmt.run(
-      updatedData.full_name,
-      updatedData.email,
-      updatedData.phone,
-      updatedData.current_title,
-      updatedData.current_employer,
-      updatedData.salary_min,
-      updatedData.salary_max,
-      updatedData.seniority,
-      updatedData.tags,
-      updatedData.notes,
-      updatedData.skills,
-      updatedData.updated_at,
-      id
-    );
+    await execute(`
+      UPDATE candidates SET
+        full_name = @full_name, email = @email, phone = @phone, current_title = @current_title, current_employer = @current_employer,
+        salary_min = @salary_min, salary_max = @salary_max, seniority = @seniority, tags = @tags, notes = @notes, skills = @skills, updated_at = @updated_at
+      WHERE id = @id
+    `, {
+      full_name: formattedData.full_name,
+      email: formattedData.email,
+      phone: formattedData.phone,
+      current_title: formattedData.current_title,
+      current_employer: formattedData.current_employer,
+      salary_min: formattedData.salary_min,
+      salary_max: formattedData.salary_max,
+      seniority: formattedData.seniority,
+      tags: formattedData.tags,
+      notes: formattedData.notes,
+      skills: formattedData.skills,
+      updated_at: formattedData.updated_at,
+      id: id
+    });
 
     res.json({ success: true, message: 'Candidate updated successfully' });
 
@@ -662,12 +768,11 @@ router.patch('/:id', (req, res) => {
 });
 
 // DELETE /candidates/:id - Delete candidate
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
-    const db = getDb();
     const { id } = req.params;
 
-    const candidate = db.prepare('SELECT * FROM candidates WHERE id = ?').get(id);
+    const candidate = await queryOne('SELECT * FROM candidates WHERE id = @id', { id });
     if (!candidate) {
       return res.status(404).json({ 
         success: false, 
@@ -675,7 +780,7 @@ router.delete('/:id', (req, res) => {
       });
     }
 
-    db.prepare('DELETE FROM candidates WHERE id = ?').run(id);
+    await execute('DELETE FROM candidates WHERE id = @id', { id });
 
     res.json({ success: true, message: 'Candidate deleted successfully' });
 
@@ -886,34 +991,36 @@ router.post('/import/commit', async (req, res) => {
           }
 
           try {
-            const db = getDb();
-            const id = nanoid();
-            const now = new Date().toISOString();
+            const id = generateId() || nanoid();
+            const now = getCurrentTimestamp();
 
-            const stmt = db.prepare(`
+            // Format data for database storage
+            const formattedData = formatJsonFields(candidate, ['tags', 'skills']);
+
+            await execute(`
               INSERT INTO candidates (
                 id, full_name, email, phone, current_title, current_employer,
                 salary_min, salary_max, seniority, tags, notes, skills,
                 created_at, updated_at
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `);
-
-            stmt.run(
-              id,
-              `${candidate.firstName} ${candidate.lastName}`.trim(),
-              candidate.email,
-              candidate.phone,
-              candidate.currentTitle,
-              candidate.currentEmployer,
-              candidate.salaryMin,
-              candidate.salaryMax,
-              candidate.seniority,
-              JSON.stringify(candidate.tags),
-              candidate.notes,
-              JSON.stringify(candidate.skills),
-              now,
-              now
-            );
+              ) VALUES (@id, @full_name, @email, @phone, @current_title, @current_employer,
+                @salary_min, @salary_max, @seniority, @tags, @notes, @skills,
+                @created_at, @updated_at)
+            `, {
+              id: id,
+              full_name: `${candidate.firstName} ${candidate.lastName}`.trim(),
+              email: candidate.email,
+              phone: candidate.phone,
+              current_title: candidate.currentTitle,
+              current_employer: candidate.currentEmployer,
+              salary_min: candidate.salaryMin,
+              salary_max: candidate.salaryMax,
+              seniority: candidate.seniority,
+              tags: formattedData.tags,
+              notes: candidate.notes,
+              skills: formattedData.skills,
+              created_at: now,
+              updated_at: now
+            });
 
             results.push({ id, ...candidate });
           } catch (dbError) {
@@ -947,13 +1054,12 @@ router.post('/import/commit', async (req, res) => {
 });
 
 // GET /unsubscribe/:token - Unsubscribe candidate from emails
-router.get('/unsubscribe/:token', (req, res) => {
+router.get('/unsubscribe/:token', async (req, res) => {
   try {
-    const db = getDb();
     const { token } = req.params;
     
     // Find candidate by unsubscribe token
-    const candidate = db.prepare('SELECT id, full_name FROM candidates WHERE unsubscribe_token = ?').get(token);
+    const candidate = await queryOne('SELECT id, full_name FROM candidates WHERE unsubscribe_token = @token', { token });
     
     if (!candidate) {
       return res.status(404).send(`
@@ -976,7 +1082,7 @@ router.get('/unsubscribe/:token', (req, res) => {
     }
     
     // Update email_ok to false
-    db.prepare('UPDATE candidates SET email_ok = 0 WHERE unsubscribe_token = ?').run(token);
+    await execute('UPDATE candidates SET email_ok = 0 WHERE unsubscribe_token = @token', { token });
     
     console.log('Candidate unsubscribed:', candidate.full_name, candidate.id);
     
@@ -1030,10 +1136,9 @@ router.get('/unsubscribe/:token', (req, res) => {
   }
 });
 
-// PATCH /candidates/:id - Update candidate email preferences
-router.patch('/:id', (req, res) => {
+// PATCH /candidates/:id/email-preferences - Update candidate email preferences
+router.patch('/:id/email-preferences', async (req, res) => {
   try {
-    const db = getDb();
     const { id } = req.params;
     const { email_ok } = req.body;
     
@@ -1041,25 +1146,24 @@ router.patch('/:id', (req, res) => {
       return res.status(400).json({ error: 'email_ok must be a boolean' });
     }
     
-    const now = new Date().toISOString();
+    const now = getCurrentTimestamp();
     
-    db.prepare('UPDATE candidates SET email_ok = ?, updated_at = ? WHERE id = ?')
-      .run(email_ok ? 1 : 0, now, id);
+    await execute('UPDATE candidates SET email_ok = @email_ok, updated_at = @updated_at WHERE id = @id', {
+      email_ok: email_ok ? 1 : 0,
+      updated_at: now,
+      id: id
+    });
     
     // Get updated candidate
-    const candidate = db.prepare('SELECT * FROM candidates WHERE id = ?').get(id);
+    const candidate = await queryOne('SELECT * FROM candidates WHERE id = @id', { id });
     
     if (!candidate) {
       return res.status(404).json({ error: 'Candidate not found' });
     }
     
     // Parse JSON fields
-    const parsedCandidate = {
-      ...candidate,
-      tags: JSON.parse(candidate.tags || '[]'),
-      skills: JSON.parse(candidate.skills || '{}'),
-      email_ok: Boolean(candidate.email_ok)
-    };
+    const parsedCandidate = parseJsonFields(candidate, ['tags', 'skills']);
+    parsedCandidate.email_ok = Boolean(candidate.email_ok);
     
     res.json(parsedCandidate);
     
@@ -1076,10 +1180,9 @@ router.patch('/:id', (req, res) => {
 // POST /candidates/:id/resend-welcome - Resend welcome email
 router.post('/:id/resend-welcome', async (req, res) => {
   try {
-    const db = getDb();
     const { id } = req.params;
     
-    const candidate = db.prepare('SELECT * FROM candidates WHERE id = ?').get(id);
+    const candidate = await queryOne('SELECT * FROM candidates WHERE id = @id', { id });
     
     if (!candidate) {
       return res.status(404).json({ error: 'Candidate not found' });
@@ -1094,7 +1197,8 @@ router.post('/:id/resend-welcome', async (req, res) => {
     }
     
     // Parse candidate data
-    const skills = JSON.parse(candidate.skills || '{}');
+    const parsedCandidate = parseJsonFields(candidate, ['tags', 'skills']);
+    const skills = parsedCandidate.skills;
     const candidateData = {
       id: candidate.id,
       firstName: candidate.full_name.split(' ')[0] || '',
@@ -1109,9 +1213,12 @@ router.post('/:id/resend-welcome', async (req, res) => {
     await sendWelcomeEmail(candidateData, candidate.unsubscribe_token);
     
     // Update welcome_sent_at timestamp
-    const now = new Date().toISOString();
-    db.prepare('UPDATE candidates SET welcome_sent_at = ?, updated_at = ? WHERE id = ?')
-      .run(now, now, id);
+    const now = getCurrentTimestamp();
+    await execute('UPDATE candidates SET welcome_sent_at = @welcome_sent_at, updated_at = @updated_at WHERE id = @id', {
+      welcome_sent_at: now,
+      updated_at: now,
+      id: id
+    });
     
     console.log('Welcome email resent to:', candidate.email);
     
