@@ -10,6 +10,7 @@
     "restartPolicyMaxRetries": 10
   },
   "env": {
-    "NIXPACKS_NODE_VERSION": "20.18.1"
+    "NIXPACKS_NODE_VERSION": "20.18.1",
+    "NODE_VERSION": "20.18.1"
   }
 }
