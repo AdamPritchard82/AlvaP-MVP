@@ -515,18 +515,6 @@ class ApiClient {
     });
   }
 
-  // Pipeline stages
-  async getPipelineStages() {
-    return this.request('/pipeline-stages');
-  }
-
-  // Update job
-  async updateJob(jobId: string, updates: any) {
-    return this.request(`/jobs/${jobId}`, {
-      method: 'PATCH',
-      body: JSON.stringify(updates)
-    });
-  }
 
   // Email preferences
   async updateCandidateEmailPreferences(candidateId: string, emailOk: boolean): Promise<Candidate> {
