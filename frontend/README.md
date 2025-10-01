@@ -36,14 +36,16 @@ A modern React-based consultant dashboard for the Door 10 recruitment platform.
 
 ## Backend Integration
 
-The frontend is configured to proxy API requests to the backend running on port 4000. Make sure your backend is running before starting the frontend.
+The frontend is configured to connect to the Railway backend:
+- **Production**: `https://natural-kindness-production.up.railway.app/api`
+- **Development**: Proxies to `http://localhost:3001/api` (for local testing)
 
 ## Environment Variables
 
 Create a `.env` file in the frontend directory if you need to customize the API endpoint:
 
 ```
-VITE_API_URL=http://localhost:4000
+VITE_API_BASE=https://natural-kindness-production.up.railway.app/api
 ```
 
 ## Building for Production

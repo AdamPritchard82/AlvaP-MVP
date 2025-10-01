@@ -73,20 +73,7 @@ export default function CandidateNewNew() {
       }
       
       // Call backend API
-      const formData = new FormData();
-      formData.append('file', file);
-      
-      const response = await fetch(`${import.meta.env.VITE_API_BASE}/api/candidates/parse-cv`, {
-        method: 'POST',
-        body: formData,
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error?.message || `HTTP ${response.status}: ${response.statusText}`);
-      }
-      
-      const result = await response.json();
+      const result = await api.parseCV(file);
       
       if (!result.success) {
         throw new Error(result.error?.message || 'Failed to parse CV');

@@ -197,7 +197,7 @@ class ApiClient {
     const formData = new FormData();
     formData.append('file', file);
     
-    const response = await fetch(`${API_BASE}/api/candidates/parse-cv`, {
+    const response = await fetch(`${API_BASE}/candidates/parse-cv`, {
       method: 'POST',
       body: formData,
     });
