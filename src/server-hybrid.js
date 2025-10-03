@@ -374,8 +374,8 @@ app.post('/api/candidates', async (req, res) => {
         candidateData.updatedAt
       ]);
     } else {
-      const db = getDb();
-      const stmt = db.prepare(`
+      const dbInstance = db();
+      const stmt = dbInstance.prepare(`
         INSERT INTO candidates (id, full_name, email, phone, current_title, current_employer, salary_min, salary_max, skills, tags, notes, email_ok, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
@@ -430,7 +430,7 @@ app.get('/api/candidates', async (req, res) => {
         total: result.rows.length
       });
     } else {
-      const dbInstance = getDb();
+      const dbInstance = db();
       const candidates = dbInstance.prepare('SELECT * FROM candidates ORDER BY created_at DESC LIMIT 50').all();
       res.json({
         success: true,

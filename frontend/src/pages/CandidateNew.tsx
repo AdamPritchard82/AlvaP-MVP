@@ -1,16 +1,37 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save } from 'lucide-react';
-import { api } from '../lib/api';
-import toast from 'react-hot-toast';
-import CVUpload from '../components/CVUpload';
+import { toast } from 'react-hot-toast';
 
-export default function CandidateNew() {
+interface FormData {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  currentTitle: string;
+  currentEmployer: string;
+  salaryMin: string;
+  salaryMax: string;
+  skills: {
+    communications: number;
+    campaigns: number;
+    policy: number;
+    publicAffairs: number;
+  };
+  tags: string[];
+  notes: string;
+  emailOk: boolean;
+}
+
+interface ValidationErrors {
+  [key: string]: string;
+}
+
+const CandidateNew: React.FC = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
-  const [parsing, setParsing] = useState(false);
-  const [formData, setFormData] = useState({
+  const [validationErrors, setValidationErrors] = useState<ValidationErrors>({});
+  
+  const [formData, setFormData] = useState<FormData>({
     firstName: '',
     lastName: '',
     email: '',
@@ -19,25 +40,61 @@ export default function CandidateNew() {
     currentEmployer: '',
     salaryMin: '',
     salaryMax: '',
-    seniority: '',
-    tags: [] as string[],
-    notes: '',
-    emailOk: true,
     skills: {
       communications: 0,
       campaigns: 0,
       policy: 0,
       publicAffairs: 0
-    }
+    },
+    tags: [],
+    notes: '',
+    emailOk: true
   });
 
-  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  // Validation function
+  const validateForm = (): boolean => {
+    const errors: ValidationErrors = {};
+    
+    // Required fields
+    if (!formData.firstName.trim()) errors.firstName = 'First name is required';
+    if (!formData.lastName.trim()) errors.lastName = 'Last name is required';
+    if (!formData.email.trim()) errors.email = 'Email is required';
+    if (!formData.phone.trim()) errors.phone = 'Phone is required';
+    if (!formData.currentTitle.trim()) errors.currentTitle = 'Job title is required';
+    if (!formData.currentEmployer.trim()) errors.currentEmployer = 'Employer is required';
+    
+    // Email format validation
+    if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      errors.email = 'Please enter a valid email address';
+    }
+    
+    // Skills validation - at least one skill must be rated
+    const hasSkills = Object.values(formData.skills).some(value => value > 0);
+    if (!hasSkills) errors.skills = 'Please rate at least one skill';
+    
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
+  // Check if form is valid (for UI feedback)
+  const isFormValid = (): boolean => {
+    return formData.firstName.trim() !== '' &&
+           formData.lastName.trim() !== '' &&
+           formData.email.trim() !== '' &&
+           formData.phone.trim() !== '' &&
+           formData.currentTitle.trim() !== '' &&
+           formData.currentEmployer.trim() !== '' &&
+           Object.values(formData.skills).some(value => value > 0) &&
+           /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email);
+  };
+
+  // Handle input changes
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value, type } = e.target;
+    
     setFormData(prev => ({
       ...prev,
-      [name]: value
+      [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value
     }));
     
     // Clear validation error when user starts typing
@@ -49,7 +106,8 @@ export default function CandidateNew() {
     }
   };
 
-  const handleSkillChange = (skill: string, value: number) => {
+  // Handle skill rating changes
+  const handleSkillChange = (skill: keyof FormData['skills'], value: number) => {
     setFormData(prev => ({
       ...prev,
       skills: {
@@ -58,7 +116,7 @@ export default function CandidateNew() {
       }
     }));
     
-    // Clear skills validation error when user adjusts skills
+    // Clear skills validation error
     if (validationErrors.skills) {
       setValidationErrors(prev => ({
         ...prev,
@@ -67,706 +125,122 @@ export default function CandidateNew() {
     }
   };
 
-  // Validation functions
-  const validateForm = () => {
-    const errors: Record<string, string> = {};
-    
-    // Required fields
-    if (!formData.firstName.trim()) {
-      errors.firstName = 'First name is required';
-    }
-    
-    if (!formData.lastName.trim()) {
-      errors.lastName = 'Last name is required';
-    }
-    
-    if (!formData.email.trim()) {
-      errors.email = 'Email is required';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      errors.email = 'Please enter a valid email address';
-    }
-    
-    if (!formData.phone.trim()) {
-      errors.phone = 'Phone number is required';
-    }
-    
-    if (!formData.currentTitle.trim()) {
-      errors.currentTitle = 'Current job title is required';
-    }
-    
-    if (!formData.currentEmployer.trim()) {
-      errors.currentEmployer = 'Current employer is required';
-    }
-    
-    // Skills validation - at least one skill should be rated > 0
-    const hasAnySkills = Object.values(formData.skills).some(value => value > 0);
-    if (!hasAnySkills) {
-      errors.skills = 'Please rate at least one skill area';
-    }
-    
-    setValidationErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
+  // Handle CV file upload and parsing
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-  const isFormValid = () => {
-    return formData.firstName.trim() && 
-           formData.lastName.trim() && 
-           formData.email.trim() && 
-           /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email) &&
-           formData.phone.trim() && 
-           formData.currentTitle.trim() && 
-           formData.currentEmployer.trim() &&
-           Object.values(formData.skills).some(value => value > 0);
-  };
+    // Validate file type
+    const allowedTypes = ['.txt', '.pdf', '.docx', '.doc'];
+    const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
+    
+    if (!allowedTypes.includes(fileExtension)) {
+      toast.error('Please upload a .txt, .pdf, .docx, or .doc file');
+      return;
+    }
 
-  const parseCVContent = (text: string) => {
-    console.log('Starting to parse CV content...');
-    console.log('Raw text received:', text.substring(0, 200) + '...');
+    setLoading(true);
     
     try {
-      const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
-      console.log('CV lines:', lines.slice(0, 10));
+      const formData = new FormData();
+      formData.append('file', file);
       
-      let firstName = '';
-      let lastName = '';
-      let email = '';
-      let phone = '';
-      let currentTitle = '';
-      let currentEmployer = '';
-      
-      // Extract name from first line
-      if (lines.length > 0) {
-        const firstLine = lines[0];
-        // Look for name patterns
-        const nameMatch = firstLine.match(/^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/);
-        if (nameMatch) {
-          const fullName = nameMatch[1];
-          const nameParts = fullName.split(' ');
-          firstName = nameParts[0] || '';
-          lastName = nameParts.slice(1).join(' ') || '';
-          console.log('Extracted name:', firstName, lastName);
-        }
-      }
-      
-      // Extract email
-      const emailMatch = text.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
-      if (emailMatch) {
-        email = emailMatch[1];
-        console.log('Extracted email:', email);
-      }
-      
-      // Extract phone
-      const phoneMatch = text.match(/(\+?[\d\s\-\(\)]{10,})/);
-      if (phoneMatch) {
-        phone = phoneMatch[1];
-        console.log('Extracted phone:', phone);
-      }
-      
-      // Look for employment section
-      const employmentStart = lines.findIndex(line => {
-        const lowerLine = line.toLowerCase();
-        return lowerLine.includes('employment') || 
-               lowerLine.includes('experience') ||
-               lowerLine.includes('work history') ||
-               lowerLine.includes('professional experience') ||
-               lowerLine.includes('career history') ||
-               lowerLine.includes('work experience') ||
-               lowerLine.includes('employment history') ||
-               lowerLine.includes('current role') ||
-               lowerLine.includes('current position');
+      const response = await fetch('/api/candidates/parse-cv', {
+        method: 'POST',
+        body: formData
       });
       
-      console.log('Found employment section at line:', employmentStart);
+      if (!response.ok) {
+        throw new Error('Failed to parse CV');
+      }
       
-      // Extract from employment section or first 20 lines
-      const searchStart = employmentStart !== -1 ? employmentStart : 0;
-      const searchEnd = Math.min(searchStart + 20, lines.length);
+      const result = await response.json();
       
-      // Look for title and company patterns
-      for (let i = searchStart; i < searchEnd; i++) {
-        const line = lines[i].trim();
+      if (result.success && result.data) {
+        const parsedData = result.data;
         
-        // Skip very short lines, empty lines, and obvious headers
-        if (line.length < 3 || 
-            line.match(/^(name|email|phone|address|summary|profile|objective|skills|education|experience|employment|work|location|contact|references|achievements|qualifications)/i)) {
-          continue;
-        }
-        
-        console.log(`Checking line ${i}: "${line}"`);
-        
-        // Look for job titles
-        if (!currentTitle) {
-          const jobKeywords = [
-            'manager', 'director', 'officer', 'specialist', 'coordinator', 
-            'executive', 'analyst', 'consultant', 'advisor', 'associate', 
-            'assistant', 'head', 'chief', 'vice', 'deputy', 'senior', 'junior',
-            'lead', 'principal', 'architect', 'engineer', 'developer', 'designer',
-            'supervisor', 'superintendent', 'administrator', 'representative',
-            'officer', 'agent', 'coordinator', 'facilitator', 'liaison'
-          ];
-          
-          const hasJobKeyword = jobKeywords.some(keyword => 
-            line.toLowerCase().includes(keyword)
-          );
-          
-          const looksLikeTitle = /^[A-Z][a-zA-Z\s&,\-\/]+$/.test(line) && 
-                                line.length > 4 && line.length < 60 &&
-                                !line.includes('@') && !line.includes('http') &&
-                                !line.match(/\d{4}/) && // No years
-                                !line.toLowerCase().includes('summary') &&
-                                !line.toLowerCase().includes('phone') &&
-                                !line.toLowerCase().includes('location') &&
-                                !line.toLowerCase().includes('address');
-          
-          if ((hasJobKeyword || looksLikeTitle) && 
-              !line.toLowerCase().includes('university') &&
-              !line.toLowerCase().includes('college') &&
-              !line.toLowerCase().includes('school')) {
-            currentTitle = line;
-            console.log(`Found job title: "${line}"`);
+        // Auto-fill form with parsed data
+        setFormData(prev => ({
+          ...prev,
+          firstName: parsedData.firstName || prev.firstName,
+          lastName: parsedData.lastName || prev.lastName,
+          email: parsedData.email || prev.email,
+          phone: parsedData.phone || prev.phone,
+          currentTitle: parsedData.currentTitle || prev.currentTitle,
+          currentEmployer: parsedData.currentEmployer || prev.currentEmployer,
+          skills: {
+            communications: parsedData.skills?.communications ? 5 : prev.skills.communications,
+            campaigns: parsedData.skills?.campaigns ? 5 : prev.skills.campaigns,
+            policy: parsedData.skills?.policy ? 5 : prev.skills.policy,
+            publicAffairs: parsedData.skills?.publicAffairs ? 5 : prev.skills.publicAffairs
           }
-        }
+        }));
         
-        // Look for companies
-        if (!currentEmployer) {
-          const companyIndicators = [
-            'Corporation', 'Inc', 'Ltd', 'LLC', 'Company', 'Group', 
-            'Associates', 'Partners', 'Consulting', 'Services', 'Solutions',
-            'Limited', 'International', 'Global', 'Systems', 'Technologies',
-            'Enterprises', 'Holdings', 'Industries', 'Organizations', 'Foundation',
-            'Institute', 'Society', 'Association', 'Council', 'Board',
-            'Ministry', 'Department', 'Agency', 'Authority', 'Commission'
-          ];
-          
-          const hasCompanyIndicator = companyIndicators.some(indicator => 
-            line.includes(indicator)
-          );
-          
-          const looksLikeCompany = /^[A-Z][a-zA-Z\s&,\-\/\.]+$/.test(line) && 
-                                  line.length > 3 && line.length < 80 &&
-                                  !line.includes('@') && !line.includes('http') &&
-                                  !line.match(/\d{4}/) && // No years
-                                  !line.toLowerCase().includes('summary') &&
-                                  !line.toLowerCase().includes('phone') &&
-                                  !line.toLowerCase().includes('location') &&
-                                  !line.toLowerCase().includes('address') &&
-                                  !line.toLowerCase().includes('university') &&
-                                  !line.toLowerCase().includes('college') &&
-                                  !line.toLowerCase().includes('school');
-          
-          if ((hasCompanyIndicator || looksLikeCompany) && 
-              !line.toLowerCase().includes('university') &&
-              !line.toLowerCase().includes('college') &&
-              !line.toLowerCase().includes('school')) {
-            currentEmployer = line;
-            console.log(`Found company: "${line}"`);
-          }
-        }
+        toast.success(`CV parsed successfully using ${result.parserUsed}`);
+      } else {
+        toast.error('Failed to parse CV');
       }
-      
-      console.log('Final extracted title:', currentTitle);
-      console.log('Final extracted employer:', currentEmployer);
-      
-      // Extract skills based on content
-      const skills = {
-        communications: 0,
-        campaigns: 0,
-        policy: 0,
-        publicAffairs: 0
-      };
-      
-      const textLower = text.toLowerCase();
-      if (textLower.includes('communication') || textLower.includes('pr') || textLower.includes('media')) {
-        skills.communications = Math.min(5, Math.floor(Math.random() * 3) + 3);
-      }
-      if (textLower.includes('campaign') || textLower.includes('marketing') || textLower.includes('outreach')) {
-        skills.campaigns = Math.min(5, Math.floor(Math.random() * 3) + 3);
-      }
-      if (textLower.includes('policy') || textLower.includes('government') || textLower.includes('legislative')) {
-        skills.policy = Math.min(5, Math.floor(Math.random() * 3) + 3);
-      }
-      if (textLower.includes('public affairs') || textLower.includes('stakeholder') || textLower.includes('engagement')) {
-        skills.publicAffairs = Math.min(5, Math.floor(Math.random() * 3) + 3);
-      }
-      
-      // Generate tags based on skills and title
-      const tags = [];
-      if (skills.communications > 0) tags.push('communications');
-      if (skills.campaigns > 0) tags.push('campaigns');
-      if (skills.policy > 0) tags.push('policy');
-      if (skills.publicAffairs > 0) tags.push('public-affairs');
-      if (currentTitle.toLowerCase().includes('senior')) tags.push('senior');
-      if (currentTitle.toLowerCase().includes('manager')) tags.push('management');
-
-      return {
-        firstName,
-        lastName,
-        email,
-        phone,
-        currentTitle,
-        currentEmployer,
-        skills,
-        tags
-      };
     } catch (error) {
-      console.error('Error in parseCVContent:', error);
-      // Return empty data on error
-      return {
-        firstName: '',
-        lastName: '',
-        email: '',
-        phone: '',
-        currentTitle: '',
-        currentEmployer: '',
-        skills: { communications: 0, campaigns: 0, policy: 0, publicAffairs: 0 },
-        tags: []
-      };
-    }
-  };
-
-  const handleCVUpload = async (file: File) => {
-    setUploadedFile(file);
-    setParsing(true);
-    
-    // Show parsing status
-    toast.loading('Parsing CV...', { id: 'cv-parse' });
-    
-    try {
-      // Validate file type - accept common CV formats
-      const allowedTypes = ['text/plain', 'application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-      if (!allowedTypes.includes(file.type)) {
-        toast.error('Please upload a .txt, .pdf, or .docx file.', { id: 'cv-parse' });
-        return;
-      }
-      
-      // Validate file size (20MB limit)
-      const maxSize = 20 * 1024 * 1024; // 20MB
-      if (file.size > maxSize) {
-        toast.error('File too large. Please upload files smaller than 20MB.', { id: 'cv-parse' });
-        return;
-      }
-      
-      // Call backend API for all file types
-      const result = await api.parseCV(file);
-      
-      if (!result.success) {
-        throw new Error(result.error?.message || 'Failed to parse CV');
-      }
-      
-      const parsedData = result.data;
-      
-      // Prefill form with parsed data
-      setFormData(prev => ({
-        ...prev,
-        firstName: parsedData.firstName || '',
-        lastName: parsedData.lastName || '',
-        email: parsedData.email || '',
-        phone: parsedData.phone || '',
-        currentTitle: parsedData.currentTitle || '',
-        currentEmployer: parsedData.currentEmployer || '',
-        skills: {
-          communications: parsedData.skills?.communications ? 5 : 0,
-          campaigns: parsedData.skills?.campaigns ? 5 : 0,
-          policy: parsedData.skills?.policy ? 5 : 0,
-          publicAffairs: parsedData.skills?.publicAffairs ? 5 : 0
-        },
-        tags: Array.isArray(parsedData.tags) ? parsedData.tags.join(', ') : (parsedData.tags || ''),
-        notes: parsedData.notes || ''
-      }));
-      
-      toast.success('CV parsed successfully! Fields have been prefilled.', { id: 'cv-parse' });
-      
-    } catch (error) {
-      console.error('Error parsing CV:', error);
-      toast.error(`Failed to parse CV: ${error.message}`, { id: 'cv-parse' });
-      // Keep manual entry enabled - don't clear the form
+      console.error('CV parsing error:', error);
+      toast.error('Failed to parse CV. Please try again.');
     } finally {
-      setParsing(false);
+      setLoading(false);
     }
   };
 
-  const handleCVRemove = () => {
-    setUploadedFile(null);
-  };
-
+  // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validate form before submitting
     if (!validateForm()) {
       toast.error('Please fill in all required fields correctly');
       return;
     }
     
     setLoading(true);
-
+    
     try {
-      const tags = Array.isArray(formData.tags) ? formData.tags : (formData.tags as string).split(',').map((tag: string) => tag.trim()).filter((tag: string) => tag);
+      const response = await fetch('/api/candidates', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(formData)
+      });
       
-      const candidateData = {
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        email: formData.email || undefined,
-        phone: formData.phone || undefined,
-        currentTitle: formData.currentTitle || undefined,
-        currentEmployer: formData.currentEmployer || undefined,
-        salaryMin: formData.salaryMin ? parseInt(formData.salaryMin) : undefined,
-        salaryMax: formData.salaryMax ? parseInt(formData.salaryMax) : undefined,
-        seniority: formData.seniority || undefined,
-        tags,
-        notes: formData.notes || undefined,
-        skills: formData.skills
-      };
-
-      console.log('Sending candidate data:', candidateData);
-
-      if (uploadedFile) {
-        // Create FormData for file upload
-        const formDataToSend = new FormData();
-        Object.entries(candidateData).forEach(([key, value]) => {
-          if (value !== undefined) {
-            if (key === 'skills' || key === 'tags') {
-              formDataToSend.append(key, JSON.stringify(value));
-            } else {
-              formDataToSend.append(key, String(value));
-            }
-          }
-        });
-        formDataToSend.append('cv', uploadedFile);
-
-        // Upload with file
-        const response = await fetch('/api/candidates', {
-          method: 'POST',
-          body: formDataToSend,
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          }
-        });
-
-        if (!response.ok) {
-          throw new Error('Failed to create candidate');
-        }
-
-        const result = await response.json();
-        toast.success('Candidate created successfully');
-        navigate(`/candidates/${result.id}`);
+      if (!response.ok) {
+        throw new Error('Failed to create candidate');
+      }
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        toast.success('Candidate created successfully!');
+        navigate('/candidates');
       } else {
-        // Create without file
-        const result = await api.createCandidate(candidateData);
-        toast.success('Candidate created successfully');
-        navigate(`/candidates/${result.id}`);
+        throw new Error(result.message || 'Failed to create candidate');
       }
     } catch (error) {
       console.error('Error creating candidate:', error);
-      toast.error('Failed to create candidate');
+      toast.error('Failed to create candidate. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="md:flex md:items-center md:justify-between">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center">
-            <button
-              onClick={() => navigate('/candidates')}
-              className="mr-4 p-2 text-gray-400 hover:text-gray-600"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </button>
-            <div>
-              <h2 className="text-2xl font-bold leading-7 text-gray-900 sm:text-3xl sm:truncate">
-                Add New Candidate
-              </h2>
-              <p className="mt-1 text-sm text-gray-500">
-                Create a new candidate profile with CV upload or manual entry.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* CV Upload */}
-          <div className="lg:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              CV Upload (Optional)
-            </label>
-            <CVUpload
-              onUpload={handleCVUpload}
-              onRemove={handleCVRemove}
-              disabled={loading}
-              parsing={parsing}
-            />
-            <p className="mt-2 text-xs text-gray-500">
-              Upload a CV to automatically extract candidate information
-            </p>
-          </div>
-
-          {/* Basic Information */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-medium text-gray-900">Basic Information</h3>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                First Name *
-              </label>
-              <input
-                type="text"
-                name="firstName"
-                value={formData.firstName}
-                onChange={handleInputChange}
-                required
-                className={`input ${validationErrors.firstName ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''}`}
-                placeholder="Enter first name"
-              />
-              {validationErrors.firstName && (
-                <p className="mt-1 text-sm text-red-600">{validationErrors.firstName}</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Last Name *
-              </label>
-              <input
-                type="text"
-                name="lastName"
-                value={formData.lastName}
-                onChange={handleInputChange}
-                required
-                className={`input ${validationErrors.lastName ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''}`}
-                placeholder="Enter last name"
-              />
-              {validationErrors.lastName && (
-                <p className="mt-1 text-sm text-red-600">{validationErrors.lastName}</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Email *
-              </label>
-              <input
-                type="email"
-                name="email"
-                value={formData.email}
-                onChange={handleInputChange}
-                required
-                className={`input ${validationErrors.email ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''}`}
-                placeholder="Enter email address"
-              />
-              {validationErrors.email && (
-                <p className="mt-1 text-sm text-red-600">{validationErrors.email}</p>
-              )}
-            </div>
-
-            <div>
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  name="emailOk"
-                  checked={formData.emailOk}
-                  onChange={(e) => setFormData(prev => ({ ...prev, emailOk: e.target.checked }))}
-                  className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                />
-                <span className="ml-2 text-sm text-gray-700">
-                  Send welcome email and future updates
-                </span>
-              </label>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Phone *
-              </label>
-              <input
-                type="tel"
-                name="phone"
-                value={formData.phone}
-                onChange={handleInputChange}
-                required
-                className={`input ${validationErrors.phone ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''}`}
-                placeholder="Enter phone number"
-              />
-              {validationErrors.phone && (
-                <p className="mt-1 text-sm text-red-600">{validationErrors.phone}</p>
-              )}
-            </div>
-          </div>
-
-          {/* Professional Information */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-medium text-gray-900">Professional Information</h3>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Current Title *
-              </label>
-              <input
-                type="text"
-                name="currentTitle"
-                value={formData.currentTitle}
-                onChange={handleInputChange}
-                required
-                className={`input ${validationErrors.currentTitle ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''}`}
-                placeholder="Enter current job title"
-              />
-              {validationErrors.currentTitle && (
-                <p className="mt-1 text-sm text-red-600">{validationErrors.currentTitle}</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Current Employer *
-              </label>
-              <input
-                type="text"
-                name="currentEmployer"
-                value={formData.currentEmployer}
-                onChange={handleInputChange}
-                required
-                className={`input ${validationErrors.currentEmployer ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''}`}
-                placeholder="Enter current employer"
-              />
-              {validationErrors.currentEmployer && (
-                <p className="mt-1 text-sm text-red-600">{validationErrors.currentEmployer}</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Seniority Level
-              </label>
-              <select
-                name="seniority"
-                value={formData.seniority}
-                onChange={handleInputChange}
-                className="input"
-              >
-                <option value="">Select seniority level</option>
-                <option value="junior">Junior</option>
-                <option value="mid">Mid-level</option>
-                <option value="senior">Senior</option>
-                <option value="lead">Lead</option>
-                <option value="director">Director</option>
-                <option value="executive">Executive</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Salary Information */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-medium text-gray-900">Salary Information</h3>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Min Salary
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <span className="text-gray-500 sm:text-sm">£</span>
-                  </div>
-                  <input
-                    type="number"
-                    name="salaryMin"
-                    value={formData.salaryMin}
-                    onChange={handleInputChange}
-                    className="input pl-8"
-                    placeholder="0"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Max Salary
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <span className="text-gray-500 sm:text-sm">£</span>
-                  </div>
-                  <input
-                    type="number"
-                    name="salaryMax"
-                    value={formData.salaryMax}
-                    onChange={handleInputChange}
-                    className="input pl-8"
-                    placeholder="0"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Skills Assessment */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-medium text-gray-900">Skills Assessment *</h3>
-            
-            {Object.entries(formData.skills).map(([skill, value]) => (
-              <div key={skill}>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {skill.charAt(0).toUpperCase() + skill.slice(1).replace(/([A-Z])/g, ' $1')}
-                </label>
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="range"
-                    min="0"
-                    max="5"
-                    value={value}
-                    onChange={(e) => handleSkillChange(skill, parseInt(e.target.value))}
-                    className="flex-1"
-                  />
-                  <span className="text-sm text-gray-600 w-8">{value}/5</span>
-                </div>
-              </div>
-            ))}
-            {validationErrors.skills && (
-              <p className="text-sm text-red-600">{validationErrors.skills}</p>
-            )}
-          </div>
-
-          {/* Additional Information */}
-          <div className="lg:col-span-2 space-y-4">
-            <h3 className="text-lg font-medium text-gray-900">Additional Information</h3>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Tags
-              </label>
-              <input
-                type="text"
-                name="tags"
-                value={formData.tags}
-                onChange={handleInputChange}
-                className="input"
-                placeholder="Enter tags separated by commas (e.g., marketing, digital, campaigns)"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Notes
-              </label>
-              <textarea
-                name="notes"
-                value={formData.notes}
-                onChange={handleInputChange}
-                rows={4}
-                className="input"
-                placeholder="Enter any additional notes about this candidate"
-              />
-            </div>
-          </div>
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">Add New Candidate</h1>
+          <p className="mt-2 text-gray-600">
+            Upload a CV to auto-fill information, or enter details manually.
+          </p>
         </div>
 
-        {/* Form Status */}
-        <div className="pt-4 border-t border-gray-200">
+        {/* Form Status Indicator */}
+        <div className="mb-6 p-4 bg-white rounded-lg border border-gray-200">
           <div className="flex items-center justify-between">
             <div className="text-sm text-gray-600">
               {isFormValid() ? (
@@ -781,38 +255,281 @@ export default function CandidateNew() {
           </div>
         </div>
 
-        {/* Actions */}
-        <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
-          <button
-            type="button"
-            onClick={() => navigate('/candidates')}
-            className="btn btn-outline btn-md"
-            disabled={loading}
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            className="btn btn-primary btn-md"
-            disabled={loading || !isFormValid()}
-          >
-            {loading ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                Creating...
-              </>
-            ) : (
-              <>
-                <Save className="h-4 w-4 mr-2" />
-                Create Candidate
-              </>
+        <form onSubmit={handleSubmit} className="space-y-8">
+          {/* CV Upload Section */}
+          <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <h2 className="text-lg font-medium text-gray-900 mb-4">CV Upload</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Upload CV (PDF, DOCX, DOC, TXT)
+                </label>
+                <input
+                  type="file"
+                  accept=".pdf,.docx,.doc,.txt"
+                  onChange={handleFileUpload}
+                  disabled={loading}
+                  className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  Upload a CV to automatically fill in candidate information
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Personal Information */}
+          <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <h2 className="text-lg font-medium text-gray-900 mb-4">Personal Information</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  First Name *
+                </label>
+                <input
+                  type="text"
+                  name="firstName"
+                  value={formData.firstName}
+                  onChange={handleInputChange}
+                  required
+                  className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    validationErrors.firstName ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-gray-300'
+                  }`}
+                  placeholder="Enter first name"
+                />
+                {validationErrors.firstName && (
+                  <p className="mt-1 text-sm text-red-600">{validationErrors.firstName}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Last Name *
+                </label>
+                <input
+                  type="text"
+                  name="lastName"
+                  value={formData.lastName}
+                  onChange={handleInputChange}
+                  required
+                  className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    validationErrors.lastName ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-gray-300'
+                  }`}
+                  placeholder="Enter last name"
+                />
+                {validationErrors.lastName && (
+                  <p className="mt-1 text-sm text-red-600">{validationErrors.lastName}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Email Address *
+                </label>
+                <input
+                  type="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleInputChange}
+                  required
+                  className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    validationErrors.email ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-gray-300'
+                  }`}
+                  placeholder="Enter email address"
+                />
+                {validationErrors.email && (
+                  <p className="mt-1 text-sm text-red-600">{validationErrors.email}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Phone Number *
+                </label>
+                <input
+                  type="tel"
+                  name="phone"
+                  value={formData.phone}
+                  onChange={handleInputChange}
+                  required
+                  className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    validationErrors.phone ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-gray-300'
+                  }`}
+                  placeholder="Enter phone number"
+                />
+                {validationErrors.phone && (
+                  <p className="mt-1 text-sm text-red-600">{validationErrors.phone}</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Professional Information */}
+          <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <h2 className="text-lg font-medium text-gray-900 mb-4">Professional Information</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Current Job Title *
+                </label>
+                <input
+                  type="text"
+                  name="currentTitle"
+                  value={formData.currentTitle}
+                  onChange={handleInputChange}
+                  required
+                  className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    validationErrors.currentTitle ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-gray-300'
+                  }`}
+                  placeholder="Enter current job title"
+                />
+                {validationErrors.currentTitle && (
+                  <p className="mt-1 text-sm text-red-600">{validationErrors.currentTitle}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Current Employer *
+                </label>
+                <input
+                  type="text"
+                  name="currentEmployer"
+                  value={formData.currentEmployer}
+                  onChange={handleInputChange}
+                  required
+                  className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    validationErrors.currentEmployer ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-gray-300'
+                  }`}
+                  placeholder="Enter current employer"
+                />
+                {validationErrors.currentEmployer && (
+                  <p className="mt-1 text-sm text-red-600">{validationErrors.currentEmployer}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Salary Range (Min)
+                </label>
+                <input
+                  type="number"
+                  name="salaryMin"
+                  value={formData.salaryMin}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter minimum salary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Salary Range (Max)
+                </label>
+                <input
+                  type="number"
+                  name="salaryMax"
+                  value={formData.salaryMax}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter maximum salary"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Skills Assessment */}
+          <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <h2 className="text-lg font-medium text-gray-900 mb-4">Skills Assessment *</h2>
+            <p className="text-sm text-gray-600 mb-6">
+              Rate the candidate's skills from 1 (beginner) to 5 (expert)
+            </p>
+            
+            <div className="space-y-4">
+              {Object.entries(formData.skills).map(([skill, value]) => (
+                <div key={skill} className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-gray-700 capitalize">
+                    {skill.replace(/([A-Z])/g, ' $1').trim()}
+                  </label>
+                  <div className="flex space-x-2">
+                    {[1, 2, 3, 4, 5].map((rating) => (
+                      <button
+                        key={rating}
+                        type="button"
+                        onClick={() => handleSkillChange(skill as keyof FormData['skills'], rating)}
+                        className={`w-8 h-8 rounded-full border-2 flex items-center justify-center text-sm font-medium ${
+                          value >= rating
+                            ? 'bg-blue-500 border-blue-500 text-white'
+                            : 'bg-white border-gray-300 text-gray-500 hover:border-blue-300'
+                        }`}
+                      >
+                        {rating}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            
+            {validationErrors.skills && (
+              <p className="mt-2 text-sm text-red-600">{validationErrors.skills}</p>
             )}
-          </button>
-        </div>
-      </form>
+          </div>
+
+          {/* Additional Information */}
+          <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <h2 className="text-lg font-medium text-gray-900 mb-4">Additional Information</h2>
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Notes
+                </label>
+                <textarea
+                  name="notes"
+                  value={formData.notes}
+                  onChange={handleInputChange}
+                  rows={4}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter any additional notes about the candidate"
+                />
+              </div>
+
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  name="emailOk"
+                  checked={formData.emailOk}
+                  onChange={handleInputChange}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <label className="ml-2 block text-sm text-gray-700">
+                  Candidate has consented to receive emails
+                </label>
+              </div>
+            </div>
+          </div>
+
+          {/* Form Actions */}
+          <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200">
+            <button
+              type="button"
+              onClick={() => navigate('/candidates')}
+              className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading || !isFormValid()}
+              className="px-6 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? 'Creating...' : 'Create Candidate'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
-}
+};
 
-
-
+export default CandidateNew;
