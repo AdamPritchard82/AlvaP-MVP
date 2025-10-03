@@ -3,6 +3,7 @@ const express = require('express');
 const multer = require('multer');
 const cors = require('cors');
 const { SimpleEnhancedCvParser } = require('./src/parsers/simpleEnhancedCvParser');
+const cvParserHealth = require('./src/routes/cv-parser-health');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -14,17 +15,21 @@ const parser = new SimpleEnhancedCvParser();
 app.use(cors({ origin: ['http://localhost:3000', 'http://localhost:5173'] }));
 app.use(express.json({ limit: '10mb' }));
 
-// Health endpoint
+// Health endpoints
 app.get('/health', (req, res) => {
   res.json({ 
     ok: true, 
     features: {
       ocr: process.env.ENABLE_OCR === 'true',
       python: process.env.ENABLE_PYTHON_PARSERS === 'true',
+      dotnet: process.env.ENABLE_DOTNET_PARSER === 'true',
       logLevel: process.env.LOG_LEVEL || 'info'
     }
   });
 });
+
+// CV Parser health check
+app.use('/api/cv-parser', cvParserHealth);
 
 // File upload setup
 const upload = multer({

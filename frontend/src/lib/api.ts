@@ -1,7 +1,7 @@
 // Environment-aware API base
 const API_BASE = import.meta.env.VITE_API_BASE || 
   (import.meta.env.PROD 
-    ? 'https://natural-kindness-production.up.railway.app/api'
+    ? 'https://alvap-mvp-production.up.railway.app/api'
     : '/api');
 
 export interface User {

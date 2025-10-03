@@ -31,3 +31,4 @@
 1. Check that Natural Kindness is running `node working-server.js`
 2. Check that AlvaP-MVP has the correct `VITE_API_BASE` environment variable
 3. Check that root directories are set correctly
+
