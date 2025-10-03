@@ -20,4 +20,5 @@ RUN dotnet publish "CVDocumentParser.API/CVDocumentParser.API.csproj" -c Release
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
+ENV ASPNETCORE_URLS=http://+:8080
 ENTRYPOINT ["dotnet", "CVDocumentParser.API.dll"]
