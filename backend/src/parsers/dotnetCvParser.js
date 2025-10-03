@@ -31,8 +31,10 @@ class DotNetCvParser {
         throw new Error(response.data.message || 'CV parsing failed');
       }
 
-      console.log(`[DotNetCvParser] Successfully parsed ${filename}`);
-      console.log(`[DotNetCvParser] Raw .NET response:`, JSON.stringify(response.data.data, null, 2));
+          console.log(`[DotNetCvParser] Successfully parsed ${filename}`);
+          console.log(`[DotNetCvParser] Raw .NET response:`, JSON.stringify(response.data.data, null, 2));
+          console.log(`[DotNetCvParser] Personal Info:`, JSON.stringify(response.data.data.personalInfo, null, 2));
+          console.log(`[DotNetCvParser] Work Experience:`, JSON.stringify(response.data.data.workExperience, null, 2));
       
       // Transform .NET response to your existing format
       return this.transformResponse(response.data.data, filename, mimetype);
@@ -79,13 +81,18 @@ class DotNetCvParser {
     };
 
     // Transform work experience
-    const experience = workExperience.map(exp => ({
-      employer: exp.company || '',
-      title: exp.jobTitle || '',
-      startDate: exp.startDate || '',
-      endDate: exp.endDate || '',
-      description: exp.description || ''
-    }));
+    const experience = workExperience.map(exp => {
+      console.log(`[DotNetCvParser] Processing work experience:`, JSON.stringify(exp, null, 2));
+      return {
+        employer: exp.company || '',
+        title: exp.jobTitle || '',
+        startDate: exp.startDate || '',
+        endDate: exp.endDate || '',
+        description: exp.description || ''
+      };
+    });
+    
+    console.log(`[DotNetCvParser] Transformed experience:`, JSON.stringify(experience, null, 2));
 
     // Generate notes from summary or first few work experiences
     let notes = summary || '';
