@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { mkdirSync } from 'node:fs';
 import { nanoid } from 'nanoid';
 import { getDb } from '../db.js';
-import { parseBuffer } from '../parsers/cvParser.js';
+import { SimpleEnhancedCvParser } from '../parsers/simpleEnhancedCvParser.js';
 
 const router = Router();
 
@@ -51,10 +51,8 @@ router.post('/parse-cv', upload.single('file'), async (req, res) => {
     // Parse the file buffer with error handling
     let parsedData;
     try {
-      parsedData = await parseBuffer(req.file.buffer, {
-        mimetype: req.file.mimetype,
-        filename: req.file.originalname
-      });
+      const parser = new SimpleEnhancedCvParser();
+      parsedData = await parser.parseFile(req.file.buffer, req.file.mimetype, req.file.originalname);
     } catch (parseError) {
       console.error('Parse buffer error:', parseError);
       return res.status(422).json({ 
