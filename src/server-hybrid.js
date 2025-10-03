@@ -347,6 +347,7 @@ app.post('/api/candidates', async (req, res) => {
       tags: Array.isArray(tags) ? tags : [],
       notes: notes || '',
       emailOk: Boolean(emailOk),
+      createdBy: 'system', // Add required created_by field
       createdAt: now,
       updatedAt: now
     };
@@ -355,8 +356,8 @@ app.post('/api/candidates', async (req, res) => {
     if (usePostgres) {
       const { query } = require('./db-postgres');
       await query(`
-        INSERT INTO candidates (id, full_name, email, phone, current_title, current_employer, salary_min, salary_max, skills, tags, notes, email_ok, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        INSERT INTO candidates (id, full_name, email, phone, current_title, current_employer, salary_min, salary_max, skills, tags, notes, email_ok, created_by, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       `, [
         candidateData.id,
         `${candidateData.firstName} ${candidateData.lastName}`,
@@ -370,14 +371,15 @@ app.post('/api/candidates', async (req, res) => {
         JSON.stringify(candidateData.tags),
         candidateData.notes,
         candidateData.emailOk,
+        candidateData.createdBy,
         candidateData.createdAt,
         candidateData.updatedAt
       ]);
     } else {
       const dbInstance = db();
       const stmt = dbInstance.prepare(`
-        INSERT INTO candidates (id, full_name, email, phone, current_title, current_employer, salary_min, salary_max, skills, tags, notes, email_ok, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO candidates (id, full_name, email, phone, current_title, current_employer, salary_min, salary_max, skills, tags, notes, email_ok, created_by, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       
       stmt.run(
@@ -393,6 +395,7 @@ app.post('/api/candidates', async (req, res) => {
         JSON.stringify(candidateData.tags),
         candidateData.notes,
         candidateData.emailOk ? 1 : 0,
+        candidateData.createdBy,
         candidateData.createdAt,
         candidateData.updatedAt
       );

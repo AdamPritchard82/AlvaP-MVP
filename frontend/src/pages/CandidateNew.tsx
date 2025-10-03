@@ -126,8 +126,7 @@ const CandidateNew: React.FC = () => {
   };
 
   // Handle CV file upload and parsing
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const handleFileUpload = async (file: File) => {
     if (!file) return;
 
     // Validate file type
@@ -185,6 +184,40 @@ const CandidateNew: React.FC = () => {
       toast.error('Failed to parse CV. Please try again.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Handle file input change
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleFileUpload(file);
+    }
+  };
+
+  // Handle drag and drop
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      handleFileUpload(files[0]);
     }
   };
 
@@ -260,14 +293,54 @@ const CandidateNew: React.FC = () => {
           <div className="bg-white rounded-lg border border-gray-200 p-6">
             <h2 className="text-lg font-medium text-gray-900 mb-4">CV Upload</h2>
             <div className="space-y-4">
+              {/* Drag and Drop Zone */}
+              <div
+                onDragOver={handleDragOver}
+                onDragEnter={handleDragEnter}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-400 hover:bg-blue-50 transition-colors duration-200"
+              >
+                <div className="space-y-4">
+                  <div className="mx-auto w-12 h-12 text-gray-400">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-lg font-medium text-gray-900">
+                      Drop your CV here, or{' '}
+                      <label className="text-blue-600 hover:text-blue-500 cursor-pointer">
+                        browse files
+                        <input
+                          type="file"
+                          accept=".pdf,.docx,.doc,.txt"
+                          onChange={handleFileInputChange}
+                          disabled={loading}
+                          className="hidden"
+                        />
+                      </label>
+                    </p>
+                    <p className="text-sm text-gray-500 mt-1">
+                      Supports PDF, DOCX, DOC, and TXT files
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Alternative Upload Method */}
+              <div className="text-center">
+                <span className="text-sm text-gray-500">or</span>
+              </div>
+              
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Upload CV (PDF, DOCX, DOC, TXT)
+                  Choose File
                 </label>
                 <input
                   type="file"
                   accept=".pdf,.docx,.doc,.txt"
-                  onChange={handleFileUpload}
+                  onChange={handleFileInputChange}
                   disabled={loading}
                   className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                 />
