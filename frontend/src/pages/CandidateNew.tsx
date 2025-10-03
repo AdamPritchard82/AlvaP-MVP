@@ -31,12 +31,22 @@ export default function CandidateNew() {
     }
   });
 
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
       [name]: value
     }));
+    
+    // Clear validation error when user starts typing
+    if (validationErrors[name]) {
+      setValidationErrors(prev => ({
+        ...prev,
+        [name]: ''
+      }));
+    }
   };
 
   const handleSkillChange = (skill: string, value: number) => {
@@ -47,6 +57,66 @@ export default function CandidateNew() {
         [skill]: value
       }
     }));
+    
+    // Clear skills validation error when user adjusts skills
+    if (validationErrors.skills) {
+      setValidationErrors(prev => ({
+        ...prev,
+        skills: ''
+      }));
+    }
+  };
+
+  // Validation functions
+  const validateForm = () => {
+    const errors: Record<string, string> = {};
+    
+    // Required fields
+    if (!formData.firstName.trim()) {
+      errors.firstName = 'First name is required';
+    }
+    
+    if (!formData.lastName.trim()) {
+      errors.lastName = 'Last name is required';
+    }
+    
+    if (!formData.email.trim()) {
+      errors.email = 'Email is required';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      errors.email = 'Please enter a valid email address';
+    }
+    
+    if (!formData.phone.trim()) {
+      errors.phone = 'Phone number is required';
+    }
+    
+    if (!formData.currentTitle.trim()) {
+      errors.currentTitle = 'Current job title is required';
+    }
+    
+    if (!formData.currentEmployer.trim()) {
+      errors.currentEmployer = 'Current employer is required';
+    }
+    
+    // Skills validation - at least one skill should be rated > 0
+    const hasAnySkills = Object.values(formData.skills).some(value => value > 0);
+    if (!hasAnySkills) {
+      errors.skills = 'Please rate at least one skill area';
+    }
+    
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const isFormValid = () => {
+    return formData.firstName.trim() && 
+           formData.lastName.trim() && 
+           formData.email.trim() && 
+           /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email) &&
+           formData.phone.trim() && 
+           formData.currentTitle.trim() && 
+           formData.currentEmployer.trim() &&
+           Object.values(formData.skills).some(value => value > 0);
   };
 
   const parseCVContent = (text: string) => {
@@ -321,6 +391,13 @@ export default function CandidateNew() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate form before submitting
+    if (!validateForm()) {
+      toast.error('Please fill in all required fields correctly');
+      return;
+    }
+    
     setLoading(true);
 
     try {
@@ -443,9 +520,12 @@ export default function CandidateNew() {
                 value={formData.firstName}
                 onChange={handleInputChange}
                 required
-                className="input"
+                className={`input ${validationErrors.firstName ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''}`}
                 placeholder="Enter first name"
               />
+              {validationErrors.firstName && (
+                <p className="mt-1 text-sm text-red-600">{validationErrors.firstName}</p>
+              )}
             </div>
 
             <div>
@@ -458,23 +538,30 @@ export default function CandidateNew() {
                 value={formData.lastName}
                 onChange={handleInputChange}
                 required
-                className="input"
+                className={`input ${validationErrors.lastName ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''}`}
                 placeholder="Enter last name"
               />
+              {validationErrors.lastName && (
+                <p className="mt-1 text-sm text-red-600">{validationErrors.lastName}</p>
+              )}
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Email
+                Email *
               </label>
               <input
                 type="email"
                 name="email"
                 value={formData.email}
                 onChange={handleInputChange}
-                className="input"
+                required
+                className={`input ${validationErrors.email ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''}`}
                 placeholder="Enter email address"
               />
+              {validationErrors.email && (
+                <p className="mt-1 text-sm text-red-600">{validationErrors.email}</p>
+              )}
             </div>
 
             <div>
@@ -494,16 +581,20 @@ export default function CandidateNew() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Phone
+                Phone *
               </label>
               <input
                 type="tel"
                 name="phone"
                 value={formData.phone}
                 onChange={handleInputChange}
-                className="input"
+                required
+                className={`input ${validationErrors.phone ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''}`}
                 placeholder="Enter phone number"
               />
+              {validationErrors.phone && (
+                <p className="mt-1 text-sm text-red-600">{validationErrors.phone}</p>
+              )}
             </div>
           </div>
 
@@ -513,30 +604,38 @@ export default function CandidateNew() {
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Current Title
+                Current Title *
               </label>
               <input
                 type="text"
                 name="currentTitle"
                 value={formData.currentTitle}
                 onChange={handleInputChange}
-                className="input"
+                required
+                className={`input ${validationErrors.currentTitle ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''}`}
                 placeholder="Enter current job title"
               />
+              {validationErrors.currentTitle && (
+                <p className="mt-1 text-sm text-red-600">{validationErrors.currentTitle}</p>
+              )}
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Current Employer
+                Current Employer *
               </label>
               <input
                 type="text"
                 name="currentEmployer"
                 value={formData.currentEmployer}
                 onChange={handleInputChange}
-                className="input"
+                required
+                className={`input ${validationErrors.currentEmployer ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''}`}
                 placeholder="Enter current employer"
               />
+              {validationErrors.currentEmployer && (
+                <p className="mt-1 text-sm text-red-600">{validationErrors.currentEmployer}</p>
+              )}
             </div>
 
             <div>
@@ -607,7 +706,7 @@ export default function CandidateNew() {
 
           {/* Skills Assessment */}
           <div className="space-y-4">
-            <h3 className="text-lg font-medium text-gray-900">Skills Assessment</h3>
+            <h3 className="text-lg font-medium text-gray-900">Skills Assessment *</h3>
             
             {Object.entries(formData.skills).map(([skill, value]) => (
               <div key={skill}>
@@ -627,6 +726,9 @@ export default function CandidateNew() {
                 </div>
               </div>
             ))}
+            {validationErrors.skills && (
+              <p className="text-sm text-red-600">{validationErrors.skills}</p>
+            )}
           </div>
 
           {/* Additional Information */}
@@ -663,6 +765,22 @@ export default function CandidateNew() {
           </div>
         </div>
 
+        {/* Form Status */}
+        <div className="pt-4 border-t border-gray-200">
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-gray-600">
+              {isFormValid() ? (
+                <span className="text-green-600 font-medium">✓ All required fields completed</span>
+              ) : (
+                <span className="text-red-600">Please complete all required fields to save candidate</span>
+              )}
+            </div>
+            <div className="text-xs text-gray-500">
+              Required: Name, Email, Phone, Job Title, Employer, Skills
+            </div>
+          </div>
+        </div>
+
         {/* Actions */}
         <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
           <button
@@ -676,7 +794,7 @@ export default function CandidateNew() {
           <button
             type="submit"
             className="btn btn-primary btn-md"
-            disabled={loading}
+            disabled={loading || !isFormValid()}
           >
             {loading ? (
               <>
