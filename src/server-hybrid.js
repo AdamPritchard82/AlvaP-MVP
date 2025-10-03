@@ -76,16 +76,19 @@ const upload = multer({
 
 // .NET CV Parser Integration
 let dotNetParser = null;
-if (process.env.ENABLE_DOTNET_PARSER === 'true' && process.env.DOTNET_CV_API_URL) {
+const dotNetApiUrl = process.env.DOTNET_CV_API_URL || 'https://alvap-mvp-production.up.railway.app';
+
+if (process.env.ENABLE_DOTNET_PARSER === 'true' || process.env.ENABLE_DOTNET_PARSER === '1') {
   try {
     const { DotNetCvParser } = require('./parsers/dotnetCvParser');
-    dotNetParser = new DotNetCvParser(process.env.DOTNET_CV_API_URL);
-    console.log('✅ .NET CV Parser enabled:', process.env.DOTNET_CV_API_URL);
+    dotNetParser = new DotNetCvParser(dotNetApiUrl);
+    console.log('✅ .NET CV Parser enabled:', dotNetApiUrl);
   } catch (error) {
     console.warn('⚠️ .NET CV Parser disabled:', error.message);
   }
 } else {
   console.log('ℹ️ .NET CV Parser disabled (ENABLE_DOTNET_PARSER=false or no URL)');
+  console.log('ℹ️ To enable: Set ENABLE_DOTNET_PARSER=true and DOTNET_CV_API_URL');
 }
 
 // Enhanced CV parsing function (fallback)
