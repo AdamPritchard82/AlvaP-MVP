@@ -126,6 +126,8 @@ router.post('/', async (req, res) => {
       lastName,
       email,
       phone,
+      currentTitle,
+      currentEmployer,
       salaryMin,
       salaryMax,
       skills = {},
@@ -143,6 +145,8 @@ router.post('/', async (req, res) => {
       lastName: lastName || '',
       email: email || '',
       phone: phone || '',
+      currentTitle: currentTitle || '',
+      currentEmployer: currentEmployer || '',
       salaryMin: salaryMin ? Number(salaryMin) : null,
       salaryMax: salaryMax ? Number(salaryMax) : null,
       skills: {
@@ -162,9 +166,9 @@ router.post('/', async (req, res) => {
     // Insert into database
     const stmt = db.prepare(`
       INSERT INTO candidates (
-        id, full_name, email, phone, salary_min, salary_max, skills,
+        id, full_name, email, phone, current_title, current_employer, salary_min, salary_max, skills,
         tags, notes, email_ok, unsubscribe_token, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -172,6 +176,8 @@ router.post('/', async (req, res) => {
       `${candidateData.firstName} ${candidateData.lastName}`.trim(),
       candidateData.email,
       candidateData.phone,
+      candidateData.currentTitle,
+      candidateData.currentEmployer,
       candidateData.salaryMin,
       candidateData.salaryMax,
       JSON.stringify(candidateData.skills),
