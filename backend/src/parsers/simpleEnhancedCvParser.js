@@ -3,6 +3,7 @@ const pdfParse = require('pdf-parse');
 const mammoth = require('mammoth');
 const textract = require('textract');
 const Tesseract = require('tesseract.js');
+const { DotNetCvParser } = require('./dotnetCvParser');
 
 // Environment flags
 const ENABLE_OCR = process.env.ENABLE_OCR === 'true';
@@ -213,6 +214,9 @@ class SimpleEnhancedCvParser {
       new TextAdapter(),
       new TextractAdapter()
     ];
+    
+    // Initialize .NET parser if enabled
+    this.dotNetParser = process.env.ENABLE_DOTNET_PARSER === 'true' ? new DotNetCvParser() : null;
   }
 
   async parseFile(buffer, mimetype, filename) {
@@ -221,7 +225,43 @@ class SimpleEnhancedCvParser {
     const results = [];
     const errors = [];
 
-    // Try each adapter in priority order
+    // Try .NET parser first if enabled and file type is supported
+    if (this.dotNetParser && this.shouldUseDotNet(mimetype, filename)) {
+      try {
+        log('info', `Trying .NET parser for ${filename}`);
+        log('info', `.NET parser URL: ${this.dotNetParser.apiUrl}`);
+        const startTime = Date.now();
+        
+        const result = await this.dotNetParser.parseFile(buffer, mimetype, filename);
+        const duration = Date.now() - startTime;
+        
+        result.duration = duration;
+        result.adapter = 'dotnet-api';
+        results.push(result);
+        
+        log('info', `.NET parser succeeded: confidence: ${result.confidence.toFixed(2)}, duration: ${duration}ms`);
+        
+        // If we got good results from .NET, use it
+        if (result.confidence > 0.6) {
+          log('info', `High confidence result from .NET parser, using it`);
+          return {
+            ...result,
+            allResults: results,
+            errors: errors
+          };
+        }
+      } catch (error) {
+        errors.push({
+          adapter: 'dotnet-api',
+          error: error.message
+        });
+        log('warn', `.NET parser failed: ${error.message}, falling back to local parsers`);
+      }
+    } else {
+      log('info', `.NET parser not used - enabled: ${!!this.dotNetParser}, shouldUse: ${this.shouldUseDotNet(mimetype, filename)}`);
+    }
+
+    // Try each local adapter in priority order
     for (const adapter of this.adapters) {
       try {
         if (await adapter.canParse(buffer, mimetype, filename)) {
@@ -381,6 +421,15 @@ class SimpleEnhancedCvParser {
       notes,
       confidence
     };
+  }
+
+  shouldUseDotNet(mimetype, filename) {
+    const supportedTypes = [
+      'application/pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/msword'
+    ];
+    return supportedTypes.includes(mimetype);
   }
 }
 
