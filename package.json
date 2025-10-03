@@ -5,7 +5,7 @@
   "main": "src/server.js",
   "scripts": {
     "dev": "node src/server.js",
-    "start": "node src/server-simple.js",
+    "start": "node src/server-minimal.js",
     "simple": "node simple-server.js",
     "main": "node main-server.js",
     "minimal": "node minimal-server.js",
