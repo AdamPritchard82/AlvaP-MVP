@@ -7,14 +7,14 @@ EXPOSE 8081
 # Use the .NET 8.0 SDK to build the application
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
-COPY ["CVDocumentParser.API/CVDocumentParser.API.csproj", "CVDocumentParser.API/"]
-RUN dotnet restore "CVDocumentParser.API/CVDocumentParser.API.csproj"
-COPY CVDocumentParser.API/ CVDocumentParser.API/
-RUN dotnet build "CVDocumentParser.API/CVDocumentParser.API.csproj" -c Release -o /app/build
+COPY ["CVDocumentParser.API.csproj", "."]
+RUN dotnet restore "CVDocumentParser.API.csproj"
+COPY . .
+RUN dotnet build "CVDocumentParser.API.csproj" -c Release -o /app/build
 
 # Publish the application
 FROM build AS publish
-RUN dotnet publish "CVDocumentParser.API/CVDocumentParser.API.csproj" -c Release -o /app/publish
+RUN dotnet publish "CVDocumentParser.API.csproj" -c Release -o /app/publish
 
 # Create the final runtime image
 FROM base AS final
