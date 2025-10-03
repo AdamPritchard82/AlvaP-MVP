@@ -1,0 +1,12 @@
+{
+  "$schema": "https://railway.app/schemas/cli/v2/railway.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfile": "Dockerfile"
+  },
+  "deploy": {
+    "startCommand": "dotnet CVDocumentParser.API.dll",
+    "healthcheckPath": "/api/documentparser/health",
+    "healthcheckTimeout": 300
+  }
+}
