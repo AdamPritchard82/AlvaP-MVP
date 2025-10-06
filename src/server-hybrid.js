@@ -49,6 +49,7 @@ const PORT = process.env.PORT || 3001;
 app.use(cors({
   origin: [
     'https://alvap-mvp-production.up.railway.app',
+    'https://natural-kindness-production.up.railway.app',
     'http://localhost:5173',
     'http://localhost:3000'
   ],
@@ -61,7 +62,18 @@ app.use(helmet());
 
 // Handle preflight requests
 app.options('*', (req, res) => {
-  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  const allowedOrigins = [
+    'https://alvap-mvp-production.up.railway.app',
+    'https://natural-kindness-production.up.railway.app',
+    'http://localhost:5173',
+    'http://localhost:3000'
+  ];
+  
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+  }
+  
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
   res.header('Access-Control-Allow-Credentials', 'true');
