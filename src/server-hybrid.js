@@ -463,7 +463,12 @@ app.get('/health', (req, res) => {
     database: usePostgres ? 'PostgreSQL' : 'SQLite',
     dotnetParser: dotNetParser ? 'enabled' : 'disabled',
     platform: process.platform,
-    uptime: process.uptime()
+    uptime: process.uptime(),
+    env: {
+      ENABLE_DOTNET_PARSER: process.env.ENABLE_DOTNET_PARSER,
+      DOTNET_CV_API_URL: process.env.DOTNET_CV_API_URL,
+      NODE_ENV: process.env.NODE_ENV
+    }
   });
 });
 
