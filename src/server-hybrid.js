@@ -121,7 +121,29 @@ function parseCVContent(text) {
   
   // Extract basic information using regex
   const emailMatch = text.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
-  const phoneMatch = text.match(/(\+?[\d\s\-\(\)]{10,})/);
+  
+  // Improved phone number regex - matches various formats
+  const phoneRegexes = [
+    /(\+44\s?[0-9]{2,4}\s?[0-9]{3,4}\s?[0-9]{3,4})/g,  // UK: +44 20 1234 5678
+    /(\+1\s?[0-9]{3}\s?[0-9]{3}\s?[0-9]{4})/g,         // US: +1 555 123 4567
+    /(0[0-9]{2,4}\s?[0-9]{3,4}\s?[0-9]{3,4})/g,        // UK: 020 1234 5678
+    /([0-9]{3}\s?[0-9]{3}\s?[0-9]{4})/g,               // US: 555 123 4567
+    /(\([0-9]{2,4}\)\s?[0-9]{3,4}\s?[0-9]{3,4})/g,     // (020) 1234 5678
+    /([0-9]{10,})/g,                                    // 10+ digits
+    /(\+?[\d\s\-\(\)]{10,})/g                          // Original fallback
+  ];
+  
+  let phoneMatch = null;
+  for (const regex of phoneRegexes) {
+    const matches = text.match(regex);
+    if (matches && matches.length > 0) {
+      // Find the most likely phone number (longest match)
+      phoneMatch = matches.reduce((longest, current) => 
+        current.replace(/\D/g, '').length > longest.replace(/\D/g, '').length ? current : longest
+      );
+      break;
+    }
+  }
   
   // Extract name from first line
   const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
@@ -155,11 +177,19 @@ function parseCVContent(text) {
   if (skills.policy) tags.push('policy');
   if (skills.publicAffairs) tags.push('public-affairs');
   
+  const phone = phoneMatch ? phoneMatch.trim() : '';
+  
+  console.log('Phone parsing results:', {
+    found: !!phoneMatch,
+    phone: phone,
+    textSample: text.substring(0, 500) // First 500 chars for debugging
+  });
+
   return {
     firstName,
     lastName,
     email: emailMatch ? emailMatch[1] : '',
-    phone: phoneMatch ? phoneMatch[1] : '',
+    phone: phone,
     currentTitle: '',
     currentEmployer: '',
     skills,
