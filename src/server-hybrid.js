@@ -46,7 +46,14 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: [
+    'https://alvap-mvp-production.up.railway.app',
+    'http://localhost:5173',
+    'http://localhost:3000'
+  ],
+  credentials: true
+}));
 app.use(helmet());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -470,6 +477,45 @@ app.get('/health', (req, res) => {
       NODE_ENV: process.env.NODE_ENV
     }
   });
+});
+
+// Additional API endpoints for frontend compatibility
+app.get('/api/jobs', async (req, res) => {
+  try {
+    const limit = req.query.limit || 10;
+    res.json({ success: true, jobs: [], total: 0, limit: parseInt(limit) });
+  } catch (error) {
+    console.error('[get-jobs] Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/matches', async (req, res) => {
+  try {
+    const limit = req.query.limit || 10;
+    res.json({ success: true, matches: [], total: 0, limit: parseInt(limit) });
+  } catch (error) {
+    console.error('[get-matches] Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/events/unread-count', async (req, res) => {
+  try {
+    res.json({ success: true, count: 0 });
+  } catch (error) {
+    console.error('[get-unread-count] Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/licensing/subscription', async (req, res) => {
+  try {
+    res.json({ success: true, subscription: { status: 'active', plan: 'free' } });
+  } catch (error) {
+    console.error('[get-subscription] Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 // Root endpoint
