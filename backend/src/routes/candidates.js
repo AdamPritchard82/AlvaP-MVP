@@ -168,33 +168,172 @@ async function parseCVContent(filePath, mimetype) {
   const emailMatch = cleanText.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
     const email = emailMatch ? emailMatch[1] : '';
     
-    // Extract phone
-  const phoneMatch = cleanText.match(/(\+?[\d\s\-\(\)]{10,})/);
-    const phone = phoneMatch ? phoneMatch[1] : '';
+    // Enhanced phone number extraction with multiple regex patterns
+    const phoneRegexes = [
+      /(\+91\s?[0-9]{4}\s?[0-9]{5})/g,                   // India: +91 7838 82147
+      /(\+44\s?[0-9]{2,4}\s?[0-9]{3,4}\s?[0-9]{3,4})/g,  // UK: +44 20 1234 5678
+      /(\+1\s?[0-9]{3}\s?[0-9]{3}\s?[0-9]{4})/g,         // US: +1 555 123 4567
+      /(\+[0-9]{1,3}\s?[0-9]{4,5}\s?[0-9]{4,5})/g,       // International: +XX XXXX XXXX
+      /(0[0-9]{2,4}\s?[0-9]{3,4}\s?[0-9]{3,4})/g,        // UK: 020 1234 5678
+      /([0-9]{3}\s?[0-9]{3}\s?[0-9]{4})/g,               // US: 555 123 4567
+      /(\([0-9]{2,4}\)\s?[0-9]{3,4}\s?[0-9]{3,4})/g,     // (020) 1234 5678
+      /([0-9]{10,})/g,                                    // 10+ digits
+      /(\+?[\d\s\-\(\)]{10,})/g                          // Original fallback
+    ];
     
-  // Extract current title and employer
+    let phone = '';
+    let phoneMatch = null;
+    
+    // First, try to find phone numbers in the header area (first 500 characters)
+    const headerText = cleanText.substring(0, 500);
+    console.log('Searching header for phone numbers:', headerText);
+    
+    for (const regex of phoneRegexes) {
+      const matches = headerText.match(regex);
+      if (matches && matches.length > 0) {
+        // Find the most likely phone number (longest match)
+        phoneMatch = matches.reduce((longest, current) => 
+          current.replace(/\D/g, '').length > longest.replace(/\D/g, '').length ? current : longest
+        );
+        console.log('Found phone in header:', phoneMatch);
+        break;
+      }
+    }
+    
+    // If not found in header, search the full text
+    if (!phoneMatch) {
+      console.log('No phone found in header, searching full text...');
+      for (const regex of phoneRegexes) {
+        const matches = cleanText.match(regex);
+        if (matches && matches.length > 0) {
+          phoneMatch = matches.reduce((longest, current) => 
+            current.replace(/\D/g, '').length > longest.replace(/\D/g, '').length ? current : longest
+          );
+          console.log('Found phone in full text:', phoneMatch);
+          break;
+        }
+      }
+    }
+    
+    phone = phoneMatch || '';
+    
+  // Enhanced job title and employer extraction from experience section
     let currentTitle = '';
     let currentEmployer = '';
     
-    for (let i = 0; i < Math.min(10, lines.length); i++) {
-      const line = lines[i];
-      
-      // Look for job titles
-      if (!currentTitle && line.length > 5 && line.length < 60 && 
-          /^[A-Z]/.test(line) && !line.includes('@') && !line.match(/\d{4}/)) {
-        const jobKeywords = ['manager', 'director', 'officer', 'specialist', 'coordinator', 
-                           'executive', 'analyst', 'consultant', 'advisor', 'associate'];
-        if (jobKeywords.some(keyword => line.toLowerCase().includes(keyword))) {
-          currentTitle = line;
+    // Look for common experience section headers - prioritize "work experience"
+    const experienceKeywords = ['work experience', 'professional experience', 'employment history', 'career history', 'experience', 'employment', 'work history', 'career'];
+    let experienceStartIndex = -1;
+    
+    // First pass: look for exact "work experience" matches
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].toLowerCase().trim();
+      if (line === 'work experience' || line === 'professional experience') {
+        experienceStartIndex = i;
+        console.log('Found exact experience section at line', i, ':', lines[i]);
+        break;
+      }
+    }
+    
+    // Second pass: look for other experience section headers
+    if (experienceStartIndex === -1) {
+      for (let i = 0; i < lines.length; i++) {
+        const rawLine = lines[i];
+        const line = rawLine.toLowerCase();
+        const looksLikeHeader =
+          !/^•/.test(rawLine) && // not a bullet point
+          rawLine.length <= 40 &&
+          !/[.,;:]/.test(rawLine) && // avoid sentences
+          /experience|employment|career/.test(line);
+        if (looksLikeHeader && experienceKeywords.some(keyword => line.includes(keyword))) {
+          experienceStartIndex = i;
+          console.log('Found experience section at line', i, ':', rawLine);
+          break;
         }
       }
+    }
+    
+    // If we found experience section, look for the first job entry
+    if (experienceStartIndex !== -1) {
+      for (let i = experienceStartIndex + 1; i < Math.min(experienceStartIndex + 10, lines.length); i++) {
+        const line = lines[i];
+        
+        // Skip empty lines and section headers
+        if (!line || line.length < 3) continue;
+        
+        // Look for job title patterns (usually at the start of a line)
+        const jobTitlePatterns = [
+          // Common job titles with specific endings
+          /^([A-Z][a-zA-Z\s&/\-]+(?:Manager|Director|Coordinator|Specialist|Analyst|Consultant|Advisor|Officer|Executive|Lead|Head|Chief|Senior|Junior|Associate|Assistant|Intern|Trainee|Representative|Agent|Clerk|Developer|Engineer|Designer))/i,
+          // Any capitalized word sequence that looks like a title
+          /^([A-Z][a-zA-Z\s&/\-]{3,}(?:\s+[A-Z][a-zA-Z\s&/\-]*)*)/,
+          // Simple pattern for any line that starts with capital and looks like a title
+          /^([A-Z][a-zA-Z\s&/\-]{4,})/
+        ];
+        
+        for (const pattern of jobTitlePatterns) {
+          const match = line.match(pattern);
+          if (match && match[1] && match[1].length > 3) {
+            const potentialTitle = match[1].trim();
+            
+            // Filter out common non-title patterns
+            const skipPatterns = [
+              /^(Government|Westminster|European|Parliament|London|United|Kingdom|UK|England|Scotland|Wales|Northern|Ireland)$/i,
+              /^(Address|Phone|Email|Contact|Location|Date|Time|Year|Month|Day)$/i,
+              /^(Summary|Objective|Profile|About|Introduction)$/i,
+              /^(Education|Qualifications|Skills|Languages|Certifications)$/i,
+              /^(References|Referees|Contact|Details)$/i
+            ];
+            
+            if (!skipPatterns.some(skipPattern => skipPattern.test(potentialTitle))) {
+              currentTitle = potentialTitle;
+              console.log('Found job title:', currentTitle);
+              break;
+            }
+          }
+        }
+        
+        if (currentTitle) break;
+      }
       
-      // Look for companies
-      if (!currentEmployer && line.length > 3 && line.length < 80 && 
-          /^[A-Z]/.test(line) && !line.includes('@') && !line.match(/\d{4}/)) {
-        const companyKeywords = ['Ltd', 'Inc', 'Corp', 'Company', 'Group', 'Associates', 'Partners'];
-        if (companyKeywords.some(keyword => line.includes(keyword))) {
-          currentEmployer = line;
+      // Look for employer after finding title
+      if (currentTitle) {
+        for (let i = experienceStartIndex + 1; i < Math.min(experienceStartIndex + 15, lines.length); i++) {
+          const line = lines[i];
+          if (!line || line.length < 3) continue;
+          
+          // Look for company patterns
+          const employerPatterns = [
+            /^([A-Z][a-zA-Z\s&/\-]+(?:Ltd|Inc|Corp|Company|Group|Associates|Partners|LLC|LLP|Co\.|Corporation|Limited|Services|Consulting|Solutions|Systems|Technologies|International|Global|UK|USA|Europe|London|Manchester|Birmingham|Leeds|Glasgow|Edinburgh|Bristol|Liverpool|Newcastle|Sheffield|Nottingham|Leicester|Coventry|Bradford|Cardiff|Belfast|Derby|Plymouth|Southampton|Norwich|Wolverhampton|Swansea|Southend|Middlesbrough|Huddersfield|York|Ipswich|Blackpool|Bolton|Bournemouth|Brighton|Huddersfield|Hull|Milton Keynes|Reading|Slough|Stoke|Swindon|Watford|Wigan|Wolverhampton|York))/i,
+            /^([A-Z][a-zA-Z\s&/\-]{3,}(?:\s+[A-Z][a-zA-Z\s&/\-]*)*)/,
+            /^([A-Z][a-zA-Z\s&/\-]{4,})/
+          ];
+          
+          for (const pattern of employerPatterns) {
+            const match = line.match(pattern);
+            if (match && match[1] && match[1].length > 3) {
+              const potentialEmployer = match[1].trim();
+              
+              // Filter out common non-employer patterns
+              const skipPatterns = [
+                /^(Government|Westminster|European|Parliament|London|United|Kingdom|UK|England|Scotland|Wales|Northern|Ireland)$/i,
+                /^(Address|Phone|Email|Contact|Location|Date|Time|Year|Month|Day)$/i,
+                /^(Summary|Objective|Profile|About|Introduction)$/i,
+                /^(Education|Qualifications|Skills|Languages|Certifications)$/i,
+                /^(References|Referees|Contact|Details)$/i,
+                /^(Manager|Director|Coordinator|Specialist|Analyst|Consultant|Advisor|Officer|Executive|Lead|Head|Chief|Senior|Junior|Associate|Assistant|Intern|Trainee|Representative|Agent|Clerk|Developer|Engineer|Designer)$/i
+              ];
+              
+              if (!skipPatterns.some(skipPattern => skipPattern.test(potentialEmployer)) && 
+                  potentialEmployer !== currentTitle) {
+                currentEmployer = potentialEmployer;
+                console.log('Found employer:', currentEmployer);
+                break;
+              }
+            }
+          }
+          
+          if (currentEmployer) break;
         }
       }
     }
