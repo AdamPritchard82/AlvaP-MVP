@@ -1,8 +1,16 @@
 // Environment-aware API base
 const API_BASE = import.meta.env.VITE_API_BASE || 
   (import.meta.env.PROD 
-    ? 'https://natural-kindness-production.up.railway.app/api'
+    ? 'https://alvap-mvp-production.up.railway.app/api'
     : '/api');
+
+// Debug logging for API configuration
+console.log('APP_BOOT', { 
+  mode: import.meta.env.MODE, 
+  base: import.meta.env.BASE_URL,
+  apiBase: API_BASE,
+  isProd: import.meta.env.PROD
+});
 
 export interface User {
   id: string;
