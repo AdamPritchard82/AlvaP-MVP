@@ -4,6 +4,9 @@ const API_BASE = import.meta.env.VITE_API_BASE ||
     ? 'https://alvap-mvp-production.up.railway.app/api'
     : '/api');
 
+// Runtime visibility to confirm the API base in production bundles
+try { console.log('APP_API_BASE', API_BASE); } catch {}
+
 export interface User {
   id: string;
   email: string;
