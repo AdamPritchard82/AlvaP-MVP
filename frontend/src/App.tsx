@@ -1,3 +1,4 @@
+import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -65,6 +66,29 @@ function AppRoutes() {
 }
 
 function App() {
+  // Add boot logging to debug the issue
+  console.log('APP_BOOT', { 
+    mode: import.meta.env.MODE, 
+    base: import.meta.env.BASE_URL,
+    timestamp: new Date().toISOString()
+  });
+
+  // Add a small delay to ensure everything is loaded
+  const [isReady, setIsReady] = React.useState(false);
+
+  React.useEffect(() => {
+    const timer = setTimeout(() => setIsReady(true), 100);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (!isReady) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
   return (
     <ErrorBoundary>
       <AuthProvider>
