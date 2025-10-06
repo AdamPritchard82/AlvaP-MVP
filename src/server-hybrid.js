@@ -188,15 +188,29 @@ function parseCVContent(text) {
   let currentTitle = '';
   let currentEmployer = '';
   
-  // Look for common experience section headers
-  const experienceKeywords = ['experience', 'employment', 'work history', 'career', 'professional experience'];
+  // Look for common experience section headers - prioritize "work experience"
+  const experienceKeywords = ['work experience', 'professional experience', 'employment history', 'career history', 'experience', 'employment', 'work history', 'career'];
   let experienceStartIndex = -1;
   
+  // First pass: look for exact "work experience" matches
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].toLowerCase();
-    if (experienceKeywords.some(keyword => line.includes(keyword))) {
+    const line = lines[i].toLowerCase().trim();
+    if (line === 'work experience' || line === 'professional experience') {
       experienceStartIndex = i;
+      console.log('Found exact experience section at line', i, ':', lines[i]);
       break;
+    }
+  }
+  
+  // Second pass: look for partial matches if exact not found
+  if (experienceStartIndex === -1) {
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].toLowerCase();
+      if (experienceKeywords.some(keyword => line.includes(keyword))) {
+        experienceStartIndex = i;
+        console.log('Found experience section at line', i, ':', lines[i]);
+        break;
+      }
     }
   }
   
@@ -210,14 +224,36 @@ function parseCVContent(text) {
       
       // Look for job title patterns (usually at the start of a line)
       const jobTitlePatterns = [
-        /^([A-Z][a-zA-Z\s&]+(?:Manager|Director|Coordinator|Specialist|Analyst|Consultant|Advisor|Officer|Executive|Lead|Head|Chief|Senior|Junior|Associate|Assistant|Intern|Trainee|Representative|Agent|Officer|Clerk))/,
-        /^([A-Z][a-zA-Z\s&]+(?:Manager|Director|Coordinator|Specialist|Analyst|Consultant|Advisor|Officer|Executive|Lead|Head|Chief|Senior|Junior|Associate|Assistant|Intern|Trainee|Representative|Agent|Officer|Clerk))/i
+        // Common job titles with specific endings
+        /^([A-Z][a-zA-Z\s&/\-]+(?:Manager|Director|Coordinator|Specialist|Analyst|Consultant|Advisor|Officer|Executive|Lead|Head|Chief|Senior|Junior|Associate|Assistant|Intern|Trainee|Representative|Agent|Clerk|Developer|Engineer|Designer|Coordinator|Officer|Executive|Manager|Director|Specialist|Analyst|Consultant|Advisor|Lead|Head|Chief|Senior|Junior|Associate|Assistant|Intern|Trainee|Representative|Agent|Clerk))/i,
+        // Any capitalized word sequence that looks like a title
+        /^([A-Z][a-zA-Z\s&/\-]{3,}(?:\s+[A-Z][a-zA-Z\s&/\-]*)*)/,
+        // Simple pattern for any line that starts with capital and looks like a title
+        /^([A-Z][a-zA-Z\s&/\-]{4,})/
       ];
       
       for (const pattern of jobTitlePatterns) {
         const match = line.match(pattern);
         if (match && match[1] && match[1].length > 3) {
-          currentTitle = match[1].trim();
+          const potentialTitle = match[1].trim();
+          
+          // Filter out common non-title patterns
+          const skipPatterns = [
+            /^(Government|Westminster|European|Parliament|London|United|Kingdom|UK|England|Scotland|Wales|Northern|Ireland)$/i,
+            /^(Address|Phone|Email|Contact|Location|Date|Time|Year|Month|Day)$/i,
+            /^(Summary|Objective|Profile|About|Introduction)$/i,
+            /^(Education|Qualifications|Skills|Languages|Certifications)$/i,
+            /^(References|Referees|Contact|Details)$/i
+          ];
+          
+          const shouldSkip = skipPatterns.some(skipPattern => skipPattern.test(potentialTitle));
+          if (shouldSkip) {
+            console.log('Skipping non-title pattern:', potentialTitle);
+            continue;
+          }
+          
+          currentTitle = potentialTitle;
+          console.log('Found potential job title:', currentTitle);
           
           // Look for employer in the same line or next few lines
           const employerPatterns = [
