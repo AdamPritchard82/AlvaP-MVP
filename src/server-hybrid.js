@@ -202,13 +202,19 @@ function parseCVContent(text) {
     }
   }
   
-  // Second pass: look for partial matches if exact not found
+  // Second pass: look for partial matches if exact not found, but avoid sentence-like lines
   if (experienceStartIndex === -1) {
     for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].toLowerCase();
-      if (experienceKeywords.some(keyword => line.includes(keyword))) {
+      const rawLine = lines[i];
+      const line = rawLine.toLowerCase();
+      const looksLikeHeader =
+        !/^•/.test(rawLine) && // not a bullet point
+        rawLine.length <= 40 &&
+        !/[.,;:]/.test(rawLine) && // avoid sentences
+        /experience|employment|career/.test(line);
+      if (looksLikeHeader && experienceKeywords.some(keyword => line.includes(keyword))) {
         experienceStartIndex = i;
-        console.log('Found experience section at line', i, ':', lines[i]);
+        console.log('Found experience section at line', i, ':', rawLine);
         break;
       }
     }
@@ -291,6 +297,8 @@ function parseCVContent(text) {
   if (!currentTitle || !currentEmployer) {
     const headerWindow = lines.slice(0, Math.min(15, lines.length));
     const companySuffixes = /(Limited|Ltd\.?|PLC|LLC|Inc\.?|Incorporated|GmbH|SAS|BV|SA|PTY|Pty\.? Ltd\.?)/i;
+    const roleKeywords = /(Manager|Director|Coordinator|Specialist|Analyst|Consultant|Advisor|Officer|Executive|Lead|Head|Chief|Engineer|Developer|Designer|Assistant|Associate)/i;
+    const blacklist = /(Government|Parliament|Westminster|European\s+Parliament)/i;
 
     for (let i = 0; i < headerWindow.length; i++) {
       const line = headerWindow[i];
@@ -315,15 +323,31 @@ function parseCVContent(text) {
           // Select which is title/company based on pattern type
           if (type === 'company_dash_title') {
             // company, title
-            if (!currentEmployer) currentEmployer = m[1].trim();
-            if (!currentTitle) currentTitle = m[2].trim();
+            const candidateEmployer = m[1].trim();
+            const candidateTitle = m[2].trim();
+            // Validate candidates
+            const titleOk = roleKeywords.test(candidateTitle) && !blacklist.test(candidateTitle);
+            const employerOk = (!blacklist.test(candidateEmployer)) && (companySuffixes.test(candidateEmployer) || /\b(Company|Group|Ltd|PLC|Inc|LLC|Holdings)\b/i.test(candidateEmployer) || candidateEmployer.split(/\s+/).length >= 2);
+            if (titleOk && employerOk) {
+              if (!currentEmployer) currentEmployer = candidateEmployer;
+              if (!currentTitle) currentTitle = candidateTitle;
+              matched = true;
+              break;
+            }
           } else {
             // title, company
-            if (!currentTitle) currentTitle = m[1].trim();
-            if (!currentEmployer) currentEmployer = m[2].trim();
+            const candidateTitle = m[1].trim();
+            const candidateEmployer = m[2].trim();
+            // Validate candidates
+            const titleOk = roleKeywords.test(candidateTitle) && !blacklist.test(candidateTitle);
+            const employerOk = (!blacklist.test(candidateEmployer)) && (companySuffixes.test(candidateEmployer) || /\b(Company|Group|Ltd|PLC|Inc|LLC|Holdings)\b/i.test(candidateEmployer) || candidateEmployer.split(/\s+/).length >= 2);
+            if (titleOk && employerOk) {
+              if (!currentTitle) currentTitle = candidateTitle;
+              if (!currentEmployer) currentEmployer = candidateEmployer;
+              matched = true;
+              break;
+            }
           }
-          matched = true;
-          break;
         }
       }
       if (matched) break;
