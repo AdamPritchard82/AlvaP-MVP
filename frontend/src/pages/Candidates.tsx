@@ -57,7 +57,7 @@ export default function Candidates() {
         mode: tagMode,
         limit: 50
       });
-      setCandidates(response.candidates || []);
+      setCandidates(Array.isArray(response.candidates) ? response.candidates : []);
     } catch (error) {
       toast.error('Failed to load candidates');
       console.error('Error loading candidates:', error);
@@ -70,8 +70,8 @@ export default function Candidates() {
     try {
       // Load all candidates to get all available tags
       const response = await api.getCandidates({ limit: 1000 });
-      const allCandidates = response.candidates || [];
-      const uniqueTags = Array.from(new Set(allCandidates.flatMap(c => c.tags))).sort();
+      const allCandidates = Array.isArray(response.candidates) ? response.candidates : [];
+      const uniqueTags = Array.from(new Set(allCandidates.flatMap(c => Array.isArray(c.tags) ? c.tags : []))).sort();
       setAllTags(uniqueTags);
     } catch (error) {
       console.error('Error loading tags:', error);
