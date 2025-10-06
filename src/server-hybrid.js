@@ -338,6 +338,14 @@ function parseCVContent(text) {
   const allPhoneLike = text.match(/(\+?[\d\s\-\(\)]{8,})/g);
   console.log('All phone-like patterns found:', allPhoneLike);
 
+  // Debug job parsing
+  console.log('Job parsing debug:', {
+    currentTitle: currentTitle,
+    currentEmployer: currentEmployer,
+    experienceStartIndex: experienceStartIndex,
+    first15Lines: lines.slice(0, 15)
+  });
+
   return {
     firstName,
     lastName,
