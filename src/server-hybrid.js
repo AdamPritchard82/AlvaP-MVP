@@ -124,8 +124,10 @@ function parseCVContent(text) {
   
   // Improved phone number regex - matches various formats
   const phoneRegexes = [
+    /(\+91\s?[0-9]{4}\s?[0-9]{5})/g,                   // India: +91 7838 82147
     /(\+44\s?[0-9]{2,4}\s?[0-9]{3,4}\s?[0-9]{3,4})/g,  // UK: +44 20 1234 5678
     /(\+1\s?[0-9]{3}\s?[0-9]{3}\s?[0-9]{4})/g,         // US: +1 555 123 4567
+    /(\+[0-9]{1,3}\s?[0-9]{4,5}\s?[0-9]{4,5})/g,       // International: +XX XXXX XXXX
     /(0[0-9]{2,4}\s?[0-9]{3,4}\s?[0-9]{3,4})/g,        // UK: 020 1234 5678
     /([0-9]{3}\s?[0-9]{3}\s?[0-9]{4})/g,               // US: 555 123 4567
     /(\([0-9]{2,4}\)\s?[0-9]{3,4}\s?[0-9]{3,4})/g,     // (020) 1234 5678
@@ -134,14 +136,35 @@ function parseCVContent(text) {
   ];
   
   let phoneMatch = null;
+  
+  // First, try to find phone numbers in the header area (first 500 characters)
+  const headerText = text.substring(0, 500);
+  console.log('Searching header for phone numbers:', headerText);
+  
   for (const regex of phoneRegexes) {
-    const matches = text.match(regex);
+    const matches = headerText.match(regex);
     if (matches && matches.length > 0) {
       // Find the most likely phone number (longest match)
       phoneMatch = matches.reduce((longest, current) => 
         current.replace(/\D/g, '').length > longest.replace(/\D/g, '').length ? current : longest
       );
+      console.log('Found phone in header:', phoneMatch);
       break;
+    }
+  }
+  
+  // If not found in header, search the full text
+  if (!phoneMatch) {
+    console.log('No phone found in header, searching full text...');
+    for (const regex of phoneRegexes) {
+      const matches = text.match(regex);
+      if (matches && matches.length > 0) {
+        phoneMatch = matches.reduce((longest, current) => 
+          current.replace(/\D/g, '').length > longest.replace(/\D/g, '').length ? current : longest
+        );
+        console.log('Found phone in full text:', phoneMatch);
+        break;
+      }
     }
   }
   
@@ -182,8 +205,12 @@ function parseCVContent(text) {
   console.log('Phone parsing results:', {
     found: !!phoneMatch,
     phone: phone,
-    textSample: text.substring(0, 500) // First 500 chars for debugging
+    textSample: text.substring(0, 1000) // First 1000 chars for debugging
   });
+  
+  // Also log all potential phone-like patterns found
+  const allPhoneLike = text.match(/(\+?[\d\s\-\(\)]{8,})/g);
+  console.log('All phone-like patterns found:', allPhoneLike);
 
   return {
     firstName,
