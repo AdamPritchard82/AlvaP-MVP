@@ -592,6 +592,7 @@ app.post('/api/candidates/parse-cv', upload.single('file'), async (req, res) => 
 // Create candidate endpoint with form validation support
 app.post('/api/candidates', async (req, res) => {
   console.log('[create-candidate] Route started');
+  console.log('[create-candidate] Request body:', JSON.stringify(req.body, null, 2));
   
   try {
     const {
@@ -716,11 +717,13 @@ app.post('/api/candidates', async (req, res) => {
 // Get candidates endpoint
 app.get('/api/candidates', async (req, res) => {
   console.log('[get-candidates] Route started');
+  console.log('[get-candidates] Query params:', req.query);
   
   try {
     if (usePostgres) {
       const { query } = require('./db-postgres');
       const result = await query('SELECT * FROM candidates ORDER BY created_at DESC LIMIT 50');
+      console.log('[get-candidates] Found', result.rows.length, 'candidates in PostgreSQL');
       res.json({
         success: true,
         candidates: result.rows,
@@ -729,6 +732,7 @@ app.get('/api/candidates', async (req, res) => {
     } else {
       const dbInstance = db();
       const candidates = dbInstance.prepare('SELECT * FROM candidates ORDER BY created_at DESC LIMIT 50').all();
+      console.log('[get-candidates] Found', candidates.length, 'candidates in SQLite');
       res.json({
         success: true,
         candidates: candidates,
