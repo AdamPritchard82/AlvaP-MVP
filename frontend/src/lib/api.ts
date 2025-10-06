@@ -5,7 +5,15 @@ const API_BASE = import.meta.env.VITE_API_BASE ||
     : '/api');
 
 // Runtime visibility to confirm the API base in production bundles
-try { console.log('APP_API_BASE', API_BASE); } catch {}
+try { 
+  console.log('APP_API_BASE', API_BASE);
+  console.log('APP_BOOT', { 
+    timestamp: new Date().toISOString(),
+    env: import.meta.env.MODE,
+    prod: import.meta.env.PROD,
+    viteApiBase: import.meta.env.VITE_API_BASE
+  });
+} catch {}
 
 export interface User {
   id: string;
