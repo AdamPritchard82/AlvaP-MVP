@@ -76,8 +76,17 @@ const CandidateNew: React.FC = () => {
     return Object.keys(errors).length === 0;
   };
 
-  // Check if form is valid (for UI feedback)
+  // Check if form is valid (for UI feedback) - Allow CV upload first
   const isFormValid = (): boolean => {
+    // Basic validation - allow CV upload to fill in most fields
+    return formData.firstName.trim() !== '' &&
+           formData.lastName.trim() !== '' &&
+           formData.email.trim() !== '' &&
+           /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email);
+  };
+
+  // Check if form is complete (for final submission)
+  const isFormComplete = (): boolean => {
     return formData.firstName.trim() !== '' &&
            formData.lastName.trim() !== '' &&
            formData.email.trim() !== '' &&
@@ -225,7 +234,7 @@ const CandidateNew: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!validateForm()) {
+    if (!isFormComplete()) {
       toast.error('Please fill in all required fields correctly');
       return;
     }
@@ -276,10 +285,12 @@ const CandidateNew: React.FC = () => {
         <div className="mb-6 p-4 bg-white rounded-lg border border-gray-200">
           <div className="flex items-center justify-between">
             <div className="text-sm text-gray-600">
-              {isFormValid() ? (
-                <span className="text-green-600 font-medium">✓ All required fields completed</span>
+              {isFormComplete() ? (
+                <span className="text-green-600 font-medium">✓ Ready to save candidate</span>
+              ) : isFormValid() ? (
+                <span className="text-blue-600">📄 Upload CV or fill remaining fields</span>
               ) : (
-                <span className="text-red-600">Please complete all required fields to save candidate</span>
+                <span className="text-orange-600">📝 Start by uploading a CV or entering basic details</span>
               )}
             </div>
             <div className="text-xs text-gray-500">
@@ -593,7 +604,7 @@ const CandidateNew: React.FC = () => {
             </button>
             <button
               type="submit"
-              disabled={loading || !isFormValid()}
+              disabled={loading || !isFormComplete()}
               className="px-6 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? 'Creating...' : 'Create Candidate'}
