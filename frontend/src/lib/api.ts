@@ -1,7 +1,7 @@
-// Environment-aware API base. In production, default to same-origin to avoid stale hostnames
+// Environment-aware API base. Hardcode backend URL to avoid caching issues
 const API_BASE = import.meta.env.VITE_API_BASE || 
   (import.meta.env.PROD 
-    ? `${window.location.origin}/api`
+    ? 'https://alvap-mvp-production.up.railway.app/api'
     : '/api');
 
 // Runtime visibility to confirm the API base in production bundles
