@@ -11,23 +11,8 @@
   </head>
   <body>
     <div id="root"></div>
-    <!-- Load config at runtime to avoid stale bundle issues -->
-    <script>
-      window.__APP_CONFIG__ = null;
-    </script>
-    <script type="module">
-      fetch('/config.json', { cache: 'no-store' })
-        .then(r => r.json())
-        .then(cfg => {
-          window.__APP_CONFIG__ = cfg;
-          import('/src/main.tsx'); // now start the app
-        })
-        .catch(() => {
-          // Fallback if config fails to load
-          window.__APP_CONFIG__ = { API_BASE: '/api' };
-          import('/src/main.tsx');
-        });
-    </script>
+    <!-- Directly load the app (stable mode) -->
+    <script type="module" src="/src/main.tsx?v=20251006-4"></script>
   </body>
 </html>
 

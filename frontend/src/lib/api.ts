@@ -1,5 +1,5 @@
-// Load API base from runtime config to avoid stale bundle issues
-const API_BASE = (window as any).__APP_CONFIG__?.API_BASE || '/api';
+// Hardcode API base to the backend service (stable, known-working)
+const API_BASE = 'https://natural-kindness-production.up.railway.app/api';
 
 // Runtime visibility to confirm the API base in production bundles
 try { 
