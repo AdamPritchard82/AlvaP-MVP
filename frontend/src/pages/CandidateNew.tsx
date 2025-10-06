@@ -421,13 +421,8 @@ const CandidateNew: React.FC = () => {
                   <p className="mt-1 text-sm text-red-600">{validationErrors.phone}</p>
                 )}
               </div>
-            </div>
-          </div>
 
-          {/* Professional Information */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <h2 className="text-lg font-medium text-gray-900 mb-4">Professional Information</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Moved from Professional Information */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Current Job Title *
@@ -467,6 +462,14 @@ const CandidateNew: React.FC = () => {
                   <p className="mt-1 text-sm text-red-600">{validationErrors.currentEmployer}</p>
                 )}
               </div>
+            </div>
+          </div>
+
+          {/* Professional Information */}
+          <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <h2 className="text-lg font-medium text-gray-900 mb-4">Professional Information</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Salary inputs remain here */}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
