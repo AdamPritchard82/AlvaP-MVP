@@ -768,9 +768,17 @@ router.get('/', async (req, res) => {
     params.offset = offset;
 
     const candidates = await queryAll(sql, params);
+    console.log('=== CANDIDATES QUERY DEBUG ===');
+    console.log('SQL:', sql);
+    console.log('Params:', params);
+    console.log('Raw candidates result:', candidates);
+    console.log('Type of candidates:', typeof candidates);
+    console.log('Is array:', Array.isArray(candidates));
     
     // Ensure candidates is an array
     const candidatesArray = Array.isArray(candidates) ? candidates : [];
+    console.log('Final candidatesArray:', candidatesArray);
+    console.log('=== END CANDIDATES DEBUG ===');
 
     // Parse JSON fields and filter out null candidates
     const parsedCandidates = candidatesArray
