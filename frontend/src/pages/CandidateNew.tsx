@@ -78,11 +78,10 @@ const CandidateNew: React.FC = () => {
 
   // Check if form is valid (for UI feedback) - Allow CV upload first
   const isFormValid = (): boolean => {
-    // Basic validation - allow CV upload to fill in most fields
-    return formData.firstName.trim() !== '' &&
-           formData.lastName.trim() !== '' &&
-           formData.email.trim() !== '' &&
-           /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email);
+    // Very basic validation - just check if we have any data at all
+    return formData.firstName.trim() !== '' || 
+           formData.lastName.trim() !== '' || 
+           formData.email.trim() !== '';
   };
 
   // Check if form is complete (for final submission)
@@ -290,7 +289,7 @@ const CandidateNew: React.FC = () => {
               ) : isFormValid() ? (
                 <span className="text-blue-600">📄 Upload CV or fill remaining fields</span>
               ) : (
-                <span className="text-orange-600">📝 Start by uploading a CV or entering basic details</span>
+                <span className="text-gray-600">📝 Upload a CV to get started, or enter details manually</span>
               )}
             </div>
             <div className="text-xs text-gray-500">
