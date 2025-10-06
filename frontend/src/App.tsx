@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import ErrorBoundary from './components/ErrorBoundary';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -65,14 +66,16 @@ function AppRoutes() {
 
 function App() {
   return (
-    <AuthProvider>
-      <Router>
-        <div className="min-h-screen bg-gray-50">
-          <AppRoutes />
-          <Toaster position="top-right" />
-        </div>
-      </Router>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <Router>
+          <div className="min-h-screen bg-gray-50">
+            <AppRoutes />
+            <Toaster position="top-right" />
+          </div>
+        </Router>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 
