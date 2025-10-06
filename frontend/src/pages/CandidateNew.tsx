@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
+import { api } from '../lib/api';
 
 interface FormData {
   firstName: string;
@@ -149,19 +150,7 @@ const CandidateNew: React.FC = () => {
     setLoading(true);
     
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      
-      const response = await fetch('/api/candidates/parse-cv', {
-        method: 'POST',
-        body: formData
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to parse CV');
-      }
-      
-      const result = await response.json();
+      const result = await api.parseCV(file);
       
       if (result.success && result.data) {
         const parsedData = result.data;
@@ -241,19 +230,7 @@ const CandidateNew: React.FC = () => {
     setLoading(true);
     
     try {
-      const response = await fetch('/api/candidates', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(formData)
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to create candidate');
-      }
-      
-      const result = await response.json();
+      const result = await api.createCandidate(formData);
       
       if (result.success) {
         toast.success('Candidate created successfully!');
