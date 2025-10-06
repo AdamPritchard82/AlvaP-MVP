@@ -106,6 +106,11 @@ export default function CandidateDetailNew() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type, checked } = e.target as HTMLInputElement;
+    if ((name === 'salaryMin' || name === 'salaryMax') && value) {
+      const num = Math.max(10000, Math.min(200000, Math.round(Number(value) / 10000) * 10000));
+      setFormData(prev => ({ ...prev, [name]: String(num) }));
+      return;
+    }
     setFormData(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value

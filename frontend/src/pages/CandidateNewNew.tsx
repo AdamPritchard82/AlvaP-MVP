@@ -337,13 +337,13 @@ export default function CandidateNewNew() {
               </div>
             </div>
 
-            {/* Professional Information */}
+            {/* Personal/Professional Information */}
             <div className="space-y-4">
-              <h3 className="text-lg font-medium text-gray-900">Professional Information</h3>
+              <h3 className="text-lg font-medium text-gray-900">Personal/Professional Information</h3>
               
-              {/* Salary Information */}
+              {/* Salary Expectations */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Salary Range</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Salary Expectations</label>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-xs text-gray-500">Min Salary</label>
@@ -356,8 +356,11 @@ export default function CandidateNewNew() {
                         name="salaryMin"
                         value={formData.salaryMin}
                         onChange={handleInputChange}
+                        min="10000"
+                        max="200000"
+                        step="10000"
                         className="input pl-8"
-                        placeholder="0"
+                        placeholder="10000"
                       />
                     </div>
                   </div>
@@ -372,8 +375,11 @@ export default function CandidateNewNew() {
                         name="salaryMax"
                         value={formData.salaryMax}
                         onChange={handleInputChange}
+                        min="10000"
+                        max="200000"
+                        step="10000"
                         className="input pl-8"
-                        placeholder="0"
+                        placeholder="200000"
                       />
                     </div>
                   </div>

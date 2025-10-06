@@ -100,7 +100,16 @@ const CandidateNew: React.FC = () => {
   // Handle input changes
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
-    
+    // Clamp salary fields to whole increments of 10000
+    if ((name === 'salaryMin' || name === 'salaryMax') && value) {
+      const num = Math.max(10000, Math.min(200000, Math.round(Number(value) / 10000) * 10000));
+      setFormData(prev => ({ ...prev, [name]: String(num) }));
+      if (validationErrors[name]) {
+        setValidationErrors(prev => ({ ...prev, [name]: '' }));
+      }
+      return;
+    }
+
     setFormData(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value
