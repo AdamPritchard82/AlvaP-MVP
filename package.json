@@ -13,6 +13,7 @@
     "run:digest": "node src/tasks/runDigest.js"
   },
   "dependencies": {
+    "axios": "^1.6.0",
     "bcrypt": "^5.1.1",
     "cheerio": "1.0.0-rc.12",
     "compromise": "^14.14.4",
