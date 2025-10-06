@@ -338,9 +338,9 @@ const CandidateNew: React.FC = () => {
             </div>
           </div>
 
-          {/* Personal Information */}
+          {/* Personal/Professional Information */}
           <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <h2 className="text-lg font-medium text-gray-900 mb-4">Personal Information</h2>
+            <h2 className="text-lg font-medium text-gray-900 mb-4">Personal/Professional Information</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -465,9 +465,9 @@ const CandidateNew: React.FC = () => {
             </div>
           </div>
 
-          {/* Professional Information */}
+          {/* Salary Expectations */}
           <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <h2 className="text-lg font-medium text-gray-900 mb-4">Professional Information</h2>
+            <h2 className="text-lg font-medium text-gray-900 mb-4">Salary Expectations</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Salary inputs remain here */}
 

@@ -342,9 +342,9 @@ export default function CandidateDetailNew() {
             )}
           </div>
 
-          {/* Professional Information */}
+          {/* Salary Expectations */}
           <div className="card p-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Professional Information</h3>
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Salary Expectations</h3>
             
             {editing ? (
               <div className="space-y-4">
