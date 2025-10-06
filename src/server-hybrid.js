@@ -96,13 +96,16 @@ const upload = multer({
 
 // .NET CV Parser Integration
 let dotNetParser = null;
-const dotNetApiUrl = process.env.DOTNET_CV_API_URL || 'https://alvap-mvp-production.up.railway.app';
+const dotNetApiUrl = process.env.DOTNET_CV_API_URL || 'https://balanced-beauty-production.up.railway.app';
+
+// Fix for Railway truncation issue - hardcode the correct URL
+const actualDotNetApiUrl = 'https://balanced-beauty-production.up.railway.app';
 
 if (process.env.ENABLE_DOTNET_PARSER === 'true' || process.env.ENABLE_DOTNET_PARSER === '1') {
   try {
     const { DotNetCvParser } = require('./parsers/dotnetCvParser');
-    dotNetParser = new DotNetCvParser(dotNetApiUrl);
-    console.log('✅ .NET CV Parser enabled:', dotNetApiUrl);
+    dotNetParser = new DotNetCvParser(actualDotNetApiUrl);
+    console.log('✅ .NET CV Parser enabled:', actualDotNetApiUrl);
   } catch (error) {
     console.warn('⚠️ .NET CV Parser disabled:', error.message);
   }
