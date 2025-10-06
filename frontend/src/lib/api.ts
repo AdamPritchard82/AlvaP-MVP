@@ -1,8 +1,5 @@
-// Environment-aware API base. Hardcode backend URL to avoid caching issues
-const API_BASE = import.meta.env.VITE_API_BASE || 
-  (import.meta.env.PROD 
-    ? 'https://alvap-mvp-production.up.railway.app/api'
-    : '/api');
+// Load API base from runtime config to avoid stale bundle issues
+const API_BASE = (window as any).__APP_CONFIG__?.API_BASE || '/api';
 
 // Runtime visibility to confirm the API base in production bundles
 try { 
@@ -11,7 +8,7 @@ try {
     timestamp: new Date().toISOString(),
     env: import.meta.env.MODE,
     prod: import.meta.env.PROD,
-    viteApiBase: import.meta.env.VITE_API_BASE
+    runtimeConfig: (window as any).__APP_CONFIG__
   });
 } catch {}
 

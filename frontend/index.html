@@ -11,8 +11,23 @@
   </head>
   <body>
     <div id="root"></div>
-    <!-- Cache-buster to force new bundle load -->
-    <script type="module" src="/src/main.tsx?v=20251006-3"></script>
+    <!-- Load config at runtime to avoid stale bundle issues -->
+    <script>
+      window.__APP_CONFIG__ = null;
+    </script>
+    <script type="module">
+      fetch('/config.json', { cache: 'no-store' })
+        .then(r => r.json())
+        .then(cfg => {
+          window.__APP_CONFIG__ = cfg;
+          import('/src/main.tsx'); // now start the app
+        })
+        .catch(() => {
+          // Fallback if config fails to load
+          window.__APP_CONFIG__ = { API_BASE: '/api' };
+          import('/src/main.tsx');
+        });
+    </script>
   </body>
 </html>
 
