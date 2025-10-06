@@ -683,9 +683,9 @@ app.post('/api/candidates', async (req, res) => {
       );
     }
     
-    console.log(`[create-candidate] Candidate created: ${candidateId}`);
+    console.log(`[create-candidate] Candidate created: ${candidateId}, email: ${candidateData.email}`);
     
-    res.json({
+    res.status(201).json({
       success: true,
       data: candidateData,
       message: 'Candidate created successfully'
@@ -709,6 +709,7 @@ app.get('/api/candidates', async (req, res) => {
     if (usePostgres) {
       const { query } = require('./db-postgres');
       const result = await query('SELECT * FROM candidates ORDER BY created_at DESC LIMIT 50');
+      console.log(`[get-candidates] Found ${result.rows.length} candidates in PostgreSQL`);
       res.json({
         success: true,
         candidates: result.rows,
@@ -717,6 +718,7 @@ app.get('/api/candidates', async (req, res) => {
     } else {
       const dbInstance = db();
       const candidates = dbInstance.prepare('SELECT * FROM candidates ORDER BY created_at DESC LIMIT 50').all();
+      console.log(`[get-candidates] Found ${candidates.length} candidates in SQLite`);
       res.json({
         success: true,
         candidates: candidates,
