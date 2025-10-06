@@ -172,9 +172,12 @@ function parseCVContent(text) {
 // CV Parsing endpoint with .NET integration
 app.post('/api/candidates/parse-cv', upload.single('file'), async (req, res) => {
   console.log('[parse-cv] Route started');
+  console.log('[parse-cv] Request body:', req.body);
+  console.log('[parse-cv] Request file:', req.file);
   
   try {
     if (!req.file) {
+      console.log('[parse-cv] No file uploaded');
       return res.status(400).json({
         success: false,
         error: 'No file uploaded',
@@ -314,6 +317,7 @@ app.post('/api/candidates/parse-cv', upload.single('file'), async (req, res) => 
     
   } catch (error) {
     console.error('[parse-cv] Unexpected error:', error);
+    console.error('[parse-cv] Error stack:', error.stack);
     res.status(500).json({
       success: false,
       error: 'Failed to parse CV',
