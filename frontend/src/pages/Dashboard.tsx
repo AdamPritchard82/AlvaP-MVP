@@ -50,18 +50,18 @@ export default function Dashboard() {
     try {
       // Fetch real data from backend
       const [candidates, jobs] = await Promise.all([
-        api.getCandidates({ limit: 5 }),
-        api.getJobs({ limit: 5 })
+        api.getCandidates({ limit: 5 }).catch(() => ({ candidates: [], total: 0 })),
+        api.getJobs({ limit: 5 }).catch(() => ({ jobs: [], total: 0 }))
       ]);
 
-      setRecentCandidates(candidates.candidates || []);
-      setRecentJobs(jobs.jobs || []);
+      setRecentCandidates(Array.isArray((candidates as any).candidates) ? (candidates as any).candidates : []);
+      setRecentJobs(Array.isArray((jobs as any).jobs) ? (jobs as any).jobs : []);
       
       setStats({
         totalCandidates: candidates.total || 0,
         totalJobs: jobs.total || 0,
         totalUpdates: 0,
-        activeJobs: jobs.jobs?.filter(j => j.status === 'active').length || 0,
+        activeJobs: (Array.isArray((jobs as any).jobs) ? (jobs as any).jobs : []).filter((j: any) => j.status === 'active').length || 0,
         newUpdates: 0,
         recentActivity: []
       });
