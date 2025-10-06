@@ -236,8 +236,11 @@ export default function Candidates() {
                           type="number"
                           value={salaryMin}
                           onChange={(e) => setSalaryMin(e.target.value ? Number(e.target.value) : '')}
+                          min="10000"
+                          max="200000"
+                          step="10000"
                           className="input pl-8"
-                          placeholder="0"
+                          placeholder="10000"
                         />
                       </div>
                     </div>
@@ -251,8 +254,11 @@ export default function Candidates() {
                           type="number"
                           value={salaryMax}
                           onChange={(e) => setSalaryMax(e.target.value ? Number(e.target.value) : '')}
+                          min="10000"
+                          max="200000"
+                          step="10000"
                           className="input pl-8"
-                          placeholder="0"
+                          placeholder="200000"
                         />
                       </div>
                     </div>

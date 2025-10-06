@@ -362,7 +362,11 @@ export default function CandidateDetailNew() {
                           name="salaryMin"
                           value={formData.salaryMin}
                           onChange={handleInputChange}
+                          min="10000"
+                          max="200000"
+                          step="10000"
                           className="input pl-8"
+                          placeholder="e.g. 40000"
                         />
                       </div>
                     </div>
@@ -377,7 +381,11 @@ export default function CandidateDetailNew() {
                           name="salaryMax"
                           value={formData.salaryMax}
                           onChange={handleInputChange}
+                          min="10000"
+                          max="200000"
+                          step="10000"
                           className="input pl-8"
+                          placeholder="e.g. 60000"
                         />
                       </div>
                     </div>

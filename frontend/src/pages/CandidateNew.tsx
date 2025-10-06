@@ -480,9 +480,13 @@ const CandidateNew: React.FC = () => {
                   name="salaryMin"
                   value={formData.salaryMin}
                   onChange={handleInputChange}
+                  min="10000"
+                  max="200000"
+                  step="10000"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Enter minimum salary"
+                  placeholder="e.g. 40000"
                 />
+                <p className="mt-1 text-xs text-gray-500">Increments of £10,000</p>
               </div>
 
               <div>
@@ -494,9 +498,13 @@ const CandidateNew: React.FC = () => {
                   name="salaryMax"
                   value={formData.salaryMax}
                   onChange={handleInputChange}
+                  min="10000"
+                  max="200000"
+                  step="10000"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Enter maximum salary"
+                  placeholder="e.g. 60000"
                 />
+                <p className="mt-1 text-xs text-gray-500">Increments of £10,000</p>
               </div>
             </div>
           </div>
