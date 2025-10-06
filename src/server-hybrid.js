@@ -250,6 +250,65 @@ function parseCVContent(text) {
       if (currentTitle) break;
     }
   }
+
+  // If still not found, try header-area heuristics (first ~15 non-empty lines)
+  if (!currentTitle || !currentEmployer) {
+    const headerWindow = lines.slice(0, Math.min(15, lines.length));
+    const companySuffixes = /(Limited|Ltd\.?|PLC|LLC|Inc\.?|Incorporated|GmbH|SAS|BV|SA|PTY|Pty\.? Ltd\.?)/i;
+
+    for (let i = 0; i < headerWindow.length; i++) {
+      const line = headerWindow[i];
+      if (!line || line.length < 3) continue;
+
+      // Common patterns
+      const patterns = [
+        // "Title at Company"
+        { type: 'title_at_company', rx: /^([A-Z][A-Za-z &/\-]+)\s+at\s+([A-Z][A-Za-z0-9 &.,'\-]+)$/i },
+        // "Title, Company"
+        { type: 'title_comma_company', rx: /^([A-Z][A-Za-z &/\-]+),\s+([A-Z][A-Za-z0-9 &.,'\-]+)$/ },
+        // "Company - Title" or "Company — Title"
+        { type: 'company_dash_title', rx: /^([A-Z][A-Za-z0-9 &.,'\-]+)\s+[\-\u2013\u2014]\s+([A-Z][A-Za-z &/\-]+)$/ },
+        // "Title @ Company"
+        { type: 'title_at_symbol_company', rx: /^([A-Z][A-Za-z &/\-]+)\s+@\s+([A-Z][A-Za-z0-9 &.,'\-]+)$/ }
+      ];
+
+      let matched = false;
+      for (const { type, rx } of patterns) {
+        const m = line.match(rx);
+        if (m && m[1] && m[2]) {
+          // Select which is title/company based on pattern type
+          if (type === 'company_dash_title') {
+            // company, title
+            if (!currentEmployer) currentEmployer = m[1].trim();
+            if (!currentTitle) currentTitle = m[2].trim();
+          } else {
+            // title, company
+            if (!currentTitle) currentTitle = m[1].trim();
+            if (!currentEmployer) currentEmployer = m[2].trim();
+          }
+          matched = true;
+          break;
+        }
+      }
+      if (matched) break;
+
+      // Fallback: two-line combo where one looks like a title and the next looks like a company
+      if (i + 1 < headerWindow.length && (!currentTitle || !currentEmployer)) {
+        const next = headerWindow[i + 1];
+        const looksLikeTitle = /^[A-Z][A-Za-z &/\-]{3,}$/.test(line) && !companySuffixes.test(line);
+        const looksLikeCompany = /^[A-Z][A-Za-z0-9 &.,'\-]{3,}$/.test(next) && (companySuffixes.test(next) || /\b(Ltd|Limited|Inc|PLC|LLC)\b/i.test(next));
+        if (looksLikeTitle && looksLikeCompany) {
+          if (!currentTitle) currentTitle = line.trim();
+          if (!currentEmployer) currentEmployer = next.trim();
+          break;
+        }
+      }
+    }
+
+    if (currentTitle || currentEmployer) {
+      console.log('Header heuristics found job info:', { title: currentTitle, employer: currentEmployer });
+    }
+  }
   
   // Extract skills based on keywords
   const textLower = text.toLowerCase();
