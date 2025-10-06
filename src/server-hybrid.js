@@ -183,6 +183,73 @@ function parseCVContent(text) {
       firstName = words[0];
     }
   }
+
+  // Extract job title and employer from experience section
+  let currentTitle = '';
+  let currentEmployer = '';
+  
+  // Look for common experience section headers
+  const experienceKeywords = ['experience', 'employment', 'work history', 'career', 'professional experience'];
+  let experienceStartIndex = -1;
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].toLowerCase();
+    if (experienceKeywords.some(keyword => line.includes(keyword))) {
+      experienceStartIndex = i;
+      break;
+    }
+  }
+  
+  // If we found experience section, look for the first job entry
+  if (experienceStartIndex !== -1) {
+    for (let i = experienceStartIndex + 1; i < Math.min(experienceStartIndex + 10, lines.length); i++) {
+      const line = lines[i];
+      
+      // Skip empty lines and section headers
+      if (!line || line.length < 3) continue;
+      
+      // Look for job title patterns (usually at the start of a line)
+      const jobTitlePatterns = [
+        /^([A-Z][a-zA-Z\s&]+(?:Manager|Director|Coordinator|Specialist|Analyst|Consultant|Advisor|Officer|Executive|Lead|Head|Chief|Senior|Junior|Associate|Assistant|Intern|Trainee|Representative|Agent|Officer|Clerk))/,
+        /^([A-Z][a-zA-Z\s&]+(?:Manager|Director|Coordinator|Specialist|Analyst|Consultant|Advisor|Officer|Executive|Lead|Head|Chief|Senior|Junior|Associate|Assistant|Intern|Trainee|Representative|Agent|Officer|Clerk))/i
+      ];
+      
+      for (const pattern of jobTitlePatterns) {
+        const match = line.match(pattern);
+        if (match && match[1] && match[1].length > 3) {
+          currentTitle = match[1].trim();
+          
+          // Look for employer in the same line or next few lines
+          const employerPatterns = [
+            /at\s+([A-Z][a-zA-Z\s&.,]+)/i,
+            /@\s+([A-Z][a-zA-Z\s&.,]+)/i,
+            /,\s+([A-Z][a-zA-Z\s&.,]+)/i
+          ];
+          
+          for (const empPattern of employerPatterns) {
+            const empMatch = line.match(empPattern);
+            if (empMatch && empMatch[1] && empMatch[1].length > 2) {
+              currentEmployer = empMatch[1].trim();
+              break;
+            }
+          }
+          
+          // If no employer found in same line, check next line
+          if (!currentEmployer && i + 1 < lines.length) {
+            const nextLine = lines[i + 1];
+            if (nextLine && nextLine.length > 2 && nextLine.length < 100) {
+              currentEmployer = nextLine.trim();
+            }
+          }
+          
+          console.log('Found job info:', { title: currentTitle, employer: currentEmployer });
+          break;
+        }
+      }
+      
+      if (currentTitle) break;
+    }
+  }
   
   // Extract skills based on keywords
   const textLower = text.toLowerCase();
@@ -217,8 +284,8 @@ function parseCVContent(text) {
     lastName,
     email: emailMatch ? emailMatch[1] : '',
     phone: phone,
-    currentTitle: '',
-    currentEmployer: '',
+    currentTitle: currentTitle,
+    currentEmployer: currentEmployer,
     skills,
     tags,
     notes: text.substring(0, 200) + (text.length > 200 ? '...' : ''),
