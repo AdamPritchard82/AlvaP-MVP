@@ -6,6 +6,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
+import LibraryEntry, { LibrarySkills, LibraryBands, LibraryCandidates } from './pages/Library';
 import Candidates from './pages/Candidates';
 import CandidateNew from './pages/CandidateNew';
 import CandidateDetail from './pages/CandidateDetail';
@@ -53,6 +54,9 @@ function AppRoutes() {
                 <Route path="/jobs/new" element={<JobNew />} />
                 <Route path="/jobs/:jobId" element={<JobDetail />} />
                 <Route path="/updates" element={<UpdatesAndOpenRoles />} />
+                <Route path="/library" element={<LibrarySkills />} />
+                <Route path="/library/:skill" element={<LibraryBands />} />
+                <Route path="/library/:skill/:band" element={<LibraryCandidates />} />
                 <Route path="/clients" element={<Clients />} />
                 <Route path="/clients/new" element={<ClientNew />} />
                 <Route path="/pricing" element={<Pricing />} />

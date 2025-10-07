@@ -218,6 +218,22 @@ class ApiClient {
     return response.json();
   }
 
+  // Library - skills and bands
+  async getSkillCounts(): Promise<{ success: boolean; counts: Record<string, number> }> {
+    return this.request('/skills/counts');
+  }
+
+  async getBandsForSkill(skill: string): Promise<{ success: boolean; bands: Array<{ band: string; count: number }> }> {
+    const encoded = encodeURIComponent(skill);
+    return this.request(`/skills/${encoded}/bands`);
+  }
+
+  async getCandidatesBySkillAndBand(skill: string, band: string, page = 1, pageSize = 20): Promise<{ success: boolean; candidates: Candidate[]; total: number; page: number; pageSize: number }> {
+    const s = encodeURIComponent(skill);
+    const b = encodeURIComponent(band);
+    return this.request(`/skills/${s}/bands/${b}/candidates?page=${page}&pageSize=${pageSize}`);
+  }
+
   // Jobs
   async getJobs(params?: { search?: string; tags?: string[]; limit?: number; offset?: number }): Promise<{ jobs: Job[]; total: number }> {
     const searchParams = new URLSearchParams();
