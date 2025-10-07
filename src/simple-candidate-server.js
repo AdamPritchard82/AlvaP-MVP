@@ -434,14 +434,19 @@ app.get('/api/candidates', async (req, res) => {
         
         const dbCandidates = result.rows.map(row => ({
           id: row.id,
-          firstName: row.full_name.split(' ')[0] || '',
-          lastName: row.full_name.split(' ').slice(1).join(' ') || '',
+          full_name: row.full_name || '',
           email: row.email || '',
           phone: row.phone || '',
-          currentTitle: row.current_title || '',
-          currentEmployer: row.current_employer || '',
-          createdAt: row.created_at,
-          createdBy: 'system'
+          current_title: row.current_title || '',
+          current_employer: row.current_employer || '',
+          salary_min: row.salary_min || null,
+          salary_max: row.salary_max || null,
+          skills: row.skills ? JSON.parse(row.skills) : { communications: false, campaigns: false, policy: false, publicAffairs: false },
+          tags: row.tags ? JSON.parse(row.tags) : [],
+          notes: row.notes || '',
+          email_ok: row.email_ok || true,
+          created_at: row.created_at,
+          updated_at: row.updated_at || row.created_at
         }));
         
         console.log('✅ [DB] Returning candidates:', dbCandidates.length);
@@ -454,13 +459,43 @@ app.get('/api/candidates', async (req, res) => {
       } catch (dbError) {
         console.error('❌ [DB] List error:', dbError.message);
         // To avoid split read/write confusion, if DB failed earlier we already forced memory
-        const sortedCandidates = [...candidates].reverse();
+        const sortedCandidates = [...candidates].reverse().map(candidate => ({
+          id: candidate.id,
+          full_name: `${candidate.firstName} ${candidate.lastName}`,
+          email: candidate.email || '',
+          phone: candidate.phone || '',
+          current_title: candidate.currentTitle || '',
+          current_employer: candidate.currentEmployer || '',
+          salary_min: candidate.salaryMin || null,
+          salary_max: candidate.salaryMax || null,
+          skills: candidate.skills || { communications: false, campaigns: false, policy: false, publicAffairs: false },
+          tags: candidate.tags || [],
+          notes: candidate.notes || '',
+          email_ok: candidate.emailOk || true,
+          created_at: candidate.createdAt,
+          updated_at: candidate.updatedAt || candidate.createdAt
+        }));
         console.log('✅ [MEM] Returning candidates:', sortedCandidates.length);
         res.json({ success: true, candidates: sortedCandidates, total: sortedCandidates.length });
       }
     } else {
       // Use in-memory storage
-      const sortedCandidates = [...candidates].reverse();
+      const sortedCandidates = [...candidates].reverse().map(candidate => ({
+        id: candidate.id,
+        full_name: `${candidate.firstName} ${candidate.lastName}`,
+        email: candidate.email || '',
+        phone: candidate.phone || '',
+        current_title: candidate.currentTitle || '',
+        current_employer: candidate.currentEmployer || '',
+        salary_min: candidate.salaryMin || null,
+        salary_max: candidate.salaryMax || null,
+        skills: candidate.skills || { communications: false, campaigns: false, policy: false, publicAffairs: false },
+        tags: candidate.tags || [],
+        notes: candidate.notes || '',
+        email_ok: candidate.emailOk || true,
+        created_at: candidate.createdAt,
+        updated_at: candidate.updatedAt || candidate.createdAt
+      }));
       console.log('✅ [MEM] Returning candidates:', sortedCandidates.length);
       res.json({ success: true, candidates: sortedCandidates, total: sortedCandidates.length });
     }
