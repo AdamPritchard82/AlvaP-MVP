@@ -55,6 +55,25 @@ const upload = multer({
   limits: { fileSize: 20 * 1024 * 1024 }
 });
 
+// Helpers: salary banding
+function toBandLabel(amount) {
+  if (!amount || isNaN(amount)) return null;
+  const band = Math.floor(Number(amount) / 10000) * 10000;
+  if (band < 10000) return '£10,000';
+  if (band > 950000) return '£950,000';
+  return `£${band.toLocaleString('en-GB')}`;
+}
+
+function candidateToSkillSet(candidate) {
+  const s = candidate.skills || {};
+  const set = new Set();
+  if (s.publicAffairs) set.add('Public Affairs');
+  if (s.communications) set.add('Communications');
+  if (s.policy) set.add('Policy');
+  if (s.campaigns) set.add('Campaigns');
+  return set;
+}
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({
@@ -342,6 +361,12 @@ app.post('/api/candidates', async (req, res) => {
   
   try {
     const { firstName, lastName, email, phone, currentTitle, currentEmployer } = req.body;
+    const salaryMinRaw = req.body.salaryMin;
+    const salaryMaxRaw = req.body.salaryMax;
+    const skillsInput = req.body.skills || {};
+    const tagsInput = Array.isArray(req.body.tags) ? req.body.tags : [];
+    const notesInput = req.body.notes || '';
+    const emailOkInput = req.body.emailOk !== undefined ? !!req.body.emailOk : true;
     
     // Basic validation
     if (!firstName || !lastName || !email) {
@@ -361,23 +386,54 @@ app.post('/api/candidates', async (req, res) => {
       phone: phone || '',
       currentTitle: currentTitle || '',
       currentEmployer: currentEmployer || '',
+      salaryMin: salaryMinRaw ? Number(salaryMinRaw) : null,
+      salaryMax: salaryMaxRaw ? Number(salaryMaxRaw) : null,
+      // normalise skills booleans
+      skills: {
+        communications: !!(skillsInput.communications || skillsInput.Communications),
+        campaigns: !!(skillsInput.campaigns || skillsInput.Campaigns),
+        policy: !!(skillsInput.policy || skillsInput.Policy),
+        publicAffairs: !!(skillsInput.publicAffairs || skillsInput['Public Affairs'])
+      },
+      tags: tagsInput,
+      notes: notesInput,
+      emailOk: emailOkInput,
       createdAt: new Date().toISOString(),
       createdBy: 'system'
     };
+
+    // Apply salary default rule for missing max
+    if (candidate.salaryMin && (candidate.salaryMax === null || candidate.salaryMax === undefined || Number.isNaN(candidate.salaryMax))) {
+      candidate.salaryMax = candidate.salaryMin < 100000 ? candidate.salaryMin + 30000 : candidate.salaryMin + 50000;
+    }
     
     if (useDatabase && db) {
       // Use database with existing schema
       try {
         const result = await db.query(`
-          INSERT INTO candidates (id, full_name, email, phone, current_title, current_employer, created_by, created_at, updated_at)
-          VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, gen_random_uuid(), $6, $7)
-          RETURNING id, full_name, email, phone, current_title, current_employer, created_at
+          INSERT INTO candidates (
+            id, full_name, email, phone, current_title, current_employer,
+            salary_min, salary_max, skills, tags, notes, email_ok,
+            created_by, created_at, updated_at
+          )
+          VALUES (
+            gen_random_uuid(), $1, $2, $3, $4, $5,
+            $6, $7, $8, $9, $10, $11,
+            gen_random_uuid(), $12, $13
+          )
+          RETURNING id, full_name, email, phone, current_title, current_employer, salary_min, salary_max, skills, tags, notes, email_ok, created_at, updated_at
         `, [
           `${candidate.firstName} ${candidate.lastName}`,
           candidate.email,
           candidate.phone,
           candidate.currentTitle,
           candidate.currentEmployer,
+          candidate.salaryMin,
+          candidate.salaryMax,
+          JSON.stringify(candidate.skills),
+          JSON.stringify(candidate.tags),
+          candidate.notes,
+          candidate.emailOk,
           candidate.createdAt,
           candidate.createdAt
         ]);
@@ -421,11 +477,14 @@ app.get('/api/candidates', async (req, res) => {
   console.log('=== GET CANDIDATES ===');
   
   try {
+    const safeJson = (val, fallback) => {
+      try { return typeof val === 'string' ? JSON.parse(val) : val; } catch { return fallback; }
+    };
     if (useDatabase && db) {
       // Use database
       try {
         const result = await db.query(`
-          SELECT id, full_name, email, phone, current_title, current_employer, created_at
+          SELECT id, full_name, email, phone, current_title, current_employer, salary_min, salary_max, skills, tags, notes, email_ok, created_at, updated_at
           FROM candidates 
           ORDER BY created_at DESC 
           LIMIT 50
@@ -438,12 +497,12 @@ app.get('/api/candidates', async (req, res) => {
           phone: row.phone || '',
           current_title: row.current_title || '',
           current_employer: row.current_employer || '',
-          salary_min: row.salary_min || null,
-          salary_max: row.salary_max || null,
-          skills: row.skills ? JSON.parse(row.skills) : { communications: false, campaigns: false, policy: false, publicAffairs: false },
-          tags: row.tags ? JSON.parse(row.tags) : [],
+          salary_min: row.salary_min ?? null,
+          salary_max: row.salary_max ?? null,
+          skills: row.skills ? safeJson(row.skills, { communications: false, campaigns: false, policy: false, publicAffairs: false }) : { communications: false, campaigns: false, policy: false, publicAffairs: false },
+          tags: row.tags ? safeJson(row.tags, []) : [],
           notes: row.notes || '',
-          email_ok: row.email_ok || true,
+          email_ok: row.email_ok !== false,
           created_at: row.created_at,
           updated_at: row.updated_at || row.created_at
         }));
@@ -486,12 +545,12 @@ app.get('/api/candidates', async (req, res) => {
         phone: candidate.phone || '',
         current_title: candidate.currentTitle || '',
         current_employer: candidate.currentEmployer || '',
-        salary_min: candidate.salaryMin || null,
-        salary_max: candidate.salaryMax || null,
+        salary_min: candidate.salaryMin ?? null,
+        salary_max: candidate.salaryMax ?? null,
         skills: candidate.skills || { communications: false, campaigns: false, policy: false, publicAffairs: false },
         tags: candidate.tags || [],
         notes: candidate.notes || '',
-        email_ok: candidate.emailOk || true,
+        email_ok: candidate.emailOk !== false,
         created_at: candidate.createdAt,
         updated_at: candidate.updatedAt || candidate.createdAt
       }));
@@ -509,6 +568,102 @@ app.get('/api/candidates', async (req, res) => {
   }
 });
 
+// Bands per skill (only non-empty bands)
+app.get('/api/skills/bands', async (req, res) => {
+  try {
+    const collect = (items) => {
+      const out = { 'Public Affairs': new Set(), 'Communications': new Set(), 'Policy': new Set(), 'Campaigns': new Set() };
+      items.forEach(c => {
+        const skills = c.skills || c.skills;
+        const set = candidateToSkillSet({ skills });
+        const band = toBandLabel(c.salary_min);
+        if (!band) return;
+        set.forEach(skill => out[skill].add(band));
+      });
+      return Object.fromEntries(Object.entries(out).map(([k, v]) => [k, Array.from(v).sort((a,b)=>Number(a.replace(/[^\d]/g,''))-Number(b.replace(/[^\d]/g,'')))]));
+    };
+
+    if (useDatabase && db) {
+      const result = await db.query(`SELECT salary_min, skills FROM candidates`);
+      const rows = result.rows.map(r => ({ salary_min: r.salary_min ?? null, skills: safeParse(r.skills) }));
+      return res.json({ success: true, bands: collect(rows) });
+    } else {
+      const rows = candidates.map(c => ({ salary_min: c.salaryMin ?? null, skills: c.skills }));
+      return res.json({ success: true, bands: collect(rows) });
+    }
+  } catch (err) {
+    console.error('[bands] Error:', err);
+    return res.json({ success: true, bands: { 'Public Affairs': [], 'Communications': [], 'Policy': [], 'Campaigns': [] } });
+  }
+});
+
+// Candidates by skill + band (simple paging)
+app.get('/api/skills/:skill/bands/:band/candidates', async (req, res) => {
+  const { skill, band } = req.params;
+  const page = Math.max(1, parseInt(req.query.page || '1', 10));
+  const pageSize = Math.min(50, Math.max(1, parseInt(req.query.pageSize || '20', 10)));
+
+  const skillKeyMap = {
+    'Public Affairs': 'publicAffairs',
+    'Communications': 'communications',
+    'Policy': 'policy',
+    'Campaigns': 'campaigns'
+  };
+  const skillKey = skillKeyMap[skill] || '';
+  if (!skillKey) return res.json({ success: true, candidates: [], total: 0, page, pageSize });
+
+  const inBand = (min) => toBandLabel(min) === band;
+
+  try {
+    let rows = [];
+    if (useDatabase && db) {
+      const result = await db.query(`SELECT id, full_name, email, phone, current_title, current_employer, salary_min, salary_max, skills, tags, notes, email_ok, created_at, updated_at FROM candidates ORDER BY created_at DESC LIMIT 500`);
+      rows = result.rows.map(r => ({
+        id: r.id,
+        full_name: r.full_name || '',
+        email: r.email || '',
+        phone: r.phone || '',
+        current_title: r.current_title || '',
+        current_employer: r.current_employer || '',
+        salary_min: r.salary_min ?? null,
+        salary_max: r.salary_max ?? null,
+        skills: safeParse(r.skills),
+        tags: safeParse(r.tags, []),
+        notes: r.notes || '',
+        email_ok: r.email_ok !== false,
+        created_at: r.created_at,
+        updated_at: r.updated_at || r.created_at
+      }));
+    } else {
+      rows = candidates.map(c => ({
+        id: c.id,
+        full_name: `${c.firstName} ${c.lastName}`,
+        email: c.email || '',
+        phone: c.phone || '',
+        current_title: c.currentTitle || '',
+        current_employer: c.currentEmployer || '',
+        salary_min: c.salaryMin ?? null,
+        salary_max: c.salaryMax ?? null,
+        skills: c.skills || {},
+        tags: c.tags || [],
+        notes: c.notes || '',
+        email_ok: c.emailOk !== false,
+        created_at: c.createdAt,
+        updated_at: c.updatedAt || c.createdAt
+      }));
+    }
+
+    const filtered = rows.filter(r => r.skills && r.skills[skillKey] && inBand(r.salary_min));
+    const total = filtered.length;
+    const start = (page - 1) * pageSize;
+    const slice = filtered.slice(start, start + pageSize);
+    return res.json({ success: true, candidates: slice, total, page, pageSize });
+  } catch (err) {
+    console.error('[skill+band] Error:', err);
+    return res.json({ success: true, candidates: [], total: 0, page, pageSize });
+  }
+});
+
 // Root endpoint
 app.get('/', (req, res) => {
   res.json({
@@ -518,7 +673,9 @@ app.get('/', (req, res) => {
     endpoints: {
       health: '/health',
       create: 'POST /api/candidates',
-      list: 'GET /api/candidates'
+      list: 'GET /api/candidates',
+      skillBands: 'GET /api/skills/bands',
+      candidatesBySkillBand: 'GET /api/skills/:skill/bands/:band/candidates'
     }
   });
 });
