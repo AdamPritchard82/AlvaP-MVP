@@ -659,28 +659,78 @@ app.post('/api/candidates', async (req, res) => {
       ]);
     } else {
       const dbInstance = db();
-      const stmt = dbInstance.prepare(`
-        INSERT INTO candidates (id, full_name, email, phone, current_title, current_employer, salary_min, salary_max, skills, tags, notes, email_ok, created_by, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
       
-      stmt.run(
-        candidateData.id,
-        `${candidateData.firstName} ${candidateData.lastName}`,
-        candidateData.email,
-        candidateData.phone,
-        candidateData.currentTitle,
-        candidateData.currentEmployer,
-        candidateData.salaryMin,
-        candidateData.salaryMax,
-        JSON.stringify(candidateData.skills),
-        JSON.stringify(candidateData.tags),
-        candidateData.notes,
-        candidateData.emailOk ? 1 : 0,
-        candidateData.createdBy,
-        candidateData.createdAt,
-        candidateData.updatedAt
-      );
+      // Ensure table exists first
+      try {
+        const tableCheck = dbInstance.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='candidates'").get();
+        if (!tableCheck) {
+          console.log('[create-candidate] Creating candidates table...');
+          dbInstance.exec(`
+            CREATE TABLE IF NOT EXISTS candidates (
+              id TEXT PRIMARY KEY,
+              full_name TEXT NOT NULL,
+              email TEXT,
+              phone TEXT,
+              current_title TEXT,
+              current_employer TEXT,
+              salary_min INTEGER,
+              salary_max INTEGER,
+              seniority TEXT,
+              tags TEXT NOT NULL DEFAULT '[]',
+              notes TEXT,
+              skills TEXT NOT NULL DEFAULT '{"communications":false,"campaigns":false,"policy":false,"publicAffairs":false}',
+              cv_original_path TEXT,
+              cv_light TEXT,
+              parsed_raw TEXT,
+              parse_status TEXT NOT NULL DEFAULT 'unparsed',
+              needs_review INTEGER NOT NULL DEFAULT 0,
+              email_ok INTEGER NOT NULL DEFAULT 1,
+              unsubscribe_token TEXT UNIQUE,
+              welcome_sent_at TEXT,
+              created_by TEXT NOT NULL,
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL
+            )
+          `);
+        }
+        
+        const stmt = dbInstance.prepare(`
+          INSERT INTO candidates (id, full_name, email, phone, current_title, current_employer, salary_min, salary_max, skills, tags, notes, email_ok, created_by, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        
+        const result = stmt.run(
+          candidateData.id,
+          `${candidateData.firstName} ${candidateData.lastName}`,
+          candidateData.email,
+          candidateData.phone,
+          candidateData.currentTitle,
+          candidateData.currentEmployer,
+          candidateData.salaryMin,
+          candidateData.salaryMax,
+          JSON.stringify(candidateData.skills),
+          JSON.stringify(candidateData.tags),
+          candidateData.notes,
+          candidateData.emailOk ? 1 : 0,
+          candidateData.createdBy,
+          candidateData.createdAt,
+          candidateData.updatedAt
+        );
+        
+        console.log('[create-candidate] SQLite insert result:', result);
+        
+        // Verify the insert worked
+        const verify = dbInstance.prepare('SELECT COUNT(*) as count FROM candidates WHERE id = ?').get(candidateData.id);
+        console.log('[create-candidate] Verification - row exists:', verify.count > 0);
+        
+        if (verify.count === 0) {
+          throw new Error('Insert verification failed - row not found after insert');
+        }
+        
+      } catch (dbError) {
+        console.error('[create-candidate] Database error:', dbError);
+        throw new Error(`Database insert failed: ${dbError.message}`);
+      }
     }
     
     console.log(`[create-candidate] Candidate created: ${candidateId}, email: ${candidateData.email}`);
@@ -717,13 +767,67 @@ app.get('/api/candidates', async (req, res) => {
       });
     } else {
       const dbInstance = db();
-      const candidates = dbInstance.prepare('SELECT * FROM candidates ORDER BY created_at DESC LIMIT 50').all();
-      console.log(`[get-candidates] Found ${candidates.length} candidates in SQLite`);
-      res.json({
-        success: true,
-        candidates: candidates,
-        total: candidates.length
-      });
+      
+      // First check if candidates table exists
+      try {
+        const tableCheck = dbInstance.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='candidates'").get();
+        console.log('[get-candidates] Table exists:', !!tableCheck);
+        
+        if (!tableCheck) {
+          console.log('[get-candidates] Creating candidates table...');
+          // Create the table if it doesn't exist
+          dbInstance.exec(`
+            CREATE TABLE IF NOT EXISTS candidates (
+              id TEXT PRIMARY KEY,
+              full_name TEXT NOT NULL,
+              email TEXT,
+              phone TEXT,
+              current_title TEXT,
+              current_employer TEXT,
+              salary_min INTEGER,
+              salary_max INTEGER,
+              seniority TEXT,
+              tags TEXT NOT NULL DEFAULT '[]',
+              notes TEXT,
+              skills TEXT NOT NULL DEFAULT '{"communications":false,"campaigns":false,"policy":false,"publicAffairs":false}',
+              cv_original_path TEXT,
+              cv_light TEXT,
+              parsed_raw TEXT,
+              parse_status TEXT NOT NULL DEFAULT 'unparsed',
+              needs_review INTEGER NOT NULL DEFAULT 0,
+              email_ok INTEGER NOT NULL DEFAULT 1,
+              unsubscribe_token TEXT UNIQUE,
+              welcome_sent_at TEXT,
+              created_by TEXT NOT NULL,
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL
+            )
+          `);
+        }
+        
+        const candidates = dbInstance.prepare('SELECT * FROM candidates ORDER BY created_at DESC LIMIT 50').all() || [];
+        console.log(`[get-candidates] Found ${candidates.length} candidates in SQLite`);
+        
+        // Parse JSON fields for SQLite
+        const parsedCandidates = candidates.map(candidate => ({
+          ...candidate,
+          tags: JSON.parse(candidate.tags || '[]'),
+          skills: JSON.parse(candidate.skills || '{}')
+        }));
+        
+        res.json({
+          success: true,
+          candidates: parsedCandidates,
+          total: parsedCandidates.length
+        });
+      } catch (dbError) {
+        console.error('[get-candidates] Database error:', dbError);
+        res.status(500).json({
+          success: false,
+          error: 'Database error',
+          message: dbError.message
+        });
+      }
     }
   } catch (error) {
     console.error('[get-candidates] Error:', error);
