@@ -27,7 +27,19 @@ const fs = require('fs');
 
 // Database setup
 let db;
-const usePostgres = process.env.DATABASE_URL;
+// Environment & database selection
+const isProduction = process.env.NODE_ENV === 'production' || !!process.env.RAILWAY_ENVIRONMENT || !!process.env.RAILWAY_STATIC_URL;
+const hasPostgresUrl = Boolean(process.env.DATABASE_URL);
+const usePostgres = hasPostgresUrl || false;
+
+if (isProduction) {
+  // In production we must use Postgres – SQLite is disabled to avoid split environments
+  if (!hasPostgresUrl) {
+    console.error('❌ FATAL: DATABASE_URL is not set in production. Refusing to start with SQLite.');
+    console.error('Please set DATABASE_URL in Railway environment variables.');
+    process.exit(1);
+  }
+}
 
 if (usePostgres) {
   console.log('🐘 Using PostgreSQL database');
@@ -807,15 +819,27 @@ app.get('/api/candidates', async (req, res) => {
         
         const candidates = dbInstance.prepare('SELECT * FROM candidates ORDER BY created_at DESC LIMIT 50').all() || [];
         console.log(`[get-candidates] Found ${candidates.length} candidates in SQLite`);
+        console.log(`[get-candidates] Raw candidates:`, candidates);
         
         // Parse JSON fields for SQLite with null safety
         const parsedCandidates = candidates
           .filter(candidate => candidate !== null && candidate !== undefined)
-          .map(candidate => ({
-            ...candidate,
-            tags: candidate.tags ? JSON.parse(candidate.tags) : [],
-            skills: candidate.skills ? JSON.parse(candidate.skills) : {}
-          }));
+          .map(candidate => {
+            try {
+              return {
+                ...candidate,
+                tags: candidate.tags ? JSON.parse(candidate.tags) : [],
+                skills: candidate.skills ? JSON.parse(candidate.skills) : {}
+              };
+            } catch (parseError) {
+              console.error('[get-candidates] JSON parse error for candidate:', candidate.id, parseError);
+              return {
+                ...candidate,
+                tags: [],
+                skills: {}
+              };
+            }
+          });
         
         res.json({
           success: true,
@@ -929,6 +953,18 @@ app.use((req, res) => {
     message: `Route ${req.method} ${req.url} not found`,
     availableEndpoints: ['/health', '/api/candidates/parse-cv', '/api/candidates']
   });
+});
+
+// Global error handler to prevent crashes
+process.on('uncaughtException', (error) => {
+  console.error('❌ Uncaught Exception:', error);
+  console.error('Stack trace:', error.stack);
+  // Don't exit, just log and continue
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+  // Don't exit, just log and continue
 });
 
 // Start server
