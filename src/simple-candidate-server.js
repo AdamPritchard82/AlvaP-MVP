@@ -73,27 +73,231 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Minimal CV parsing util
-function basicParseCV(text) {
+// Enhanced CV parsing function (from yesterday's working version)
+function parseCVContent(text) {
+  console.log('Parsing CV content...');
+  
+  // Extract basic information using regex
   const emailMatch = text.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
-  const phoneMatch = text.match(/(\+?[\d\s\-()]{10,})/);
-  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-  let firstName = '', lastName = '';
-  if (lines[0]) {
-    const parts = lines[0].split(/\s+/);
-    firstName = parts[0] || '';
-    lastName = parts.slice(1).join(' ') || '';
+  
+  // Improved phone number regex - matches various formats
+  const phoneRegexes = [
+    /(\+91\s?[0-9]{4}\s?[0-9]{5})/g,                   // India: +91 7838 82147
+    /(\+44\s?[0-9]{2,4}\s?[0-9]{3,4}\s?[0-9]{3,4})/g,  // UK: +44 20 1234 5678
+    /(\+1\s?[0-9]{3}\s?[0-9]{3}\s?[0-9]{4})/g,         // US: +1 555 123 4567
+    /(\+[0-9]{1,3}\s?[0-9]{4,5}\s?[0-9]{4,5})/g,       // International: +XX XXXX XXXX
+    /(0[0-9]{2,4}\s?[0-9]{3,4}\s?[0-9]{3,4})/g,        // UK: 020 1234 5678
+    /([0-9]{3}\s?[0-9]{3}\s?[0-9]{4})/g,               // US: 555 123 4567
+    /(\([0-9]{2,4}\)\s?[0-9]{3,4}\s?[0-9]{3,4})/g,     // (020) 1234 5678
+    /([0-9]{10,})/g,                                    // 10+ digits
+    /(\+?[\d\s\-\(\)]{10,})/g                          // Original fallback
+  ];
+  
+  let phoneMatch = null;
+  
+  // First, try to find phone numbers in the header area (first 500 characters)
+  const headerText = text.substring(0, 500);
+  console.log('Searching header for phone numbers:', headerText);
+  
+  for (const regex of phoneRegexes) {
+    const matches = headerText.match(regex);
+    if (matches && matches.length > 0) {
+      // Find the most likely phone number (longest match)
+      phoneMatch = matches.reduce((longest, current) => 
+        current.replace(/\D/g, '').length > longest.replace(/\D/g, '').length ? current : longest
+      );
+      console.log('Found phone in header:', phoneMatch);
+      break;
+    }
   }
+  
+  // If not found in header, search the full text
+  if (!phoneMatch) {
+    console.log('No phone found in header, searching full text...');
+    for (const regex of phoneRegexes) {
+      const matches = text.match(regex);
+      if (matches && matches.length > 0) {
+        phoneMatch = matches.reduce((longest, current) => 
+          current.replace(/\D/g, '').length > longest.replace(/\D/g, '').length ? current : longest
+        );
+        console.log('Found phone in full text:', phoneMatch);
+        break;
+      }
+    }
+  }
+  
+  // Extract name from first line
+  const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+  let firstName = '';
+  let lastName = '';
+  
+  if (lines.length > 0) {
+    const firstLine = lines[0];
+    const words = firstLine.split(/\s+/);
+    if (words.length >= 2) {
+      firstName = words[0];
+      lastName = words.slice(1).join(' ');
+    } else if (words.length === 1) {
+      firstName = words[0];
+    }
+  }
+
+  // Extract job title and employer from experience section
+  let currentTitle = '';
+  let currentEmployer = '';
+  
+  // Look for common experience section headers - prioritize "work experience"
+  const experienceKeywords = ['work experience', 'professional experience', 'employment history', 'career history', 'experience', 'employment', 'work history', 'career'];
+  let experienceStartIndex = -1;
+  
+  // First pass: look for exact "work experience" matches
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].toLowerCase().trim();
+    if (line === 'work experience' || line === 'professional experience') {
+      experienceStartIndex = i;
+      console.log('Found exact experience section at line', i, ':', lines[i]);
+      break;
+    }
+  }
+  
+  // Second pass: look for partial matches if exact not found, but avoid sentence-like lines
+  if (experienceStartIndex === -1) {
+    for (let i = 0; i < lines.length; i++) {
+      const rawLine = lines[i];
+      const line = rawLine.toLowerCase();
+      const looksLikeHeader =
+        !/^•/.test(rawLine) && // not a bullet point
+        rawLine.length <= 40 &&
+        !/[.,;:]/.test(rawLine) && // avoid sentences
+        /experience|employment|career/.test(line);
+      if (looksLikeHeader && experienceKeywords.some(keyword => line.includes(keyword))) {
+        experienceStartIndex = i;
+        console.log('Found experience section at line', i, ':', rawLine);
+        break;
+      }
+    }
+  }
+  
+  // If we found experience section, look for the first job entry
+  if (experienceStartIndex !== -1) {
+    for (let i = experienceStartIndex + 1; i < Math.min(experienceStartIndex + 10, lines.length); i++) {
+      const line = lines[i];
+      
+      // Skip empty lines and section headers
+      if (!line || line.length < 3) continue;
+      
+      // Look for job title patterns (usually at the start of a line)
+      const jobTitlePatterns = [
+        // Common job titles with specific endings
+        /^([A-Z][a-zA-Z\s&/\-]+(?:Manager|Director|Coordinator|Specialist|Analyst|Consultant|Advisor|Officer|Executive|Lead|Head|Chief|Senior|Junior|Associate|Assistant|Intern|Trainee|Representative|Agent|Clerk|Developer|Engineer|Designer|Coordinator|Officer|Executive|Manager|Director|Specialist|Analyst|Consultant|Advisor|Lead|Head|Chief|Senior|Junior|Associate|Assistant|Intern|Trainee|Representative|Agent|Clerk))/i,
+        // Any capitalized word sequence that looks like a title
+        /^([A-Z][a-zA-Z\s&/\-]{3,}(?:\s+[A-Z][a-zA-Z\s&/\-]*)*)/,
+        // Simple pattern for any line that starts with capital and looks like a title
+        /^([A-Z][a-zA-Z\s&/\-]{4,})/
+      ];
+      
+      for (const pattern of jobTitlePatterns) {
+        const match = line.match(pattern);
+        if (match && match[1] && match[1].length > 3) {
+          const potentialTitle = match[1].trim();
+          
+          // Filter out common non-title patterns
+          const skipPatterns = [
+            /^(Government|Westminster|European|Parliament|London|United|Kingdom|UK|England|Scotland|Wales|Northern|Ireland)$/i,
+            /^(Address|Phone|Email|Contact|Location|Date|Time|Year|Month|Day)$/i,
+            /^(Summary|Objective|Profile|About|Introduction)$/i,
+            /^(Education|Qualifications|Skills|Languages|Certifications)$/i,
+            /^(References|Referees|Contact|Details)$/i
+          ];
+          
+          const shouldSkip = skipPatterns.some(skipPattern => skipPattern.test(potentialTitle));
+          if (shouldSkip) {
+            console.log('Skipping non-title pattern:', potentialTitle);
+            continue;
+          }
+          
+          currentTitle = potentialTitle;
+          console.log('Found potential job title:', currentTitle);
+          
+          // Look for employer in the same line or next few lines
+          const employerPatterns = [
+            /at\s+([A-Z][a-zA-Z\s&.,]+)/i,
+            /@\s+([A-Z][a-zA-Z\s&.,]+)/i,
+            /,\s+([A-Z][a-zA-Z\s&.,]+)/i
+          ];
+          
+          for (const empPattern of employerPatterns) {
+            const empMatch = line.match(empPattern);
+            if (empMatch && empMatch[1] && empMatch[1].length > 2) {
+              currentEmployer = empMatch[1].trim();
+              break;
+            }
+          }
+          
+          // If no employer found in same line, check next line
+          if (!currentEmployer && i + 1 < lines.length) {
+            const nextLine = lines[i + 1];
+            if (nextLine && nextLine.length > 2 && nextLine.length < 100) {
+              currentEmployer = nextLine.trim();
+            }
+          }
+          
+          console.log('Found job info:', { title: currentTitle, employer: currentEmployer });
+          break;
+        }
+      }
+      
+      if (currentTitle) break;
+    }
+  }
+  
+  // Extract skills based on keywords
+  const textLower = text.toLowerCase();
+  const skills = {
+    communications: /communications?|comms?|media|press|pr|public relations|marketing/i.test(textLower),
+    campaigns: /campaigns?|advocacy|engagement|grassroots|activism|outreach/i.test(textLower),
+    policy: /policy|policies|briefing|consultation|legislative|regulatory|government/i.test(textLower),
+    publicAffairs: /public affairs|government affairs|parliamentary|stakeholder relations|lobbying/i.test(textLower)
+  };
+  
+  // Generate tags
+  const tags = [];
+  if (skills.communications) tags.push('communications');
+  if (skills.campaigns) tags.push('campaigns');
+  if (skills.policy) tags.push('policy');
+  if (skills.publicAffairs) tags.push('public-affairs');
+  
+  const phone = phoneMatch ? phoneMatch.trim() : '';
+  
+  console.log('Phone parsing results:', {
+    found: !!phoneMatch,
+    phone: phone,
+    textSample: text.substring(0, 1000) // First 1000 chars for debugging
+  });
+  
+  // Also log all potential phone-like patterns found
+  const allPhoneLike = text.match(/(\+?[\d\s\-\(\)]{8,})/g);
+  console.log('All phone-like patterns found:', allPhoneLike);
+
+  // Debug job parsing
+  console.log('Job parsing debug:', {
+    currentTitle: currentTitle,
+    currentEmployer: currentEmployer,
+    experienceStartIndex: experienceStartIndex,
+    first15Lines: lines.slice(0, 15)
+  });
+
   return {
     firstName,
     lastName,
     email: emailMatch ? emailMatch[1] : '',
-    phone: phoneMatch ? phoneMatch[1] : '',
-    currentTitle: '',
-    currentEmployer: '',
-    skills: {},
-    tags: [],
-    confidence: 0.6
+    phone: phone,
+    currentTitle: currentTitle,
+    currentEmployer: currentEmployer,
+    skills,
+    tags,
+    notes: text.substring(0, 200) + (text.length > 200 ? '...' : ''),
+    confidence: 0.8
   };
 }
 
@@ -126,7 +330,7 @@ app.post('/api/candidates/parse-cv', upload.single('file'), async (req, res) => 
       return res.status(422).json({ success: false, error: 'No text could be extracted' });
     }
 
-    const parsed = basicParseCV(text);
+    const parsed = parseCVContent(text);
     parsed.fileName = fileName;
     parsed.parserUsed = ext.replace('.', '').toUpperCase();
 
