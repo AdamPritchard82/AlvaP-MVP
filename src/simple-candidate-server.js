@@ -5,6 +5,9 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
+const multer = require('multer');
+const mammoth = require('mammoth');
+const pdfParse = require('pdf-parse');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -50,6 +53,16 @@ try {
   useDatabase = false;
 }
 
+// Uploads directory for parsing
+const uploadsDir = path.join(process.cwd(), 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+const upload = multer({
+  dest: uploadsDir,
+  limits: { fileSize: 20 * 1024 * 1024 }
+});
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({
@@ -58,6 +71,72 @@ app.get('/health', (req, res) => {
     candidatesCount: candidates.length,
     timestamp: new Date().toISOString()
   });
+});
+
+// Minimal CV parsing util
+function basicParseCV(text) {
+  const emailMatch = text.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+  const phoneMatch = text.match(/(\+?[\d\s\-()]{10,})/);
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  let firstName = '', lastName = '';
+  if (lines[0]) {
+    const parts = lines[0].split(/\s+/);
+    firstName = parts[0] || '';
+    lastName = parts.slice(1).join(' ') || '';
+  }
+  return {
+    firstName,
+    lastName,
+    email: emailMatch ? emailMatch[1] : '',
+    phone: phoneMatch ? phoneMatch[1] : '',
+    currentTitle: '',
+    currentEmployer: '',
+    skills: {},
+    tags: [],
+    confidence: 0.6
+  };
+}
+
+// Parse CV endpoint (local parsing: txt/pdf/docx)
+app.post('/api/candidates/parse-cv', upload.single('file'), async (req, res) => {
+  console.log('=== PARSE CV (simple) ===');
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'No file uploaded' });
+    }
+    const filePath = req.file.path;
+    const fileName = req.file.originalname;
+    const ext = path.extname(fileName).toLowerCase();
+    const buffer = fs.readFileSync(filePath);
+
+    let text = '';
+    if (ext === '.txt') {
+      text = buffer.toString('utf8');
+    } else if (ext === '.pdf') {
+      const result = await pdfParse(buffer);
+      text = result.text || '';
+    } else if (ext === '.docx') {
+      const result = await mammoth.extractRawText({ buffer });
+      text = result.value || '';
+    } else {
+      return res.status(415).json({ success: false, error: 'Unsupported file type' });
+    }
+
+    if (!text || text.trim().length === 0) {
+      return res.status(422).json({ success: false, error: 'No text could be extracted' });
+    }
+
+    const parsed = basicParseCV(text);
+    parsed.fileName = fileName;
+    parsed.parserUsed = ext.replace('.', '').toUpperCase();
+
+    try { fs.unlinkSync(filePath); } catch {}
+
+    return res.json({ success: true, data: parsed });
+  } catch (err) {
+    console.error('❌ Parse CV error:', err);
+    return res.status(500).json({ success: false, error: 'Failed to parse CV', message: err.message });
+  }
 });
 
 // Create candidate - SIMPLE VERSION
