@@ -47,10 +47,8 @@ function AppRoutes() {
             <Layout>
               <Routes>
                 <Route path="/" element={<Dashboard />} />
-                {/* Make /candidates land on Library skills grid */}
-                <Route path="/candidates" element={<LibrarySkills />} />
-                <Route path="/candidates/:skill" element={<LibraryBands />} />
-                <Route path="/candidates/:skill/:band" element={<LibraryCandidates />} />
+                {/* /candidates shows the classic Candidates page (now embeds Library tiles) */}
+                <Route path="/candidates" element={<Candidates />} />
                 <Route path="/candidates/new" element={<CandidateNew />} />
                 <Route path="/candidates/:candidateId" element={<CandidateDetail />} />
                 <Route path="/jobs" element={<Jobs />} />
