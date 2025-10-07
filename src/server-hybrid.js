@@ -32,6 +32,17 @@ const isProduction = process.env.NODE_ENV === 'production' || !!process.env.RAIL
 const hasPostgresUrl = Boolean(process.env.DATABASE_URL);
 const usePostgres = hasPostgresUrl || false;
 
+// Debug logging
+console.log('🔍 Environment Debug:');
+console.log('  NODE_ENV:', process.env.NODE_ENV);
+console.log('  RAILWAY_ENVIRONMENT:', process.env.RAILWAY_ENVIRONMENT);
+console.log('  RAILWAY_STATIC_URL:', process.env.RAILWAY_STATIC_URL);
+console.log('  DATABASE_URL exists:', !!process.env.DATABASE_URL);
+console.log('  DATABASE_URL value:', process.env.DATABASE_URL ? 'SET' : 'NOT SET');
+console.log('  isProduction:', isProduction);
+console.log('  hasPostgresUrl:', hasPostgresUrl);
+console.log('  usePostgres:', usePostgres);
+
 if (isProduction) {
   // In production we must use Postgres – SQLite is disabled to avoid split environments
   if (!hasPostgresUrl) {
