@@ -17,8 +17,8 @@ import { api } from '../lib/api';
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-  // Route Candidates to the Library entry by default
-  { name: 'Candidates', href: '/library', icon: Users },
+  // Route Candidates to the /candidates page (which embeds Library tiles)
+  { name: 'Candidates', href: '/candidates', icon: Users },
   { name: 'Jobs', href: '/jobs', icon: Briefcase },
   { name: 'Updates & Open Roles', href: '/updates', icon: Activity },
   { name: 'Clients', href: '/clients', icon: Building2 },
