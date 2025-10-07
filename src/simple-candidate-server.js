@@ -370,7 +370,7 @@ app.post('/api/candidates', async (req, res) => {
       try {
         const result = await db.query(`
           INSERT INTO candidates (id, full_name, email, phone, current_title, current_employer, created_by, created_at, updated_at)
-          VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8)
+          VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, gen_random_uuid(), $6, $7)
           RETURNING id, full_name, email, phone, current_title, current_employer, created_at
         `, [
           `${candidate.firstName} ${candidate.lastName}`,
@@ -378,7 +378,6 @@ app.post('/api/candidates', async (req, res) => {
           candidate.phone,
           candidate.currentTitle,
           candidate.currentEmployer,
-          candidate.createdBy,
           candidate.createdAt,
           candidate.createdAt
         ]);
