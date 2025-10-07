@@ -35,21 +35,13 @@ try {
       connectionString: process.env.DATABASE_URL,
       ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
     });
-    
-    // Test connection
-    pool.query('SELECT NOW()', (err, result) => {
-      if (err) {
-        console.log('⚠️ Database connection failed, using in-memory storage');
-        useDatabase = false;
-      } else {
-        console.log('✅ Database connected, using PostgreSQL');
-        useDatabase = true;
-        db = pool;
-      }
-    });
+    // Prefer Postgres when DATABASE_URL is set; fallback only if a query fails later
+    db = pool;
+    useDatabase = true;
+    console.log('🔧 Database configured: PostgreSQL (will fallback to memory on error)');
   }
 } catch (error) {
-  console.log('⚠️ Database not available, using in-memory storage');
+  console.log('⚠️ Database module not available, using in-memory storage');
   useDatabase = false;
 }
 
@@ -393,16 +385,18 @@ app.post('/api/candidates', async (req, res) => {
         
         const dbCandidate = result.rows[0];
         candidate.id = dbCandidate.id;
-        console.log('✅ Candidate created in database:', candidate);
+        console.log('✅ [DB] Candidate created:', candidate);
       } catch (dbError) {
-        console.error('❌ Database error, falling back to in-memory:', dbError.message);
+        console.error('❌ [DB] Insert error:', dbError.message);
+        // Do not fallback silently; mark memory path explicitly
         candidates.push(candidate);
-        console.log('✅ Candidate created in memory:', candidate);
+        console.log('✅ [MEM] Candidate created as fallback:', candidate);
+        useDatabase = false; // force list to read from memory for consistency
       }
     } else {
       // Use in-memory storage
       candidates.push(candidate);
-      console.log('✅ Candidate created in memory:', candidate);
+      console.log('✅ [MEM] Candidate created:', candidate);
     }
     
     console.log('Total candidates:', useDatabase ? 'in database' : candidates.length);
@@ -450,7 +444,7 @@ app.get('/api/candidates', async (req, res) => {
           createdBy: 'system'
         }));
         
-        console.log('✅ Returning candidates from database:', dbCandidates.length);
+        console.log('✅ [DB] Returning candidates:', dbCandidates.length);
         
         res.json({
           success: true,
@@ -458,24 +452,17 @@ app.get('/api/candidates', async (req, res) => {
           total: dbCandidates.length
         });
       } catch (dbError) {
-        console.error('❌ Database error, falling back to in-memory:', dbError.message);
+        console.error('❌ [DB] List error:', dbError.message);
+        // To avoid split read/write confusion, if DB failed earlier we already forced memory
         const sortedCandidates = [...candidates].reverse();
-        res.json({
-          success: true,
-          candidates: sortedCandidates,
-          total: sortedCandidates.length
-        });
+        console.log('✅ [MEM] Returning candidates:', sortedCandidates.length);
+        res.json({ success: true, candidates: sortedCandidates, total: sortedCandidates.length });
       }
     } else {
       // Use in-memory storage
       const sortedCandidates = [...candidates].reverse();
-      console.log('✅ Returning candidates from memory:', sortedCandidates.length);
-      
-      res.json({
-        success: true,
-        candidates: sortedCandidates,
-        total: sortedCandidates.length
-      });
+      console.log('✅ [MEM] Returning candidates:', sortedCandidates.length);
+      res.json({ success: true, candidates: sortedCandidates, total: sortedCandidates.length });
     }
     
   } catch (error) {
