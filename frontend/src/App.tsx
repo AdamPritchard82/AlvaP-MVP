@@ -47,7 +47,10 @@ function AppRoutes() {
             <Layout>
               <Routes>
                 <Route path="/" element={<Dashboard />} />
-                <Route path="/candidates" element={<Candidates />} />
+                {/* Make /candidates land on Library skills grid */}
+                <Route path="/candidates" element={<LibrarySkills />} />
+                <Route path="/candidates/:skill" element={<LibraryBands />} />
+                <Route path="/candidates/:skill/:band" element={<LibraryCandidates />} />
                 <Route path="/candidates/new" element={<CandidateNew />} />
                 <Route path="/candidates/:candidateId" element={<CandidateDetail />} />
                 <Route path="/jobs" element={<Jobs />} />
