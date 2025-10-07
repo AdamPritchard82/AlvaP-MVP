@@ -20,6 +20,36 @@ app.use(express.json({ limit: '10mb' }));
 let candidates = [];
 let nextId = 1;
 
+// Database connection (optional - will use in-memory if fails)
+let useDatabase = false;
+let db = null;
+
+// Try to connect to database, fallback to in-memory
+try {
+  const { Pool } = require('pg');
+  if (process.env.DATABASE_URL) {
+    const pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+    });
+    
+    // Test connection
+    pool.query('SELECT NOW()', (err, result) => {
+      if (err) {
+        console.log('⚠️ Database connection failed, using in-memory storage');
+        useDatabase = false;
+      } else {
+        console.log('✅ Database connected, using PostgreSQL');
+        useDatabase = true;
+        db = pool;
+      }
+    });
+  }
+} catch (error) {
+  console.log('⚠️ Database not available, using in-memory storage');
+  useDatabase = false;
+}
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({
@@ -31,7 +61,7 @@ app.get('/health', (req, res) => {
 });
 
 // Create candidate - SIMPLE VERSION
-app.post('/api/candidates', (req, res) => {
+app.post('/api/candidates', async (req, res) => {
   console.log('=== CREATE CANDIDATE ===');
   console.log('Request body:', JSON.stringify(req.body, null, 2));
   
@@ -60,11 +90,39 @@ app.post('/api/candidates', (req, res) => {
       createdBy: 'system'
     };
     
-    // Add to array
-    candidates.push(candidate);
+    if (useDatabase && db) {
+      // Use database with existing schema
+      try {
+        const result = await db.query(`
+          INSERT INTO candidates (id, full_name, email, phone, current_title, current_employer, created_by, created_at, updated_at)
+          VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8)
+          RETURNING id, full_name, email, phone, current_title, current_employer, created_at
+        `, [
+          `${candidate.firstName} ${candidate.lastName}`,
+          candidate.email,
+          candidate.phone,
+          candidate.currentTitle,
+          candidate.currentEmployer,
+          candidate.createdBy,
+          candidate.createdAt,
+          candidate.createdAt
+        ]);
+        
+        const dbCandidate = result.rows[0];
+        candidate.id = dbCandidate.id;
+        console.log('✅ Candidate created in database:', candidate);
+      } catch (dbError) {
+        console.error('❌ Database error, falling back to in-memory:', dbError.message);
+        candidates.push(candidate);
+        console.log('✅ Candidate created in memory:', candidate);
+      }
+    } else {
+      // Use in-memory storage
+      candidates.push(candidate);
+      console.log('✅ Candidate created in memory:', candidate);
+    }
     
-    console.log('✅ Candidate created:', candidate);
-    console.log('Total candidates:', candidates.length);
+    console.log('Total candidates:', useDatabase ? 'in database' : candidates.length);
     
     res.status(201).json({
       success: true,
@@ -83,21 +141,59 @@ app.post('/api/candidates', (req, res) => {
 });
 
 // Get candidates - SIMPLE VERSION
-app.get('/api/candidates', (req, res) => {
+app.get('/api/candidates', async (req, res) => {
   console.log('=== GET CANDIDATES ===');
-  console.log('Total candidates in memory:', candidates.length);
   
   try {
-    // Return all candidates (newest first)
-    const sortedCandidates = [...candidates].reverse();
-    
-    console.log('✅ Returning candidates:', sortedCandidates.length);
-    
-    res.json({
-      success: true,
-      candidates: sortedCandidates,
-      total: sortedCandidates.length
-    });
+    if (useDatabase && db) {
+      // Use database
+      try {
+        const result = await db.query(`
+          SELECT id, full_name, email, phone, current_title, current_employer, created_at
+          FROM candidates 
+          ORDER BY created_at DESC 
+          LIMIT 50
+        `);
+        
+        const dbCandidates = result.rows.map(row => ({
+          id: row.id,
+          firstName: row.full_name.split(' ')[0] || '',
+          lastName: row.full_name.split(' ').slice(1).join(' ') || '',
+          email: row.email || '',
+          phone: row.phone || '',
+          currentTitle: row.current_title || '',
+          currentEmployer: row.current_employer || '',
+          createdAt: row.created_at,
+          createdBy: 'system'
+        }));
+        
+        console.log('✅ Returning candidates from database:', dbCandidates.length);
+        
+        res.json({
+          success: true,
+          candidates: dbCandidates,
+          total: dbCandidates.length
+        });
+      } catch (dbError) {
+        console.error('❌ Database error, falling back to in-memory:', dbError.message);
+        const sortedCandidates = [...candidates].reverse();
+        res.json({
+          success: true,
+          candidates: sortedCandidates,
+          total: sortedCandidates.length
+        });
+      }
+    } else {
+      // Use in-memory storage
+      const sortedCandidates = [...candidates].reverse();
+      console.log('✅ Returning candidates from memory:', sortedCandidates.length);
+      
+      res.json({
+        success: true,
+        candidates: sortedCandidates,
+        total: sortedCandidates.length
+      });
+    }
     
   } catch (error) {
     console.error('❌ Get candidates error:', error);
