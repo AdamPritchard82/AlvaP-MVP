@@ -1,5 +1,5 @@
 // Simple Candidate Server - Bulletproof Version
-console.log('=== SIMPLE CANDIDATE SERVER STARTING ===');
+console.log('=== SIMPLE CANDIDATE SERVER STARTING v2 ===');
 
 const express = require('express');
 const cors = require('cors');
