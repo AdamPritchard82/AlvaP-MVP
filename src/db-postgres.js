@@ -25,7 +25,7 @@ function initDatabase() {
     try {
       await pool.query(`
         CREATE TABLE IF NOT EXISTS candidates (
-          id SERIAL PRIMARY KEY,
+          id TEXT PRIMARY KEY,
           full_name VARCHAR(255) NOT NULL,
           email VARCHAR(255) UNIQUE NOT NULL,
           phone VARCHAR(50),
@@ -53,6 +53,49 @@ function initDatabase() {
       console.log('✅ Candidates table ready');
     } catch (tableErr) {
       console.error('Error creating candidates table:', tableErr);
+    }
+
+    // Validate schema for id column; recreate if incorrect (e.g., SERIAL from older version)
+    try {
+      const idTypeRes = await pool.query(`
+        SELECT data_type FROM information_schema.columns 
+        WHERE table_name = 'candidates' AND column_name = 'id'
+      `);
+      const idType = idTypeRes.rows[0] && idTypeRes.rows[0].data_type;
+      if (idType && idType.toLowerCase() !== 'text') {
+        console.warn(`⚠️ candidates.id is ${idType}, expected text. Recreating table to use TEXT primary key.`);
+        await pool.query('DROP TABLE IF EXISTS candidates');
+        await pool.query(`
+          CREATE TABLE candidates (
+            id TEXT PRIMARY KEY,
+            full_name VARCHAR(255) NOT NULL,
+            email VARCHAR(255) UNIQUE NOT NULL,
+            phone VARCHAR(50),
+            current_title VARCHAR(255),
+            current_employer VARCHAR(255),
+            salary_min INTEGER,
+            salary_max INTEGER,
+            seniority VARCHAR(50),
+            tags TEXT DEFAULT '[]',
+            notes TEXT,
+            skills TEXT DEFAULT '{"communications":0,"campaigns":0,"policy":0,"publicAffairs":0}',
+            cv_original_path VARCHAR(500),
+            cv_light TEXT,
+            parsed_raw TEXT,
+            parse_status VARCHAR(50) DEFAULT 'pending',
+            needs_review BOOLEAN DEFAULT false,
+            email_ok BOOLEAN DEFAULT true,
+            unsubscribe_token VARCHAR(255),
+            welcome_sent_at TIMESTAMP,
+            created_by VARCHAR(100) DEFAULT 'system',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          )
+        `);
+        console.log('✅ Recreated candidates table with TEXT id');
+      }
+    } catch (schemaErr) {
+      console.error('Error validating/recreating candidates table schema:', schemaErr);
     }
   });
 

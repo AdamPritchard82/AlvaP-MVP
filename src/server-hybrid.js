@@ -659,27 +659,34 @@ app.post('/api/candidates', async (req, res) => {
     
     // Save to database
     if (usePostgres) {
-      const { query } = require('./db-postgres');
-      await query(`
-        INSERT INTO candidates (id, full_name, email, phone, current_title, current_employer, salary_min, salary_max, skills, tags, notes, email_ok, created_by, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-      `, [
-        candidateData.id,
-        `${candidateData.firstName} ${candidateData.lastName}`,
-        candidateData.email,
-        candidateData.phone,
-        candidateData.currentTitle,
-        candidateData.currentEmployer,
-        candidateData.salaryMin,
-        candidateData.salaryMax,
-        JSON.stringify(candidateData.skills),
-        JSON.stringify(candidateData.tags),
-        candidateData.notes,
-        candidateData.emailOk,
-        candidateData.createdBy,
-        candidateData.createdAt,
-        candidateData.updatedAt
-      ]);
+      try {
+        const { query } = require('./db-postgres');
+        console.log('[create-candidate] Inserting into PostgreSQL...');
+        await query(`
+          INSERT INTO candidates (id, full_name, email, phone, current_title, current_employer, salary_min, salary_max, skills, tags, notes, email_ok, created_by, created_at, updated_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+        `, [
+          candidateData.id,
+          `${candidateData.firstName} ${candidateData.lastName}`,
+          candidateData.email,
+          candidateData.phone,
+          candidateData.currentTitle,
+          candidateData.currentEmployer,
+          candidateData.salaryMin,
+          candidateData.salaryMax,
+          JSON.stringify(candidateData.skills),
+          JSON.stringify(candidateData.tags),
+          candidateData.notes,
+          candidateData.emailOk,
+          candidateData.createdBy,
+          candidateData.createdAt,
+          candidateData.updatedAt
+        ]);
+        console.log('[create-candidate] PostgreSQL insert OK for id', candidateData.id);
+      } catch (pgErr) {
+        console.error('[create-candidate] PostgreSQL insert error:', pgErr);
+        throw new Error(pgErr.message);
+      }
     } else {
       const dbInstance = db();
       
@@ -780,14 +787,30 @@ app.get('/api/candidates', async (req, res) => {
   
   try {
     if (usePostgres) {
-      const { query } = require('./db-postgres');
-      const result = await query('SELECT * FROM candidates ORDER BY created_at DESC LIMIT 50');
-      console.log(`[get-candidates] Found ${result.rows.length} candidates in PostgreSQL`);
-      res.json({
-        success: true,
-        candidates: result.rows,
-        total: result.rows.length
-      });
+      try {
+        const { query } = require('./db-postgres');
+        const result = await query('SELECT * FROM candidates ORDER BY created_at DESC LIMIT 50');
+        const rows = result.rows || [];
+        // Parse JSON fields
+        const safeParse = (str, fallback) => {
+          if (!str) return fallback;
+          try { return JSON.parse(str); } catch { return fallback; }
+        };
+        const parsed = rows.map(r => ({
+          ...r,
+          tags: safeParse(r.tags, []),
+          skills: safeParse(r.skills, {})
+        }));
+        console.log(`[get-candidates] Found ${parsed.length} candidates in PostgreSQL`);
+        res.json({
+          success: true,
+          candidates: parsed,
+          total: parsed.length
+        });
+      } catch (pgErr) {
+        console.error('[get-candidates] PostgreSQL error:', pgErr);
+        return res.status(500).json({ success: false, error: 'Failed to load candidates', message: pgErr.message });
+      }
     } else {
       const dbInstance = db();
       
