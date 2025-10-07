@@ -808,12 +808,14 @@ app.get('/api/candidates', async (req, res) => {
         const candidates = dbInstance.prepare('SELECT * FROM candidates ORDER BY created_at DESC LIMIT 50').all() || [];
         console.log(`[get-candidates] Found ${candidates.length} candidates in SQLite`);
         
-        // Parse JSON fields for SQLite
-        const parsedCandidates = candidates.map(candidate => ({
-          ...candidate,
-          tags: JSON.parse(candidate.tags || '[]'),
-          skills: JSON.parse(candidate.skills || '{}')
-        }));
+        // Parse JSON fields for SQLite with null safety
+        const parsedCandidates = candidates
+          .filter(candidate => candidate !== null && candidate !== undefined)
+          .map(candidate => ({
+            ...candidate,
+            tags: candidate.tags ? JSON.parse(candidate.tags) : [],
+            skills: candidate.skills ? JSON.parse(candidate.skills) : {}
+          }));
         
         res.json({
           success: true,
