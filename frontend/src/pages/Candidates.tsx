@@ -16,6 +16,7 @@ import {
   Upload
 } from 'lucide-react';
 import { api, Candidate } from '../lib/api';
+import { LibrarySkills } from './Library';
 import { formatDate, formatCurrency } from '../lib/utils';
 import { useUsage } from '../hooks/useUsage';
 import UpgradePrompt, { UsageLimitPrompt } from '../components/UpgradePrompt';
@@ -354,6 +355,15 @@ export default function Candidates() {
             </div>
           )}
         </form>
+      </div>
+
+      {/* Library Skills Grid (below search bar and buttons) */}
+      <div className="card p-6">
+        <div className="mb-4">
+          <h3 className="text-lg font-semibold">Library</h3>
+          <p className="text-sm text-gray-500">Browse by skill and salary band.</p>
+        </div>
+        <LibrarySkills />
       </div>
 
       {/* Candidates List */}
