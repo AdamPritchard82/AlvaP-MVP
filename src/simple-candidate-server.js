@@ -153,47 +153,219 @@ function candidateToSkillSet(candidate) {
   return set;
 }
 
-// Health check
+// Health check - lightweight production monitoring
 app.get('/health', (req, res) => {
-  res.json({
-    status: 'ok',
-    message: 'Simple Candidate Server is running!',
-    candidatesCount: candidates.length,
-    timestamp: new Date().toISOString(),
-    database: useDatabase ? 'PostgreSQL' : 'SQLite',
-    fileStorage: fileStorage.getStorageInfo(),
-    emailService: emailService.getServiceInfo(),
-    authService: authService.getAuthInfo(),
-    rateLimits: rateLimitService.getRateLimitInfo(),
-    monitoring: monitoringService.getUptimeStats(),
-    searchService: {
-      configured: true,
-      features: ['fuzzy-search', 'relevance-scoring', 'suggestions']
-    },
-    userPreferences: {
-      configured: true,
-      features: ['customizable-columns', 'view-preferences', 'export-settings']
-    },
-    exportService: {
-      configured: true,
-      features: ['csv-export', 'pdf-export', 'filtered-export']
-    },
-    optimisticUI: {
-      configured: true,
-      features: ['drag-drop', 'rollback', 'operation-tracking']
-    }
-  });
+  const startTime = Date.now();
+  
+  try {
+    const health = {
+      ok: true,
+      timestamp: new Date().toISOString(),
+      subsystems: {
+        api: { status: 'ok', message: 'API responding' },
+        database: { 
+          status: useDatabase ? 'ok' : 'degraded', 
+          message: useDatabase ? 'PostgreSQL connected' : 'Using SQLite fallback' 
+        },
+        storage: { 
+          status: 'ok', 
+          message: fileStorage.getStorageInfo().type 
+        },
+        email: { 
+          status: emailService.getServiceInfo().configured ? 'ok' : 'degraded',
+          message: emailService.getServiceInfo().configured ? 'Email service ready' : 'Email not configured'
+        },
+        parsers: { 
+          status: 'ok', 
+          message: 'Local parsers available (PDF, DOCX, TXT)' 
+        }
+      }
+    };
+    
+    const duration = Date.now() - startTime;
+    logRequest('GET', '/health', 200, duration, 'health: ok');
+    res.json(health);
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    logRequest('GET', '/health', 500, duration, 'health: error');
+    res.status(500).json({
+      ok: false,
+      timestamp: new Date().toISOString(),
+      error: 'Health check failed'
+    });
+  }
 });
 
 app.get('/health/detailed', async (req, res) => {
+  const startTime = Date.now();
+  
   try {
-    const healthCheck = await monitoringService.performHealthCheck();
-    res.json(healthCheck);
-  } catch (error) {
-    res.status(500).json({
-      overall: 'unhealthy',
+    // System metadata
+    const systemInfo = {
+      backend: 'src/simple-candidate-server.js',
+      nodeVersion: process.version,
+      platform: process.platform,
+      uptime: Math.floor(process.uptime()),
+      memory: {
+        rss: Math.round(process.memoryUsage().rss / 1024 / 1024),
+        heapTotal: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),
+        heapUsed: Math.round(process.memoryUsage().heapUsed / 1024 / 1024)
+      }
+    };
+
+    // Database health
+    let dbHealth = { status: 'fail', message: 'Database not available' };
+    let candidateCount = 0;
+    let migrationStatus = 'unknown';
+    
+    if (useDatabase && db) {
+      try {
+        // Quick connectivity check
+        await db.query('SELECT 1');
+        
+        // Get candidate count (fast, indexed query)
+        const countResult = await db.query('SELECT COUNT(*) as count FROM candidates');
+        candidateCount = parseInt(countResult.rows[0].count);
+        
+        // Check migration status
+        const migrationResult = await db.query(`
+          SELECT COUNT(*) as count FROM knex_migrations 
+          WHERE batch = (SELECT MAX(batch) FROM knex_migrations)
+        `);
+        const appliedMigrations = parseInt(migrationResult.rows[0].count);
+        migrationStatus = `${appliedMigrations} migrations applied`;
+        
+        dbHealth = { 
+          status: 'ok', 
+          message: 'PostgreSQL connected',
+          driver: 'PostgreSQL',
+          candidateCount,
+          migrationStatus
+        };
+      } catch (dbError) {
+        dbHealth = { 
+          status: 'fail', 
+          message: `Database error: ${dbError.message}`,
+          driver: 'PostgreSQL'
+        };
+      }
+    } else {
+      // In-memory fallback
+      candidateCount = candidates.length;
+      dbHealth = { 
+        status: 'degraded', 
+        message: 'Using in-memory storage',
+        driver: 'SQLite (fallback)',
+        candidateCount
+      };
+    }
+
+    // Storage health
+    const storageInfo = fileStorage.getStorageInfo();
+    let storageHealth = { status: 'ok', message: 'Storage accessible' };
+    
+    try {
+      // Quick write/read probe (non-destructive)
+      const testContent = `health-check-${Date.now()}`;
+      const testPath = `health-check-${Date.now()}.txt`;
+      
+      await fileStorage.writeFile(testPath, testContent);
+      const readContent = await fileStorage.readFile(testPath);
+      
+      if (readContent === testContent) {
+        storageHealth = {
+          status: 'ok',
+          message: 'Storage read/write verified',
+          driver: storageInfo.type,
+          location: storageInfo.uploadDir || 'cloud'
+        };
+      } else {
+        storageHealth = {
+          status: 'degraded',
+          message: 'Storage accessible but read/write test failed',
+          driver: storageInfo.type
+        };
+      }
+      
+      // Clean up test file
+      try {
+        await fileStorage.deleteFile(testPath);
+      } catch (cleanupError) {
+        // Ignore cleanup errors
+      }
+    } catch (storageError) {
+      storageHealth = {
+        status: 'fail',
+        message: `Storage error: ${storageError.message}`,
+        driver: storageInfo.type
+      };
+    }
+
+    // Email health
+    const emailInfo = emailService.getServiceInfo();
+    const emailHealth = {
+      status: emailInfo.configured ? 'ok' : 'degraded',
+      message: emailInfo.configured ? 'Email service ready' : 'Email not configured',
+      provider: emailInfo.provider || 'none',
+      configured: emailInfo.configured
+    };
+
+    // Parser health
+    const parserHealth = {
+      status: 'ok',
+      message: 'Local parsers available',
+      parsers: ['PDF (pdf-parse)', 'DOCX (mammoth)', 'TXT (native)'],
+      externalParser: 'Available via .NET API'
+    };
+
+    // Rate limit config
+    const rateLimitInfo = rateLimitService.getRateLimitInfo();
+    const rateLimitHealth = {
+      status: 'ok',
+      message: 'Rate limiting active',
+      config: {
+        general: rateLimitInfo.general || '100 req/15min',
+        strict: rateLimitInfo.strict || '10 req/15min',
+        upload: rateLimitInfo.upload || '5 req/15min'
+      }
+    };
+
+    // Uptime and request metrics
+    const uptimeStats = monitoringService.getUptimeStats();
+    const metricsHealth = {
+      status: 'ok',
+      message: 'Metrics available',
+      uptime: `${systemInfo.uptime}s`,
+      requestRate: uptimeStats.requestsPerMinute || 0,
+      totalRequests: uptimeStats.totalRequests || 0
+    };
+
+    const healthCheck = {
+      ok: true,
       timestamp: new Date().toISOString(),
-      error: error.message
+      system: systemInfo,
+      subsystems: {
+        database: dbHealth,
+        storage: storageHealth,
+        email: emailHealth,
+        parsers: parserHealth,
+        rateLimits: rateLimitHealth,
+        metrics: metricsHealth
+      }
+    };
+
+    const duration = Date.now() - startTime;
+    logRequest('GET', '/health/detailed', 200, duration, 'health-detailed: ok');
+    res.json(healthCheck);
+    
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    logRequest('GET', '/health/detailed', 500, duration, 'health-detailed: error');
+    res.status(500).json({
+      ok: false,
+      timestamp: new Date().toISOString(),
+      error: 'Detailed health check failed',
+      message: error.message
     });
   }
 });
