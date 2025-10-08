@@ -1,0 +1,30 @@
+{
+  "testCandidates": [
+    {
+      "full_name": "Sarah Johnson",
+      "email": "sarah.johnson@example.com",
+      "current_title": "Senior Software Engineer",
+      "current_employer": "TechCorp Inc",
+      "skills": ["JavaScript", "React", "Node.js", "Python", "AWS", "Docker", "Kubernetes"],
+      "salary_expectation": 95000,
+      "location": "London, UK",
+      "experience_years": 6,
+      "tags": ["frontend", "fullstack", "cloud", "senior"],
+      "notes": "Experienced full-stack developer with strong React and Node.js skills. Has worked on large-scale applications and is comfortable with cloud technologies.",
+      "cv_file": "sarah-johnson-cv.pdf"
+    },
+    {
+      "full_name": "Michael Chen",
+      "email": "michael.chen@example.com", 
+      "current_title": "Data Scientist",
+      "current_employer": "DataFlow Analytics",
+      "skills": ["Python", "Machine Learning", "TensorFlow", "SQL", "R", "Tableau", "Statistics"],
+      "salary_expectation": 75000,
+      "location": "Manchester, UK",
+      "experience_years": 4,
+      "tags": ["data", "ml", "analytics", "mid-level"],
+      "notes": "Data scientist with strong machine learning background. Experienced in building predictive models and data visualization. Looking for growth opportunities.",
+      "cv_file": "michael-chen-cv.pdf"
+    }
+  ]
+}
