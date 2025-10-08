@@ -23,19 +23,7 @@ const OptimisticUIService = require('./optimistic-ui-service');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Middleware
-app.use(cors({
-  origin: process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : ['https://alvap-mvp-production.up.railway.app', 'http://localhost:5173'],
-  credentials: true
-}));
-app.use(express.json({ limit: '10mb' }));
-
-// Apply rate limiting
-app.use(rateLimitService.getGeneralRateLimit());
-app.use('/api/candidates', rateLimitService.getCandidateRateLimit());
-app.use('/api/candidates/parse-cv', rateLimitService.getParseRateLimit());
-
-// Initialize all advanced services
+// Initialize all advanced services first
 const fileStorage = new FileStorage();
 const emailService = new EmailService();
 const authService = new AuthService();
@@ -45,6 +33,18 @@ const searchService = new SearchService();
 const userPreferencesService = new UserPreferencesService();
 const exportService = new ExportService();
 const optimisticUIService = new OptimisticUIService();
+
+// Middleware
+app.use(cors({
+  origin: process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : ['https://alvap-mvp-production.up.railway.app', 'http://localhost:5173'],
+  credentials: true
+}));
+app.use(express.json({ limit: '10mb' }));
+
+// Apply rate limiting
+app.use(rateLimitService.getGeneralLimiter());
+app.use('/api/candidates', rateLimitService.getStrictLimiter());
+app.use('/api/candidates/parse-cv', rateLimitService.getUploadLimiter());
 
 // Simple in-memory storage (will persist during server uptime)
 let candidates = [];
