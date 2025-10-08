@@ -428,9 +428,6 @@ class ApiClient {
   }
 
   // Job-specific match operations
-  async getJobMatches(jobId: string): Promise<{ matches: Match[] }> {
-    return this.request(`/jobs/${jobId}/matches`);
-  }
 
   async addJobMatch(jobId: string, candidateId: string, stage?: string): Promise<{ id: string }> {
     return this.request(`/jobs/${jobId}/matches`, {

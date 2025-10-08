@@ -30,7 +30,7 @@ interface ActivityItem {
   description: string;
 }
 
-export function Analytics() {
+export default function Analytics() {
   const navigate = useNavigate();
   const [skillsBands, setSkillsBands] = useState<SkillsBandsData | null>(null);
   const [pipeline, setPipeline] = useState<PipelineData | null>(null);
