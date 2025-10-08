@@ -1,5 +1,5 @@
-// Simple Candidate Server - Bulletproof Version
-console.log('=== SIMPLE CANDIDATE SERVER STARTING v2 ===');
+// Simple Candidate Server - Bulletproof Version with Advanced Services
+console.log('=== SIMPLE CANDIDATE SERVER STARTING v3 - WITH ADVANCED SERVICES ===');
 
 const express = require('express');
 const cors = require('cors');
@@ -9,15 +9,42 @@ const multer = require('multer');
 const mammoth = require('mammoth');
 const pdfParse = require('pdf-parse');
 
+// Import all advanced services
+const FileStorage = require('./storage');
+const EmailService = require('./email-service');
+const AuthService = require('./auth-service');
+const RateLimitService = require('./rate-limit-service');
+const MonitoringService = require('./monitoring-service');
+const SearchService = require('./search-service');
+const UserPreferencesService = require('./user-preferences-service');
+const ExportService = require('./export-service');
+const OptimisticUIService = require('./optimistic-ui-service');
+
 const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
 app.use(cors({
-  origin: ['https://alvap-mvp-production.up.railway.app', 'http://localhost:5173'],
+  origin: process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : ['https://alvap-mvp-production.up.railway.app', 'http://localhost:5173'],
   credentials: true
 }));
 app.use(express.json({ limit: '10mb' }));
+
+// Apply rate limiting
+app.use(rateLimitService.getGeneralRateLimit());
+app.use('/api/candidates', rateLimitService.getCandidateRateLimit());
+app.use('/api/candidates/parse-cv', rateLimitService.getParseRateLimit());
+
+// Initialize all advanced services
+const fileStorage = new FileStorage();
+const emailService = new EmailService();
+const authService = new AuthService();
+const rateLimitService = new RateLimitService();
+const monitoringService = new MonitoringService();
+const searchService = new SearchService();
+const userPreferencesService = new UserPreferencesService();
+const exportService = new ExportService();
+const optimisticUIService = new OptimisticUIService();
 
 // Simple in-memory storage (will persist during server uptime)
 let candidates = [];
@@ -80,8 +107,43 @@ app.get('/health', (req, res) => {
     status: 'ok',
     message: 'Simple Candidate Server is running!',
     candidatesCount: candidates.length,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    database: useDatabase ? 'PostgreSQL' : 'SQLite',
+    fileStorage: fileStorage.getStorageInfo(),
+    emailService: emailService.getServiceInfo(),
+    authService: authService.getAuthInfo(),
+    rateLimits: rateLimitService.getRateLimitInfo(),
+    monitoring: monitoringService.getUptimeStats(),
+    searchService: {
+      configured: true,
+      features: ['fuzzy-search', 'relevance-scoring', 'suggestions']
+    },
+    userPreferences: {
+      configured: true,
+      features: ['customizable-columns', 'view-preferences', 'export-settings']
+    },
+    exportService: {
+      configured: true,
+      features: ['csv-export', 'pdf-export', 'filtered-export']
+    },
+    optimisticUI: {
+      configured: true,
+      features: ['drag-drop', 'rollback', 'operation-tracking']
+    }
   });
+});
+
+app.get('/health/detailed', async (req, res) => {
+  try {
+    const healthCheck = await monitoringService.performHealthCheck();
+    res.json(healthCheck);
+  } catch (error) {
+    res.status(500).json({
+      overall: 'unhealthy',
+      timestamp: new Date().toISOString(),
+      error: error.message
+    });
+  }
 });
 
 // Enhanced CV parsing function (from yesterday's working version)
@@ -727,6 +789,314 @@ app.get('/api/skills/:skill/bands/:band/candidates', async (req, res) => {
   }
 });
 
+// Advanced Search endpoints
+app.get('/api/candidates/search', async (req, res) => {
+  try {
+    const { q, limit = 10, offset = 0 } = req.query;
+    
+    if (!q) {
+      return res.status(400).json({
+        success: false,
+        error: 'Search query required',
+        message: 'Please provide a search query'
+      });
+    }
+
+    const results = await searchService.searchCandidates(q, { limit: parseInt(limit), offset: parseInt(offset) });
+    
+    res.json({
+      success: true,
+      results: results.candidates,
+      total: results.total,
+      suggestions: results.suggestions,
+      query: q,
+      pagination: {
+        limit: parseInt(limit),
+        offset: parseInt(offset),
+        hasMore: results.total > parseInt(offset) + parseInt(limit)
+      }
+    });
+  } catch (error) {
+    console.error('[search] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Search failed',
+      message: error.message
+    });
+  }
+});
+
+app.get('/api/candidates/suggestions', async (req, res) => {
+  try {
+    const { q } = req.query;
+    
+    if (!q) {
+      return res.json({
+        success: true,
+        suggestions: []
+      });
+    }
+
+    const suggestions = await searchService.getSearchSuggestions(q);
+    
+    res.json({
+      success: true,
+      suggestions
+    });
+  } catch (error) {
+    console.error('[suggestions] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get suggestions',
+      message: error.message
+    });
+  }
+});
+
+// User Preferences endpoints
+app.get('/api/user/preferences', (req, res) => {
+  try {
+    const preferences = userPreferencesService.getUserPreferences('default');
+    res.json({
+      success: true,
+      preferences
+    });
+  } catch (error) {
+    console.error('[user-preferences] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get user preferences',
+      message: error.message
+    });
+  }
+});
+
+app.put('/api/user/preferences', (req, res) => {
+  try {
+    const { preferences } = req.body;
+    const updated = userPreferencesService.updateUserPreferences('default', preferences);
+    
+    res.json({
+      success: true,
+      preferences: updated,
+      message: 'User preferences updated'
+    });
+  } catch (error) {
+    console.error('[user-preferences-update] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update user preferences',
+      message: error.message
+    });
+  }
+});
+
+app.get('/api/user/preferences/columns', (req, res) => {
+  try {
+    const columns = userPreferencesService.getColumnConfiguration('default');
+    res.json({
+      success: true,
+      columns
+    });
+  } catch (error) {
+    console.error('[user-columns] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get column configuration',
+      message: error.message
+    });
+  }
+});
+
+app.post('/api/user/preferences/reset', (req, res) => {
+  try {
+    const reset = userPreferencesService.resetToDefaults('default');
+    res.json({
+      success: true,
+      preferences: reset,
+      message: 'User preferences reset to defaults'
+    });
+  } catch (error) {
+    console.error('[user-reset] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to reset preferences',
+      message: error.message
+    });
+  }
+});
+
+// Export endpoints
+app.post('/api/candidates/export', async (req, res) => {
+  try {
+    const { format = 'csv', filters = {}, columns = [] } = req.body;
+    
+    const exportResult = await exportService.exportCandidates({
+      format,
+      filters,
+      columns,
+      candidates: candidates // Pass current candidates
+    });
+    
+    res.json({
+      success: true,
+      export: exportResult,
+      message: `Export created successfully`
+    });
+  } catch (error) {
+    console.error('[export] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Export failed',
+      message: error.message
+    });
+  }
+});
+
+app.get('/api/export/stats', (req, res) => {
+  try {
+    const stats = exportService.getExportStats();
+    res.json({
+      success: true,
+      stats
+    });
+  } catch (error) {
+    console.error('[export-stats] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get export statistics',
+      message: error.message
+    });
+  }
+});
+
+// Optimistic UI endpoints
+app.post('/api/optimistic/operation', (req, res) => {
+  try {
+    const { operationId, operation, rollback } = req.body;
+
+    if (!operationId || !operation) {
+      return res.status(400).json({
+        success: false,
+        error: 'Operation ID and operation data required',
+        message: 'Please provide operationId and operation data'
+      });
+    }
+
+    const operationData = optimisticUIService.createOperation(operationId, operation, rollback);
+
+    res.json({
+      success: true,
+      operation: operationData,
+      message: 'Optimistic operation created'
+    });
+  } catch (error) {
+    console.error('[optimistic-operation] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to create optimistic operation',
+      message: error.message
+    });
+  }
+});
+
+app.post('/api/optimistic/confirm', (req, res) => {
+  try {
+    const { operationId, result } = req.body;
+
+    if (!operationId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Operation ID required',
+        message: 'Please provide operationId'
+      });
+    }
+
+    const confirmation = optimisticUIService.confirmOperation(operationId, result);
+
+    res.json(confirmation);
+  } catch (error) {
+    console.error('[optimistic-confirm] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to confirm operation',
+      message: error.message
+    });
+  }
+});
+
+app.post('/api/optimistic/rollback', (req, res) => {
+  try {
+    const { operationId, reason } = req.body;
+
+    if (!operationId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Operation ID required',
+        message: 'Please provide operationId'
+      });
+    }
+
+    const rollback = optimisticUIService.rollbackOperation(operationId, reason);
+
+    res.json(rollback);
+  } catch (error) {
+    console.error('[optimistic-rollback] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to rollback operation',
+      message: error.message
+    });
+  }
+});
+
+app.get('/api/optimistic/status/:operationId', (req, res) => {
+  try {
+    const { operationId } = req.params;
+
+    const status = optimisticUIService.getOperationStatus(operationId);
+
+    res.json(status);
+  } catch (error) {
+    console.error('[optimistic-status] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get operation status',
+      message: error.message
+    });
+  }
+});
+
+app.get('/api/optimistic/pending', (req, res) => {
+  try {
+    const pending = optimisticUIService.getPendingOperations();
+
+    res.json(pending);
+  } catch (error) {
+    console.error('[optimistic-pending] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get pending operations',
+      message: error.message
+    });
+  }
+});
+
+app.get('/api/optimistic/stats', (req, res) => {
+  try {
+    const stats = optimisticUIService.getOperationStats();
+
+    res.json(stats);
+  } catch (error) {
+    console.error('[optimistic-stats] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get operation statistics',
+      message: error.message
+    });
+  }
+});
+
 // Root endpoint
 app.get('/', (req, res) => {
   res.json({
@@ -758,6 +1128,14 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`✅ Health check: http://0.0.0.0:${PORT}/health`);
   console.log(`✅ Create: POST http://0.0.0.0:${PORT}/api/candidates`);
   console.log(`✅ List: GET http://0.0.0.0:${PORT}/api/candidates`);
+  console.log(`✅ Database: ${useDatabase ? 'PostgreSQL' : 'SQLite'}`);
+  console.log(`✅ File storage: ${fileStorage.getStorageInfo().type}`);
+  console.log(`✅ Email service: ${emailService.getServiceInfo().configured ? 'configured' : 'not configured'}`);
+  console.log(`✅ Rate limiting: enabled`);
+  console.log(`✅ CORS: hardened`);
+  
+  // Start monitoring
+  monitoringService.startMonitoring();
 });
 
 // Graceful shutdown
