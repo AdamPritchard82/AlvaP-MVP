@@ -21,7 +21,7 @@
 - **Enhanced error handling** - Better error messages and logging
 
 ### **4. Hybrid Server Architecture**
-- **Created `src/server-hybrid.js`** - Combines working production server with new features
+- **Created `src/simple-candidate-server.js`** - Production server with all features
 - **Maintains compatibility** - Works with existing frontend
 - **Modular design** - .NET parser can be enabled/disabled
 - **Clean error handling** - Proper error responses and logging
@@ -102,7 +102,7 @@ DOTNET_CV_API_URL=https://your-dotnet-parser.up.railway.app
 ## 🎯 **Next Steps for Clean Rebuild**
 
 ### **Keep These:**
-- Backend hybrid server (`src/server-hybrid.js`)
+- Backend production server (`src/simple-candidate-server.js`)
 - .NET parser integration (`src/parsers/dotnetCvParser.js`)
 - Database schema with new fields
 - Environment variable configuration
@@ -123,7 +123,7 @@ DOTNET_CV_API_URL=https://your-dotnet-parser.up.railway.app
 ## 🔗 **Key Files Created/Modified**
 
 ### **Backend:**
-- `src/server-hybrid.js` - Main server with all features
+- `src/simple-candidate-server.js` - Main server with all features
 - `src/parsers/dotnetCvParser.js` - .NET API client
 - `src/routes/candidates-new.js` - Updated with new fields
 - `package.json` - Updated start script

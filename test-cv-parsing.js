@@ -11,7 +11,7 @@ async function testLocalParsing() {
     // Start the local server
     console.log('Starting local server...');
     const { spawn } = require('child_process');
-    const server = spawn('node', ['working-server.js'], { 
+    const server = spawn('node', ['src/simple-candidate-server.js'], { 
       stdio: 'pipe',
       cwd: __dirname 
     });
