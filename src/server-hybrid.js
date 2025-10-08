@@ -81,10 +81,10 @@ const PORT = process.env.PORT || 3001;
 
 // Middleware - Hardened CORS configuration
 const allowedOrigins = [
-  'https://alvap-mvp-production.up.railway.app',
+    'https://alvap-mvp-production.up.railway.app',
   'https://natural-kindness-production.up.railway.app', // Frontend URL
-  'http://localhost:5173',
-  'http://localhost:3000'
+    'http://localhost:5173',
+    'http://localhost:3000'
 ];
 
 // Add frontend URL from environment if provided
@@ -661,8 +661,8 @@ app.post('/api/candidates/parse-cv', rateLimitService.getUploadLimiter(), upload
       // Clean up temp file anyway
       try {
         fs.unlinkSync(filePath);
-      } catch (cleanupError) {
-        console.warn('[parse-cv] Could not clean up file:', cleanupError.message);
+    } catch (cleanupError) {
+      console.warn('[parse-cv] Could not clean up file:', cleanupError.message);
       }
     }
     
@@ -746,28 +746,28 @@ app.post('/api/candidates', async (req, res) => {
     // Save to database
     if (usePostgres) {
       try {
-        const { query } = require('./db-postgres');
+      const { query } = require('./db-postgres');
         console.log('[create-candidate] Inserting into PostgreSQL...');
-        await query(`
-          INSERT INTO candidates (id, full_name, email, phone, current_title, current_employer, salary_min, salary_max, skills, tags, notes, email_ok, created_by, created_at, updated_at)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-        `, [
-          candidateData.id,
-          `${candidateData.firstName} ${candidateData.lastName}`,
-          candidateData.email,
-          candidateData.phone,
-          candidateData.currentTitle,
-          candidateData.currentEmployer,
-          candidateData.salaryMin,
-          candidateData.salaryMax,
-          JSON.stringify(candidateData.skills),
-          JSON.stringify(candidateData.tags),
-          candidateData.notes,
-          candidateData.emailOk,
-          candidateData.createdBy,
-          candidateData.createdAt,
-          candidateData.updatedAt
-        ]);
+      await query(`
+        INSERT INTO candidates (id, full_name, email, phone, current_title, current_employer, salary_min, salary_max, skills, tags, notes, email_ok, created_by, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+      `, [
+        candidateData.id,
+        `${candidateData.firstName} ${candidateData.lastName}`,
+        candidateData.email,
+        candidateData.phone,
+        candidateData.currentTitle,
+        candidateData.currentEmployer,
+        candidateData.salaryMin,
+        candidateData.salaryMax,
+        JSON.stringify(candidateData.skills),
+        JSON.stringify(candidateData.tags),
+        candidateData.notes,
+        candidateData.emailOk,
+        candidateData.createdBy,
+        candidateData.createdAt,
+        candidateData.updatedAt
+      ]);
         console.log('[create-candidate] PostgreSQL insert OK for id', candidateData.id);
       } catch (pgErr) {
         console.error('[create-candidate] PostgreSQL insert error:', pgErr);
@@ -810,28 +810,28 @@ app.post('/api/candidates', async (req, res) => {
           `);
         }
         
-        const stmt = dbInstance.prepare(`
-          INSERT INTO candidates (id, full_name, email, phone, current_title, current_employer, salary_min, salary_max, skills, tags, notes, email_ok, created_by, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `);
-        
+      const stmt = dbInstance.prepare(`
+        INSERT INTO candidates (id, full_name, email, phone, current_title, current_employer, salary_min, salary_max, skills, tags, notes, email_ok, created_by, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      
         const result = stmt.run(
-          candidateData.id,
-          `${candidateData.firstName} ${candidateData.lastName}`,
-          candidateData.email,
-          candidateData.phone,
-          candidateData.currentTitle,
-          candidateData.currentEmployer,
-          candidateData.salaryMin,
-          candidateData.salaryMax,
-          JSON.stringify(candidateData.skills),
-          JSON.stringify(candidateData.tags),
-          candidateData.notes,
-          candidateData.emailOk ? 1 : 0,
-          candidateData.createdBy,
-          candidateData.createdAt,
-          candidateData.updatedAt
-        );
+        candidateData.id,
+        `${candidateData.firstName} ${candidateData.lastName}`,
+        candidateData.email,
+        candidateData.phone,
+        candidateData.currentTitle,
+        candidateData.currentEmployer,
+        candidateData.salaryMin,
+        candidateData.salaryMax,
+        JSON.stringify(candidateData.skills),
+        JSON.stringify(candidateData.tags),
+        candidateData.notes,
+        candidateData.emailOk ? 1 : 0,
+        candidateData.createdBy,
+        candidateData.createdAt,
+        candidateData.updatedAt
+      );
         
         console.log('[create-candidate] SQLite insert result:', result);
         
@@ -902,7 +902,7 @@ app.get('/api/candidates', async (req, res) => {
     
     if (usePostgres) {
       try {
-        const { query } = require('./db-postgres');
+      const { query } = require('./db-postgres');
         
         // Build dynamic WHERE clause
         let whereConditions = [];
@@ -988,8 +988,8 @@ app.get('/api/candidates', async (req, res) => {
         
         console.log(`[get-candidates] Found ${parsed.length} candidates in PostgreSQL (page ${page}/${Math.ceil(total / limit)})`);
         
-        res.json({
-          success: true,
+      res.json({
+        success: true,
           candidates: parsed,
           pagination: {
             page,
@@ -1120,8 +1120,8 @@ app.get('/api/candidates', async (req, res) => {
             }
           });
         
-        res.json({
-          success: true,
+      res.json({
+        success: true,
           candidates: parsedCandidates,
           pagination: {
             page,

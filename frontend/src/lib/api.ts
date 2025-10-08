@@ -41,6 +41,22 @@ export interface Candidate {
   updated_at: string;
 }
 
+export interface SavedFilter {
+  id: string;
+  name: string;
+  skill?: string;
+  band?: string;
+  searchKeyword?: string;
+  columns?: any[];
+  pageSize?: number;
+  sortBy?: string;
+  sortOrder?: string;
+  filters?: any;
+  createdAt: string;
+  lastUsed?: string;
+  lastUpdated?: string;
+}
+
 export interface Client {
   id: string;
   name: string;
@@ -232,6 +248,78 @@ class ApiClient {
     const s = encodeURIComponent(skill);
     const b = encodeURIComponent(band);
     return this.request(`/skills/${s}/bands/${b}/candidates?page=${page}&pageSize=${pageSize}`);
+  }
+
+  // Saved Filters
+  async getSavedFilters(): Promise<{ success: boolean; filters: SavedFilter[] }> {
+    return this.request('/user/saved-filters');
+  }
+
+  async saveFilter(filterData: {
+    name: string;
+    skill?: string;
+    band?: string;
+    searchKeyword?: string;
+    columns?: any[];
+    pageSize?: number;
+    sortBy?: string;
+    sortOrder?: string;
+    filters?: any;
+  }): Promise<{ success: boolean; filter: SavedFilter; message: string }> {
+    return this.request('/user/saved-filters', {
+      method: 'POST',
+      body: JSON.stringify(filterData),
+    });
+  }
+
+  async updateSavedFilter(filterId: string, updates: Partial<SavedFilter>): Promise<{ success: boolean; preferences: any; message: string }> {
+    return this.request(`/user/saved-filters/${filterId}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+  }
+
+  async deleteSavedFilter(filterId: string): Promise<{ success: boolean; preferences: any; message: string }> {
+    return this.request(`/user/saved-filters/${filterId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async applySavedFilter(filterId: string): Promise<{ success: boolean; preferences: any; message: string }> {
+    return this.request(`/user/saved-filters/${filterId}/apply`, {
+      method: 'POST',
+    });
+  }
+
+  // Analytics
+  async getSkillsBandsAnalytics(): Promise<{ success: boolean; skillCounts: any; bandsData: any; generatedAt: string }> {
+    return this.request('/analytics/skills-bands');
+  }
+
+  async getPipelineAnalytics(): Promise<{ success: boolean; pipeline: any; generatedAt: string }> {
+    return this.request('/analytics/pipeline');
+  }
+
+  async getEmailOutcomesAnalytics(): Promise<{ success: boolean; emailOutcomes: any; generatedAt: string }> {
+    return this.request('/analytics/email-outcomes');
+  }
+
+  async getRecentActivityAnalytics(limit = 10): Promise<{ success: boolean; activities: any[]; total: number; generatedAt: string }> {
+    return this.request(`/analytics/recent-activity?limit=${limit}`);
+  }
+
+  // Matching Engine
+  async getJobMatches(jobId: string, limit = 10, offset = 0): Promise<{ 
+    success: boolean; 
+    total: number; 
+    items: any[]; 
+    limit: number; 
+    offset: number; 
+    job_id: number; 
+    job_title: string; 
+    search_time_ms: number 
+  }> {
+    return this.request(`/jobs/${jobId}/matches?limit=${limit}&offset=${offset}`);
   }
 
   // Jobs

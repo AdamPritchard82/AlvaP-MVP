@@ -1403,6 +1403,405 @@ app.post('/api/user/preferences/reset', (req, res) => {
   }
 });
 
+// Saved Filters endpoints
+app.get('/api/user/saved-filters', (req, res) => {
+  try {
+    const filters = userPreferencesService.getSavedFilters('default');
+    res.json({
+      success: true,
+      filters
+    });
+  } catch (error) {
+    console.error('[saved-filters] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get saved filters',
+      message: error.message
+    });
+  }
+});
+
+app.post('/api/user/saved-filters', (req, res) => {
+  try {
+    const { name, skill, band, searchKeyword, columns, pageSize, sortBy, sortOrder, filters } = req.body;
+    
+    if (!name) {
+      return res.status(400).json({
+        success: false,
+        error: 'Filter name required',
+        message: 'Please provide a name for the saved filter'
+      });
+    }
+
+    const filterData = {
+      name,
+      skill,
+      band,
+      searchKeyword,
+      columns,
+      pageSize,
+      sortBy,
+      sortOrder,
+      filters
+    };
+
+    const updatedPrefs = userPreferencesService.saveFilter('default', filterData);
+    
+    res.json({
+      success: true,
+      filter: updatedPrefs.savedFilters[updatedPrefs.savedFilters.length - 1],
+      message: 'Filter saved successfully'
+    });
+  } catch (error) {
+    console.error('[save-filter] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to save filter',
+      message: error.message
+    });
+  }
+});
+
+app.put('/api/user/saved-filters/:filterId', (req, res) => {
+  try {
+    const { filterId } = req.params;
+    const updates = req.body;
+    
+    const updatedPrefs = userPreferencesService.updateSavedFilter('default', filterId, updates);
+    
+    res.json({
+      success: true,
+      preferences: updatedPrefs,
+      message: 'Filter updated successfully'
+    });
+  } catch (error) {
+    console.error('[update-filter] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update filter',
+      message: error.message
+    });
+  }
+});
+
+app.delete('/api/user/saved-filters/:filterId', (req, res) => {
+  try {
+    const { filterId } = req.params;
+    
+    const updatedPrefs = userPreferencesService.deleteSavedFilter('default', filterId);
+    
+    res.json({
+      success: true,
+      preferences: updatedPrefs,
+      message: 'Filter deleted successfully'
+    });
+  } catch (error) {
+    console.error('[delete-filter] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to delete filter',
+      message: error.message
+    });
+  }
+});
+
+app.post('/api/user/saved-filters/:filterId/apply', (req, res) => {
+  try {
+    const { filterId } = req.params;
+    
+    const updatedPrefs = userPreferencesService.applySavedFilter('default', filterId);
+    
+    res.json({
+      success: true,
+      preferences: updatedPrefs,
+      message: 'Filter applied successfully'
+    });
+  } catch (error) {
+    console.error('[apply-filter] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to apply filter',
+      message: error.message
+    });
+  }
+});
+
+// Analytics endpoints
+app.get('/api/analytics/skills-bands', async (req, res) => {
+  const startTime = Date.now();
+  
+  try {
+    // Get skill counts and band breakdowns
+    const sumCounts = (rows) => {
+      const tot = { 'Public Affairs': 0, 'Communications': 0, 'Policy': 0, 'Campaigns': 0 };
+      rows.forEach(r => {
+        const set = candidateToSkillSet({ skills: safeObject(r.skills, {}) });
+        set.forEach(s => tot[s] = (tot[s] || 0) + 1);
+      });
+      return tot;
+    };
+
+    const addCount = (rows, skillKey) => {
+      const counts = new Map();
+      rows.forEach(r => {
+        if (!r.salary_min) return;
+        if (!r.skills || !r.skills[skillKey]) return;
+        const band = toBandLabel(r.salary_min);
+        if (!band) return;
+        counts.set(band, (counts.get(band) || 0) + 1);
+      });
+      return Array.from(counts.entries())
+        .sort((a,b)=>Number(a[0].replace(/[^\d]/g,''))-Number(b[0].replace(/[^\d]/g,'')))
+        .map(([band, count]) => ({ band, count }));
+    };
+
+    let skillCounts = {};
+    const bandsData = {};
+    const skills = ['Public Affairs', 'Communications', 'Policy', 'Campaigns'];
+    const skillKeyMap = {
+      'Public Affairs': 'publicAffairs',
+      'Communications': 'communications',
+      'Policy': 'policy',
+      'Campaigns': 'campaigns'
+    };
+
+    if (useDatabase && db) {
+      const result = await db.query(`SELECT salary_min, skills FROM candidates`);
+      const rows = result.rows.map(r => ({ 
+        salary_min: safeNumber(r.salary_min, null), 
+        skills: safeJsonParse(r.skills, {}) 
+      }));
+      
+      skillCounts = sumCounts(rows.map(r => ({ skills: r.skills })));
+      
+      for (const skill of skills) {
+        const skillKey = skillKeyMap[skill];
+        bandsData[skill] = addCount(rows, skillKey);
+      }
+    } else {
+      const rows = candidates.map(c => ({ 
+        salary_min: safeNumber(c.salaryMin, null), 
+        skills: safeObject(c.skills, {}) 
+      }));
+      
+      skillCounts = sumCounts(rows.map(r => ({ skills: r.skills })));
+      
+      for (const skill of skills) {
+        const skillKey = skillKeyMap[skill];
+        bandsData[skill] = addCount(rows, skillKey);
+      }
+    }
+    
+    const duration = Date.now() - startTime;
+    logRequest('GET', '/api/analytics/skills-bands', 200, duration, 'analytics: skills-bands');
+    
+    res.json({
+      success: true,
+      skillCounts,
+      bandsData,
+      generatedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    logRequest('GET', '/api/analytics/skills-bands', 500, duration, 'analytics: error');
+    console.error('[analytics] Skills-bands error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get skills and bands data',
+      message: error.message
+    });
+  }
+});
+
+app.get('/api/analytics/pipeline', async (req, res) => {
+  const startTime = Date.now();
+  
+  try {
+    // Get pipeline snapshot from jobs data
+    // For now, return mock data since we don't have a jobs table yet
+    const pipelineData = {
+      stages: {
+        'Sourced': 0,
+        'Screened': 0,
+        'Interview': 0,
+        'Offer': 0,
+        'Placed': 0
+      },
+      conversionRate: 0,
+      totalCandidates: 0,
+      totalJobs: 0
+    };
+    
+    // Get total candidates count
+    try {
+      if (useDatabase && db) {
+        const result = await db.query(`SELECT COUNT(*) as count FROM candidates`);
+        pipelineData.totalCandidates = parseInt(result.rows[0]?.count || 0);
+      } else {
+        pipelineData.totalCandidates = candidates.length;
+      }
+    } catch (error) {
+      console.error('[analytics] Error getting candidates count:', error);
+    }
+    
+    const duration = Date.now() - startTime;
+    logRequest('GET', '/api/analytics/pipeline', 200, duration, 'analytics: pipeline');
+    
+    res.json({
+      success: true,
+      pipeline: pipelineData,
+      generatedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    logRequest('GET', '/api/analytics/pipeline', 500, duration, 'analytics: error');
+    console.error('[analytics] Pipeline error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get pipeline data',
+      message: error.message
+    });
+  }
+});
+
+app.get('/api/analytics/email-outcomes', async (req, res) => {
+  const startTime = Date.now();
+  
+  try {
+    // Get email outcomes from last 30 days
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    let emailStats = {
+      sent: 0,
+      opened: 0,
+      bounced: 0,
+      unsubscribed: 0,
+      last30Days: true
+    };
+    
+    if (useDatabase && db) {
+      try {
+        // Count candidates with welcome emails sent
+        const sentResult = await db.query(`
+          SELECT COUNT(*) as count 
+          FROM candidates 
+          WHERE welcome_sent_at IS NOT NULL 
+          AND welcome_sent_at >= $1
+        `, [thirtyDaysAgo.toISOString()]);
+        
+        emailStats.sent = parseInt(sentResult.rows[0]?.count || 0);
+        
+        // Count candidates with email_ok = false (bounced/unsubscribed)
+        const bouncedResult = await db.query(`
+          SELECT COUNT(*) as count 
+          FROM candidates 
+          WHERE email_ok = false 
+          AND updated_at >= $1
+        `, [thirtyDaysAgo.toISOString()]);
+        
+        emailStats.bounced = parseInt(bouncedResult.rows[0]?.count || 0);
+        
+        // For now, estimate opened as 60% of sent (industry average)
+        emailStats.opened = Math.round(emailStats.sent * 0.6);
+        
+      } catch (dbError) {
+        console.error('[analytics] Database error for email outcomes:', dbError);
+      }
+    } else {
+      // Fallback to in-memory data
+      const candidatesWithEmails = candidates.filter(c => c.welcomeSentAt);
+      emailStats.sent = candidatesWithEmails.length;
+      emailStats.opened = Math.round(emailStats.sent * 0.6);
+      emailStats.bounced = candidates.filter(c => !c.emailOk).length;
+    }
+    
+    const duration = Date.now() - startTime;
+    logRequest('GET', '/api/analytics/email-outcomes', 200, duration, 'analytics: email-outcomes');
+    
+    res.json({
+      success: true,
+      emailOutcomes: emailStats,
+      generatedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    logRequest('GET', '/api/analytics/email-outcomes', 500, duration, 'analytics: error');
+    console.error('[analytics] Email outcomes error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get email outcomes data',
+      message: error.message
+    });
+  }
+});
+
+app.get('/api/analytics/recent-activity', async (req, res) => {
+  const startTime = Date.now();
+  
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 10, 50);
+    
+    let activities = [];
+    
+    if (useDatabase && db) {
+      try {
+        // Get recent candidate activities
+        const candidatesResult = await db.query(`
+          SELECT 
+            'candidate_created' as type,
+            full_name as name,
+            created_at as timestamp,
+            'Candidate added to library' as description
+          FROM candidates 
+          ORDER BY created_at DESC 
+          LIMIT $1
+        `, [limit]);
+        
+        activities = candidatesResult.rows.map(row => ({
+          type: row.type,
+          name: row.name,
+          timestamp: row.timestamp,
+          description: row.description
+        }));
+        
+      } catch (dbError) {
+        console.error('[analytics] Database error for recent activity:', dbError);
+      }
+    } else {
+      // Fallback to in-memory data
+      activities = candidates
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+        .slice(0, limit)
+        .map(candidate => ({
+          type: 'candidate_created',
+          name: `${candidate.firstName} ${candidate.lastName}`,
+          timestamp: candidate.createdAt,
+          description: 'Candidate added to library'
+        }));
+    }
+    
+    const duration = Date.now() - startTime;
+    logRequest('GET', '/api/analytics/recent-activity', 200, duration, 'analytics: recent-activity');
+    
+    res.json({
+      success: true,
+      activities,
+      total: activities.length,
+      generatedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    logRequest('GET', '/api/analytics/recent-activity', 500, duration, 'analytics: error');
+    console.error('[analytics] Recent activity error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get recent activity data',
+      message: error.message
+    });
+  }
+});
+
 // Export endpoints
 app.post('/api/candidates/export', async (req, res) => {
   try {
@@ -1739,13 +2138,12 @@ app.get('/api/jobs/:id', async (req, res) => {
   }
 });
 
-// Match candidates for a job
-app.get('/api/match/:jobId', async (req, res) => {
-  console.log('=== MATCH CANDIDATES FOR JOB ===');
+// Production-grade Matching Engine
+app.get('/api/jobs/:jobId/matches', async (req, res) => {
+  const startTime = Date.now();
   const jobId = parseInt(req.params.jobId);
   const limit = Math.min(50, Math.max(1, parseInt(req.query.limit || '10', 10)));
-  
-  const startTime = Date.now();
+  const offset = Math.max(0, parseInt(req.query.offset || '0', 10));
   
   try {
     const job = jobs.find(j => j.id === jobId);
@@ -1757,20 +2155,17 @@ app.get('/api/match/:jobId', async (req, res) => {
       });
     }
     
-    console.log(`Matching candidates for job: ${job.title}`);
-    
     let candidates = [];
     
     if (useDatabase && db) {
-      // Get candidates from database
       try {
         const result = await db.query(`
           SELECT id, full_name, email, phone, current_title, current_employer, 
                  salary_min, salary_max, band_label, skills, tags, notes, email_ok, 
                  created_at, updated_at
           FROM candidates 
-          ORDER BY created_at DESC 
-          LIMIT 500
+          ORDER BY updated_at DESC 
+          LIMIT 1000
         `);
         
         candidates = result.rows.map(row => ({
@@ -1792,27 +2187,10 @@ app.get('/api/match/:jobId', async (req, res) => {
         }));
       } catch (dbError) {
         console.error('❌ [DB] Match error:', dbError.message);
-        // Fallback to memory
-        candidates = candidates.map(c => ({
-          id: c.id,
-          full_name: `${c.firstName} ${c.lastName}`,
-          email: c.email || '',
-          phone: c.phone || '',
-          current_title: c.currentTitle || '',
-          current_employer: c.currentEmployer || '',
-          salary_min: c.salaryMin || null,
-          salary_max: c.salaryMax || null,
-          band_label: c.bandLabel || null,
-          skills: c.skills || { communications: false, campaigns: false, policy: false, publicAffairs: false },
-          tags: c.tags || [],
-          notes: c.notes || '',
-          email_ok: c.emailOk !== false,
-          created_at: c.createdAt,
-          updated_at: c.updatedAt || c.createdAt
-        }));
+        candidates = [];
       }
     } else {
-      // Get candidates from memory
+      // Use in-memory candidates
       candidates = candidates.map(c => ({
         id: c.id,
         full_name: `${c.firstName} ${c.lastName}`,
@@ -1832,52 +2210,114 @@ app.get('/api/match/:jobId', async (req, res) => {
       }));
     }
     
-    // Calculate matches with scoring
-    const matches = candidates.map(candidate => {
-      const skillScore = calculateSkillOverlapScore(candidate.skills, job.requiredSkills);
-      const salaryScore = calculateSalaryProximityScore(
-        candidate.salary_min, 
-        candidate.salary_max, 
-        job.salaryMin, 
-        job.salaryMax
-      );
-      
-      const totalScore = skillScore + salaryScore;
-      
-      return {
-        candidate_id: candidate.id,
-        name: candidate.full_name,
-        current_title: candidate.current_title,
-        current_employer: candidate.current_employer,
-        salary_range: {
-          min: candidate.salary_min,
-          max: candidate.salary_max,
-          band_label: candidate.band_label
-        },
-        skills: candidate.skills,
-        match_score: Math.round(totalScore * 100) / 100, // Round to 2 decimal places
-        skill_score: Math.round(skillScore * 100) / 100,
-        salary_score: Math.round(salaryScore * 100) / 100
-      };
-    })
-    .filter(match => match.match_score > 0) // Only include matches with some overlap
-    .sort((a, b) => b.match_score - a.match_score) // Sort by score descending
-    .slice(0, limit); // Limit results
+    // Enhanced matching with eligibility and explainable scoring
+    console.log(`[matching] Job ${jobId} skills:`, job.requiredSkills);
+    console.log(`[matching] Processing ${candidates.length} candidates`);
+    
+    const matches = candidates
+      .map(candidate => {
+        // Check eligibility: must share at least 1 required skill
+        const candidateSkills = Object.keys(candidate.skills).filter(skill => candidate.skills[skill]);
+        const jobSkills = Object.keys(job.requiredSkills || {}).filter(skill => job.requiredSkills[skill]);
+        const skillOverlap = candidateSkills.filter(skill => jobSkills.includes(skill));
+        
+        console.log(`[matching] Candidate ${candidate.id}: skills=${candidateSkills}, overlap=${skillOverlap}`);
+        
+        if (skillOverlap.length === 0) {
+          return null; // Not eligible
+        }
+        
+        // Check salary overlap
+        const candidateMin = candidate.salary_min;
+        let candidateMax = candidate.salary_max;
+        
+        // Apply defaulting logic for missing max
+        if (candidateMin && (candidateMax === null || candidateMax === undefined || Number.isNaN(candidateMax))) {
+          candidateMax = candidateMin < 100000 ? candidateMin + 30000 : candidateMin + 50000;
+        }
+        
+        const jobMin = job.salaryMin;
+        const jobMax = job.salaryMax;
+        
+        // Check salary overlap
+        const salaryOverlap = candidateMin && candidateMax && jobMin && jobMax && 
+          Math.max(candidateMin, jobMin) <= Math.min(candidateMax, jobMax);
+        
+        if (!salaryOverlap) {
+          return null; // No salary overlap
+        }
+        
+        // Calculate scores (0-100 scale)
+        const skillScore = (skillOverlap.length / jobSkills.length) * 70; // 70% weight
+        const salaryProximity = calculateSalaryProximity(candidateMin, candidateMax, jobMin, jobMax);
+        const salaryScore = salaryProximity * 30; // 30% weight
+        
+        const totalScore = Math.round((skillScore + salaryScore) * 100) / 100;
+        
+        // Generate explainable "why" array
+        const why = [];
+        if (skillOverlap.length > 0) {
+          const skillNames = skillOverlap.map(skill => {
+            const skillMap = {
+              'communications': 'Communications',
+              'campaigns': 'Campaigns', 
+              'policy': 'Policy',
+              'publicAffairs': 'Public Affairs'
+            };
+            return skillMap[skill] || skill;
+          });
+          why.push(`Skill match: ${skillNames.join(', ')}`);
+        }
+        
+        if (salaryOverlap) {
+          const candidateRange = `£${Math.round(candidateMin/1000)}k–£${Math.round(candidateMax/1000)}k`;
+          const jobRange = `£${Math.round(jobMin/1000)}k–£${Math.round(jobMax/1000)}k`;
+          why.push(`Salary overlap: ${candidateRange} vs ${jobRange}`);
+        }
+        
+        return {
+          candidate_id: candidate.id,
+          full_name: candidate.full_name,
+          current_title: candidate.current_title,
+          current_employer: candidate.current_employer,
+          salary_min: candidateMin,
+          salary_max: candidateMax,
+          band_label: candidate.band_label,
+          skills: candidate.skills,
+          score: totalScore,
+          why: why
+        };
+      })
+      .filter(match => match !== null) // Remove ineligible candidates
+      .sort((a, b) => {
+        // Primary sort by score desc, secondary by most recently updated
+        if (b.score !== a.score) {
+          return b.score - a.score;
+        }
+        return new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at);
+      });
+    
+    // Apply pagination
+    const paginatedMatches = matches.slice(offset, offset + limit);
     
     const duration = Date.now() - startTime;
-    console.log(`✅ Matched ${matches.length} candidates for job ${jobId} in ${duration}ms`);
+    logRequest('GET', `/api/jobs/${jobId}/matches`, 200, duration, `matched ${paginatedMatches.length} of ${matches.length} candidates for job ${jobId}`);
     
     res.json({
       success: true,
+      total: matches.length,
+      items: paginatedMatches,
+      limit,
+      offset,
       job_id: jobId,
       job_title: job.title,
-      matches: matches,
-      total_matches: matches.length,
       search_time_ms: duration
     });
     
   } catch (error) {
-    console.error('❌ Match candidates error:', error);
+    const duration = Date.now() - startTime;
+    logRequest('GET', `/api/jobs/${jobId}/matches`, 500, duration, 'matching: error');
+    console.error('[matching] Error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to match candidates',
@@ -1885,6 +2325,19 @@ app.get('/api/match/:jobId', async (req, res) => {
     });
   }
 });
+
+// Helper function for salary proximity calculation
+function calculateSalaryProximity(candidateMin, candidateMax, jobMin, jobMax) {
+  if (!candidateMin || !candidateMax || !jobMin || !jobMax) return 0;
+  
+  // Calculate overlap percentage
+  const overlap = Math.max(0, Math.min(candidateMax, jobMax) - Math.max(candidateMin, jobMin));
+  const totalRange = Math.max(candidateMax, jobMax) - Math.min(candidateMin, jobMin);
+  
+  if (totalRange === 0) return 1; // Perfect match
+  
+  return overlap / totalRange;
+}
 
 // 404 handler
 app.use((req, res) => {

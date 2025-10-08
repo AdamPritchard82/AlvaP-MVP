@@ -17,6 +17,7 @@ import UpdatesAndOpenRoles from './pages/UpdatesAndOpenRoles';
 import Clients from './pages/Clients';
 import ClientNew from './pages/ClientNew';
 import Pricing from './pages/Pricing';
+import Analytics from './pages/Analytics';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -58,6 +59,7 @@ function AppRoutes() {
                 <Route path="/library" element={<LibrarySkills />} />
                 <Route path="/library/:skill" element={<LibraryBands />} />
                 <Route path="/library/:skill/:band" element={<LibraryCandidates />} />
+                <Route path="/analytics" element={<Analytics />} />
                 <Route path="/clients" element={<Clients />} />
                 <Route path="/clients/new" element={<ClientNew />} />
                 <Route path="/pricing" element={<Pricing />} />

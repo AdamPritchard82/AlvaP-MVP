@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams, useNavigate } from 'react-router-dom';
-import { api, Candidate } from '../lib/api';
+import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { api, Candidate, SavedFilter } from '../lib/api';
+import { SavedFilters } from '../components/SavedFilters';
 
 function SkillTile({ name, count, disabled }: { name: string; count: number; disabled?: boolean }) {
   return (
@@ -86,20 +87,134 @@ export function LibraryBands() {
 export function LibraryCandidates() {
   const { skill, band } = useParams<{ skill: string; band: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [rows, setRows] = useState<Candidate[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const pageSize = 20;
+  const [pageSize, setPageSize] = useState(20);
+  const [searchKeyword, setSearchKeyword] = useState('');
+  const [sortBy, setSortBy] = useState('created_at');
+  const [sortOrder, setSortOrder] = useState('desc');
+  const [columns, setColumns] = useState<any[]>([]);
+  
   const decodedSkill = decodeURIComponent(skill || '');
   const decodedBand = decodeURIComponent(band || '');
 
+  // Load URL parameters on mount
   useEffect(() => {
-    (async () => {
+    const urlPage = parseInt(searchParams.get('page') || '1');
+    const urlPageSize = parseInt(searchParams.get('pageSize') || '20');
+    const urlSearch = searchParams.get('search') || '';
+    const urlSortBy = searchParams.get('sortBy') || 'created_at';
+    const urlSortOrder = searchParams.get('sortOrder') || 'desc';
+    const urlColumns = searchParams.get('columns')?.split(',') || [];
+
+    setPage(urlPage);
+    setPageSize(urlPageSize);
+    setSearchKeyword(urlSearch);
+    setSortBy(urlSortBy);
+    setSortOrder(urlSortOrder);
+    setColumns(urlColumns);
+  }, [searchParams]);
+
+  useEffect(() => {
+    loadCandidates();
+  }, [decodedSkill, decodedBand, page, pageSize, searchKeyword, sortBy, sortOrder]);
+
+  const loadCandidates = async () => {
+    try {
       const res = await api.getCandidatesBySkillAndBand(decodedSkill, decodedBand, page, pageSize);
       setRows(res.candidates || []);
       setTotal(res.total || 0);
-    })();
-  }, [decodedSkill, decodedBand, page]);
+    } catch (error) {
+      console.error('Failed to load candidates:', error);
+    }
+  };
+
+  const updateUrl = (updates: Record<string, string | number>) => {
+    const newParams = new URLSearchParams(searchParams);
+    Object.entries(updates).forEach(([key, value]) => {
+      if (value) {
+        newParams.set(key, value.toString());
+      } else {
+        newParams.delete(key);
+      }
+    });
+    setSearchParams(newParams);
+  };
+
+  const handleApplyFilter = (filter: SavedFilter) => {
+    if (filter.skill && filter.band) {
+      navigate(`/library/${encodeURIComponent(filter.skill)}/${encodeURIComponent(filter.band)}`);
+    }
+    
+    if (filter.searchKeyword) setSearchKeyword(filter.searchKeyword);
+    if (filter.pageSize) setPageSize(filter.pageSize);
+    if (filter.sortBy) setSortBy(filter.sortBy);
+    if (filter.sortOrder) setSortOrder(filter.sortOrder);
+    if (filter.columns) setColumns(filter.columns);
+    
+    // Update URL
+    updateUrl({
+      search: filter.searchKeyword || '',
+      pageSize: filter.pageSize || 20,
+      sortBy: filter.sortBy || 'created_at',
+      sortOrder: filter.sortOrder || 'desc',
+      columns: filter.columns?.map(c => c.key).join(',') || ''
+    });
+  };
+
+  const currentFilter = {
+    skill: decodedSkill,
+    band: decodedBand,
+    searchKeyword,
+    columns,
+    pageSize,
+    sortBy,
+    sortOrder,
+    filters: {}
+  };
+
+  const handleExport = async () => {
+    try {
+      const exportData = {
+        format: 'csv',
+        filters: {
+          skill: decodedSkill,
+          band: decodedBand,
+          search: searchKeyword,
+          sortBy,
+          sortOrder
+        },
+        columns: columns.length > 0 ? columns : ['full_name', 'email', 'phone', 'current_title', 'current_employer']
+      };
+
+      const response = await fetch(`${api['API_BASE'] || 'https://natural-kindness-production.up.railway.app/api'}/candidates/export`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(exportData),
+      });
+
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `candidates-${decodedSkill}-${decodedBand}-${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      } else {
+        throw new Error('Export failed');
+      }
+    } catch (error) {
+      console.error('Export error:', error);
+      alert('Failed to export candidates');
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -107,7 +222,53 @@ export function LibraryCandidates() {
         <button className="underline" onClick={()=>navigate('/library')}>Library</button> →
         <button className="underline ml-1" onClick={()=>navigate(`/library/${encodeURIComponent(decodedSkill)}`)}>{decodedSkill}</button> → {decodedBand}
       </div>
-      <h2 className="text-xl font-semibold">Candidates</h2>
+      
+      <div className="flex justify-between items-start">
+        <h2 className="text-xl font-semibold">Candidates</h2>
+        <div className="flex items-center gap-4">
+          {/* Search */}
+          <input
+            type="text"
+            placeholder="Search candidates..."
+            value={searchKeyword}
+            onChange={(e) => {
+              setSearchKeyword(e.target.value);
+              updateUrl({ search: e.target.value });
+            }}
+            className="px-3 py-1 border rounded text-sm"
+          />
+          
+          {/* Page Size */}
+          <select
+            value={pageSize}
+            onChange={(e) => {
+              const newPageSize = parseInt(e.target.value);
+              setPageSize(newPageSize);
+              updateUrl({ pageSize: newPageSize });
+            }}
+            className="px-2 py-1 border rounded text-sm"
+          >
+            <option value={20}>20 per page</option>
+            <option value={50}>50 per page</option>
+            <option value={100}>100 per page</option>
+          </select>
+          
+          {/* Export */}
+          <button
+            onClick={handleExport}
+            className="btn btn-outline btn-sm"
+          >
+            📊 Export
+          </button>
+        </div>
+      </div>
+
+      {/* Saved Filters */}
+      <SavedFilters
+        currentFilter={currentFilter}
+        onApplyFilter={handleApplyFilter}
+        onSaveCurrentView={() => {}} // Will be handled by the component
+      />
       {rows.length === 0 ? (
         <div className="p-6 bg-white rounded border text-gray-700">No candidates in this band yet.</div>
       ) : (
@@ -152,6 +313,7 @@ export function LibraryCandidates() {
 export default function LibraryEntry() {
   return <LibrarySkills />;
 }
+
 
 
 

@@ -10,7 +10,8 @@ import {
   X,
   LogOut,
   User,
-  CreditCard
+  CreditCard,
+  BarChart3
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../lib/api';
@@ -20,6 +21,7 @@ const navigation = [
   // Route Candidates to the /candidates page (which embeds Library tiles)
   { name: 'Candidates', href: '/candidates', icon: Users },
   { name: 'Jobs', href: '/jobs', icon: Briefcase },
+  { name: 'Analytics', href: '/analytics', icon: BarChart3 },
   { name: 'Updates & Open Roles', href: '/updates', icon: Activity },
   { name: 'Clients', href: '/clients', icon: Building2 },
   { name: 'Pricing', href: '/pricing', icon: CreditCard },

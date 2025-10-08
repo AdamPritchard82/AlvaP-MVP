@@ -10,6 +10,7 @@
     "main": "node main-server.js",
     "minimal": "node minimal-server.js",
     "test": "node test-server.js",
+    "test:unit": "node tests/unit/run-tests.js",
     "run:digest": "node src/tasks/runDigest.js",
     "migrate": "knex migrate:latest",
     "migrate:rollback": "knex migrate:rollback",

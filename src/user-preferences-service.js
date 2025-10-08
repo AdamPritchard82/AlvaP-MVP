@@ -39,6 +39,7 @@ class UserPreferencesService {
         showOnlyWithPhone: false,
         showOnlyWithSalary: false
       },
+      savedFilters: [], // Array of saved Library filters
       lastUpdated: new Date().toISOString()
     };
   }
@@ -150,6 +151,143 @@ class UserPreferencesService {
     }
     
     return this.updateUserPreferences(userId, backupData.preferences);
+  }
+
+  // Saved Filters methods
+  saveFilter(userId, filterData) {
+    const currentPrefs = this.getUserPreferences(userId);
+    const newFilter = {
+      id: `filter_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      name: filterData.name,
+      skill: filterData.skill,
+      band: filterData.band,
+      searchKeyword: filterData.searchKeyword || '',
+      columns: filterData.columns || currentPrefs.columns,
+      pageSize: filterData.pageSize || currentPrefs.pageSize,
+      sortBy: filterData.sortBy || currentPrefs.sortBy,
+      sortOrder: filterData.sortOrder || currentPrefs.sortOrder,
+      filters: filterData.filters || currentPrefs.filters,
+      createdAt: new Date().toISOString(),
+      lastUsed: new Date().toISOString()
+    };
+
+    const updatedPrefs = {
+      ...currentPrefs,
+      savedFilters: [...(currentPrefs.savedFilters || []), newFilter],
+      lastUpdated: new Date().toISOString()
+    };
+
+    console.log(`[user-preferences] Saved filter for user ${userId}:`, newFilter);
+    return updatedPrefs;
+  }
+
+  getSavedFilters(userId) {
+    const prefs = this.getUserPreferences(userId);
+    return prefs.savedFilters || [];
+  }
+
+  updateSavedFilter(userId, filterId, updates) {
+    const currentPrefs = this.getUserPreferences(userId);
+    const savedFilters = currentPrefs.savedFilters || [];
+    
+    const updatedFilters = savedFilters.map(filter => 
+      filter.id === filterId 
+        ? { ...filter, ...updates, lastUpdated: new Date().toISOString() }
+        : filter
+    );
+
+    const updatedPrefs = {
+      ...currentPrefs,
+      savedFilters: updatedFilters,
+      lastUpdated: new Date().toISOString()
+    };
+
+    console.log(`[user-preferences] Updated filter ${filterId} for user ${userId}`);
+    return updatedPrefs;
+  }
+
+  deleteSavedFilter(userId, filterId) {
+    const currentPrefs = this.getUserPreferences(userId);
+    const savedFilters = currentPrefs.savedFilters || [];
+    
+    const updatedFilters = savedFilters.filter(filter => filter.id !== filterId);
+
+    const updatedPrefs = {
+      ...currentPrefs,
+      savedFilters: updatedFilters,
+      lastUpdated: new Date().toISOString()
+    };
+
+    console.log(`[user-preferences] Deleted filter ${filterId} for user ${userId}`);
+    return updatedPrefs;
+  }
+
+  applySavedFilter(userId, filterId) {
+    const currentPrefs = this.getUserPreferences(userId);
+    const savedFilters = currentPrefs.savedFilters || [];
+    const filter = savedFilters.find(f => f.id === filterId);
+    
+    if (!filter) {
+      throw new Error('Saved filter not found');
+    }
+
+    // Update last used timestamp
+    const updatedFilters = savedFilters.map(f => 
+      f.id === filterId 
+        ? { ...f, lastUsed: new Date().toISOString() }
+        : f
+    );
+
+    const updatedPrefs = {
+      ...currentPrefs,
+      columns: filter.columns,
+      pageSize: filter.pageSize,
+      sortBy: filter.sortBy,
+      sortOrder: filter.sortOrder,
+      filters: filter.filters,
+      savedFilters: updatedFilters,
+      lastUpdated: new Date().toISOString()
+    };
+
+    console.log(`[user-preferences] Applied filter ${filterId} for user ${userId}`);
+    return updatedPrefs;
+  }
+
+  // Generate deep-linkable URL for a saved filter
+  generateFilterUrl(filter) {
+    const params = new URLSearchParams();
+    
+    if (filter.skill) params.set('skill', filter.skill);
+    if (filter.band) params.set('band', filter.band);
+    if (filter.searchKeyword) params.set('search', filter.searchKeyword);
+    if (filter.pageSize) params.set('pageSize', filter.pageSize.toString());
+    if (filter.sortBy) params.set('sortBy', filter.sortBy);
+    if (filter.sortOrder) params.set('sortOrder', filter.sortOrder);
+    
+    // Add column visibility
+    if (filter.columns) {
+      const visibleColumns = filter.columns.filter(col => col.visible).map(col => col.key);
+      if (visibleColumns.length > 0) {
+        params.set('columns', visibleColumns.join(','));
+      }
+    }
+
+    return `/candidates?${params.toString()}`;
+  }
+
+  // Parse URL parameters into filter state
+  parseFilterFromUrl(searchParams) {
+    const params = new URLSearchParams(searchParams);
+    
+    return {
+      skill: params.get('skill') || null,
+      band: params.get('band') || null,
+      searchKeyword: params.get('search') || '',
+      pageSize: parseInt(params.get('pageSize')) || 20,
+      sortBy: params.get('sortBy') || 'created_at',
+      sortOrder: params.get('sortOrder') || 'desc',
+      columns: params.get('columns') ? params.get('columns').split(',') : null
+    };
   }
 }
 
