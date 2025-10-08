@@ -82,6 +82,49 @@ const upload = multer({
   limits: { fileSize: 20 * 1024 * 1024 }
 });
 
+// Centralized error handling and logging utilities
+function createErrorResponse(status, message, details = null) {
+  const response = {
+    ok: false,
+    status: status,
+    message: message
+  };
+  if (details && process.env.NODE_ENV !== 'production') {
+    response.details = details;
+  }
+  return response;
+}
+
+function logRequest(method, path, status, duration, outcome) {
+  const timestamp = new Date().toISOString();
+  console.log(`${timestamp} ${method} ${path} ${status} ${duration}ms ${outcome}`);
+}
+
+function safeJsonParse(val, fallback) {
+  try {
+    return typeof val === 'string' ? JSON.parse(val) : val;
+  } catch {
+    return fallback;
+  }
+}
+
+function safeNumber(val, fallback = 0) {
+  const num = Number(val);
+  return isNaN(num) ? fallback : num;
+}
+
+function safeString(val, fallback = '') {
+  return typeof val === 'string' ? val : fallback;
+}
+
+function safeArray(val, fallback = []) {
+  return Array.isArray(val) ? val : fallback;
+}
+
+function safeObject(val, fallback = {}) {
+  return typeof val === 'object' && val !== null ? val : fallback;
+}
+
 // Helpers: salary banding
 function toBandLabel(amount) {
   // Handle edge cases safely
@@ -385,81 +428,127 @@ function parseCVContent(text) {
 
 // Parse CV endpoint (local parsing: txt/pdf/docx)
 app.post('/api/candidates/parse-cv', upload.single('file'), async (req, res) => {
-  console.log('=== PARSE CV (simple) ===');
+  const startTime = Date.now();
+  let filePath = null;
+  
   try {
     if (!req.file) {
-      return res.status(400).json({ success: false, error: 'No file uploaded' });
+      const duration = Date.now() - startTime;
+      logRequest('POST', '/api/candidates/parse-cv', 400, duration, 'parse: no-file');
+      return res.status(400).json(createErrorResponse(400, 'No file uploaded'));
     }
-    const filePath = req.file.path;
-    const fileName = req.file.originalname;
+    
+    filePath = req.file.path;
+    const fileName = safeString(req.file.originalname, 'unknown');
     const ext = path.extname(fileName).toLowerCase();
+    
+    if (!['.txt', '.pdf', '.docx'].includes(ext)) {
+      // Clean up temp file
+      try { fs.unlinkSync(filePath); } catch {}
+      const duration = Date.now() - startTime;
+      logRequest('POST', '/api/candidates/parse-cv', 415, duration, 'parse: unsupported');
+      return res.status(415).json(createErrorResponse(415, 'Unsupported file type. Please upload TXT, PDF or DOCX files.'));
+    }
+    
     const buffer = fs.readFileSync(filePath);
-
     let text = '';
-    if (ext === '.txt') {
-      text = buffer.toString('utf8');
-    } else if (ext === '.pdf') {
-      const result = await pdfParse(buffer);
-      text = result.text || '';
-    } else if (ext === '.docx') {
-      const result = await mammoth.extractRawText({ buffer });
-      text = result.value || '';
-    } else {
-      return res.status(415).json({ success: false, error: 'Unsupported file type' });
+    
+    try {
+      if (ext === '.txt') {
+        text = buffer.toString('utf8');
+      } else if (ext === '.pdf') {
+        const result = await pdfParse(buffer);
+        text = safeString(result.text, '');
+      } else if (ext === '.docx') {
+        const result = await mammoth.extractRawText({ buffer });
+        text = safeString(result.value, '');
+      }
+    } catch (parseError) {
+      // Clean up temp file
+      try { fs.unlinkSync(filePath); } catch {}
+      const duration = Date.now() - startTime;
+      logRequest('POST', '/api/candidates/parse-cv', 422, duration, 'parse: extract-fail');
+      return res.status(422).json(createErrorResponse(422, 'Failed to extract text from file'));
     }
 
     if (!text || text.trim().length === 0) {
-      return res.status(422).json({ success: false, error: 'No text could be extracted' });
+      // Clean up temp file
+      try { fs.unlinkSync(filePath); } catch {}
+      const duration = Date.now() - startTime;
+      logRequest('POST', '/api/candidates/parse-cv', 422, duration, 'parse: no-text');
+      return res.status(422).json(createErrorResponse(422, 'No text could be extracted from the file'));
     }
 
     const parsed = parseCVContent(text);
     parsed.fileName = fileName;
     parsed.parserUsed = ext.replace('.', '').toUpperCase();
 
+    // Clean up temp file
     try { fs.unlinkSync(filePath); } catch {}
-
+    
+    const duration = Date.now() - startTime;
+    logRequest('POST', '/api/candidates/parse-cv', 200, duration, 'parse: ok');
     return res.json({ success: true, data: parsed });
+    
   } catch (err) {
+    // Clean up temp file on any error
+    if (filePath) {
+      try { fs.unlinkSync(filePath); } catch {}
+    }
+    
+    const duration = Date.now() - startTime;
+    logRequest('POST', '/api/candidates/parse-cv', 500, duration, 'parse: error');
     console.error('❌ Parse CV error:', err);
-    return res.status(500).json({ success: false, error: 'Failed to parse CV', message: err.message });
+    return res.status(500).json(createErrorResponse(500, 'Failed to parse CV'));
   }
 });
 
 // Create candidate - SIMPLE VERSION
 app.post('/api/candidates', async (req, res) => {
-  console.log('=== CREATE CANDIDATE ===');
-  console.log('Request body:', JSON.stringify(req.body, null, 2));
+  const startTime = Date.now();
   
   try {
-    const { firstName, lastName, email, phone, currentTitle, currentEmployer } = req.body;
+    // Safe extraction with defaults
+    const firstName = safeString(req.body.firstName, '').trim();
+    const lastName = safeString(req.body.lastName, '').trim();
+    const email = safeString(req.body.email, '').trim();
+    const phone = safeString(req.body.phone, '');
+    const currentTitle = safeString(req.body.currentTitle, '');
+    const currentEmployer = safeString(req.body.currentEmployer, '');
     const salaryMinRaw = req.body.salaryMin;
     const salaryMaxRaw = req.body.salaryMax;
-    const skillsInput = req.body.skills || {};
-    const tagsInput = Array.isArray(req.body.tags) ? req.body.tags : [];
-    const notesInput = req.body.notes || '';
+    const skillsInput = safeObject(req.body.skills, {});
+    const tagsInput = safeArray(req.body.tags, []);
+    const notesInput = safeString(req.body.notes, '');
     const emailOkInput = req.body.emailOk !== undefined ? !!req.body.emailOk : true;
     
-    // Basic validation
-    if (!firstName || !lastName || !email) {
-      return res.status(400).json({
-        success: false,
-        error: 'Missing required fields',
-        message: 'First name, last name, and email are required'
-      });
+    // Validation with clear error messages
+    const validationErrors = [];
+    if (!firstName) validationErrors.push('First name is required');
+    if (!lastName) validationErrors.push('Last name is required');
+    if (!email) validationErrors.push('Email is required');
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      validationErrors.push('Email format is invalid');
     }
     
-    // Create candidate
+    if (validationErrors.length > 0) {
+      const duration = Date.now() - startTime;
+      logRequest('POST', '/api/candidates', 400, duration, 'validated: fail');
+      return res.status(400).json(createErrorResponse(400, 'Validation failed', validationErrors.join('; ')));
+    }
+    
+    // Create candidate with safe defaults
     const candidate = {
       id: nextId++,
-      firstName: firstName || '',
-      lastName: lastName || '',
-      email: email || '',
-      phone: phone || '',
-      currentTitle: currentTitle || '',
-      currentEmployer: currentEmployer || '',
-      salaryMin: salaryMinRaw ? Number(salaryMinRaw) : null,
-      salaryMax: salaryMaxRaw ? Number(salaryMaxRaw) : null,
-      // normalise skills booleans
+      firstName: firstName,
+      lastName: lastName,
+      email: email,
+      phone: phone,
+      currentTitle: currentTitle,
+      currentEmployer: currentEmployer,
+      salaryMin: safeNumber(salaryMinRaw, null),
+      salaryMax: safeNumber(salaryMaxRaw, null),
+      // Normalize skills booleans safely
       skills: {
         communications: !!(skillsInput.communications || skillsInput.Communications),
         campaigns: !!(skillsInput.campaigns || skillsInput.Campaigns),
@@ -515,35 +604,42 @@ app.post('/api/candidates', async (req, res) => {
         
         const dbCandidate = result.rows[0];
         candidate.id = dbCandidate.id;
-        console.log('✅ [DB] Candidate created:', candidate);
+        const duration = Date.now() - startTime;
+        logRequest('POST', '/api/candidates', 201, duration, 'created');
+        return res.status(201).json({
+          success: true,
+          data: candidate,
+          message: 'Candidate created successfully'
+        });
       } catch (dbError) {
         console.error('❌ [DB] Insert error:', dbError.message);
-        // Do not fallback silently; mark memory path explicitly
+        // Fallback to memory storage
         candidates.push(candidate);
-        console.log('✅ [MEM] Candidate created as fallback:', candidate);
-        useDatabase = false; // force list to read from memory for consistency
+        const duration = Date.now() - startTime;
+        logRequest('POST', '/api/candidates', 201, duration, 'created: fallback');
+        return res.status(201).json({
+          success: true,
+          data: candidate,
+          message: 'Candidate created successfully (fallback storage)'
+        });
       }
     } else {
       // Use in-memory storage
       candidates.push(candidate);
-      console.log('✅ [MEM] Candidate created:', candidate);
+      const duration = Date.now() - startTime;
+      logRequest('POST', '/api/candidates', 201, duration, 'created');
+      return res.status(201).json({
+        success: true,
+        data: candidate,
+        message: 'Candidate created successfully'
+      });
     }
     
-    console.log('Total candidates:', useDatabase ? 'in database' : candidates.length);
-    
-    res.status(201).json({
-      success: true,
-      data: candidate,
-      message: 'Candidate created successfully'
-    });
-    
   } catch (error) {
+    const duration = Date.now() - startTime;
+    logRequest('POST', '/api/candidates', 500, duration, 'error');
     console.error('❌ Create candidate error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to create candidate',
-      message: error.message
-    });
+    return res.status(500).json(createErrorResponse(500, 'Failed to create candidate'));
   }
 });
 
@@ -674,12 +770,9 @@ app.put('/api/candidates/:id', async (req, res) => {
 
 // Get candidates - SIMPLE VERSION
 app.get('/api/candidates', async (req, res) => {
-  console.log('=== GET CANDIDATES ===');
+  const startTime = Date.now();
   
   try {
-    const safeJson = (val, fallback) => {
-      try { return typeof val === 'string' ? JSON.parse(val) : val; } catch { return fallback; }
-    };
     if (useDatabase && db) {
       // Use database
       try {
@@ -692,92 +785,99 @@ app.get('/api/candidates', async (req, res) => {
         
         const dbCandidates = result.rows.map(row => ({
           id: row.id,
-          full_name: row.full_name || '',
-          email: row.email || '',
-          phone: row.phone || '',
-          current_title: row.current_title || '',
-          current_employer: row.current_employer || '',
+          full_name: safeString(row.full_name, ''),
+          email: safeString(row.email, ''),
+          phone: safeString(row.phone, ''),
+          current_title: safeString(row.current_title, ''),
+          current_employer: safeString(row.current_employer, ''),
           salary_min: row.salary_min ?? null,
           salary_max: row.salary_max ?? null,
-          band_label: row.band_label || null,
-          skills: row.skills ? safeJson(row.skills, { communications: false, campaigns: false, policy: false, publicAffairs: false }) : { communications: false, campaigns: false, policy: false, publicAffairs: false },
-          tags: row.tags ? safeJson(row.tags, []) : [],
-          notes: row.notes || '',
+          band_label: safeString(row.band_label, null),
+          skills: safeJsonParse(row.skills, { communications: false, campaigns: false, policy: false, publicAffairs: false }),
+          tags: safeJsonParse(row.tags, []),
+          notes: safeString(row.notes, ''),
           email_ok: row.email_ok !== false,
           created_at: row.created_at,
           updated_at: row.updated_at || row.created_at
         }));
         
-        console.log('✅ [DB] Returning candidates:', dbCandidates.length);
+        const duration = Date.now() - startTime;
+        logRequest('GET', '/api/candidates', 200, duration, `listed: ${dbCandidates.length}`);
         
-        res.json({
+        return res.json({
           success: true,
           candidates: dbCandidates,
           total: dbCandidates.length
         });
       } catch (dbError) {
         console.error('❌ [DB] List error:', dbError.message);
-        // To avoid split read/write confusion, if DB failed earlier we already forced memory
+        // Fallback to memory storage
         const sortedCandidates = [...candidates].reverse().map(candidate => ({
           id: candidate.id,
           full_name: `${candidate.firstName} ${candidate.lastName}`,
-          email: candidate.email || '',
-          phone: candidate.phone || '',
-          current_title: candidate.currentTitle || '',
-          current_employer: candidate.currentEmployer || '',
-          salary_min: candidate.salaryMin || null,
-          salary_max: candidate.salaryMax || null,
-          band_label: candidate.bandLabel || null,
-          skills: candidate.skills || { communications: false, campaigns: false, policy: false, publicAffairs: false },
-          tags: candidate.tags || [],
-          notes: candidate.notes || '',
-          email_ok: candidate.emailOk || true,
+          email: safeString(candidate.email, ''),
+          phone: safeString(candidate.phone, ''),
+          current_title: safeString(candidate.currentTitle, ''),
+          current_employer: safeString(candidate.currentEmployer, ''),
+          salary_min: candidate.salaryMin ?? null,
+          salary_max: candidate.salaryMax ?? null,
+          band_label: safeString(candidate.bandLabel, null),
+          skills: safeObject(candidate.skills, { communications: false, campaigns: false, policy: false, publicAffairs: false }),
+          tags: safeArray(candidate.tags, []),
+          notes: safeString(candidate.notes, ''),
+          email_ok: candidate.emailOk !== false,
           created_at: candidate.createdAt,
           updated_at: candidate.updatedAt || candidate.createdAt
         }));
-        console.log('✅ [MEM] Returning candidates:', sortedCandidates.length);
-        res.json({ success: true, candidates: sortedCandidates, total: sortedCandidates.length });
+        
+        const duration = Date.now() - startTime;
+        logRequest('GET', '/api/candidates', 200, duration, `listed: ${sortedCandidates.length} (fallback)`);
+        
+        return res.json({ success: true, candidates: sortedCandidates, total: sortedCandidates.length });
       }
     } else {
       // Use in-memory storage
       const sortedCandidates = [...candidates].reverse().map(candidate => ({
         id: candidate.id,
         full_name: `${candidate.firstName} ${candidate.lastName}`,
-        email: candidate.email || '',
-        phone: candidate.phone || '',
-        current_title: candidate.currentTitle || '',
-        current_employer: candidate.currentEmployer || '',
+        email: safeString(candidate.email, ''),
+        phone: safeString(candidate.phone, ''),
+        current_title: safeString(candidate.currentTitle, ''),
+        current_employer: safeString(candidate.currentEmployer, ''),
         salary_min: candidate.salaryMin ?? null,
         salary_max: candidate.salaryMax ?? null,
-        band_label: candidate.bandLabel || null,
-        skills: candidate.skills || { communications: false, campaigns: false, policy: false, publicAffairs: false },
-        tags: candidate.tags || [],
-        notes: candidate.notes || '',
+        band_label: safeString(candidate.bandLabel, null),
+        skills: safeObject(candidate.skills, { communications: false, campaigns: false, policy: false, publicAffairs: false }),
+        tags: safeArray(candidate.tags, []),
+        notes: safeString(candidate.notes, ''),
         email_ok: candidate.emailOk !== false,
         created_at: candidate.createdAt,
         updated_at: candidate.updatedAt || candidate.createdAt
       }));
-      console.log('✅ [MEM] Returning candidates:', sortedCandidates.length);
-      res.json({ success: true, candidates: sortedCandidates, total: sortedCandidates.length });
+      
+      const duration = Date.now() - startTime;
+      logRequest('GET', '/api/candidates', 200, duration, `listed: ${sortedCandidates.length}`);
+      
+      return res.json({ success: true, candidates: sortedCandidates, total: sortedCandidates.length });
     }
     
   } catch (error) {
+    const duration = Date.now() - startTime;
+    logRequest('GET', '/api/candidates', 500, duration, 'error');
     console.error('❌ Get candidates error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to get candidates',
-      message: error.message
-    });
+    return res.status(500).json(createErrorResponse(500, 'Failed to get candidates'));
   }
 });
 
 // Bands per skill (only non-empty bands)
 app.get('/api/skills/bands', async (req, res) => {
+  const startTime = Date.now();
+  
   try {
     const collect = (items) => {
       const out = { 'Public Affairs': new Set(), 'Communications': new Set(), 'Policy': new Set(), 'Campaigns': new Set() };
       items.forEach(c => {
-        const skills = c.skills || c.skills;
+        const skills = safeObject(c.skills, {});
         const set = candidateToSkillSet({ skills });
         const band = toBandLabel(c.salary_min);
         if (!band) return;
@@ -788,13 +888,27 @@ app.get('/api/skills/bands', async (req, res) => {
 
     if (useDatabase && db) {
       const result = await db.query(`SELECT salary_min, skills FROM candidates`);
-      const rows = result.rows.map(r => ({ salary_min: r.salary_min ?? null, skills: safeParse(r.skills) }));
-      return res.json({ success: true, bands: collect(rows) });
+      const rows = result.rows.map(r => ({ 
+        salary_min: safeNumber(r.salary_min, null), 
+        skills: safeJsonParse(r.skills, {}) 
+      }));
+      const bands = collect(rows);
+      const duration = Date.now() - startTime;
+      logRequest('GET', '/api/skills/bands', 200, duration, 'bands: ok');
+      return res.json({ success: true, bands });
     } else {
-      const rows = candidates.map(c => ({ salary_min: c.salaryMin ?? null, skills: c.skills }));
-      return res.json({ success: true, bands: collect(rows) });
+      const rows = candidates.map(c => ({ 
+        salary_min: safeNumber(c.salaryMin, null), 
+        skills: safeObject(c.skills, {}) 
+      }));
+      const bands = collect(rows);
+      const duration = Date.now() - startTime;
+      logRequest('GET', '/api/skills/bands', 200, duration, 'bands: ok');
+      return res.json({ success: true, bands });
     }
   } catch (err) {
+    const duration = Date.now() - startTime;
+    logRequest('GET', '/api/skills/bands', 200, duration, 'bands: fallback');
     console.error('[bands] Error:', err);
     return res.json({ success: true, bands: { 'Public Affairs': [], 'Communications': [], 'Policy': [], 'Campaigns': [] } });
   }
@@ -802,7 +916,9 @@ app.get('/api/skills/bands', async (req, res) => {
 
 // Bands with counts for a specific skill
 app.get('/api/skills/:skill/bands', async (req, res) => {
+  const startTime = Date.now();
   const { skill } = req.params;
+  
   const skillKeyMap = {
     'Public Affairs': 'publicAffairs',
     'Communications': 'communications',
@@ -810,6 +926,7 @@ app.get('/api/skills/:skill/bands', async (req, res) => {
     'Campaigns': 'campaigns'
   };
   const skillKey = skillKeyMap[skill] || '';
+  
   const addCount = (rows) => {
     const counts = new Map();
     rows.forEach(r => {
@@ -823,16 +940,31 @@ app.get('/api/skills/:skill/bands', async (req, res) => {
       .sort((a,b)=>Number(a[0].replace(/[^\d]/g,''))-Number(b[0].replace(/[^\d]/g,'')))
       .map(([band, count]) => ({ band, count }));
   };
+  
   try {
     if (useDatabase && db) {
       const result = await db.query(`SELECT salary_min, skills FROM candidates`);
-      const rows = result.rows.map(r => ({ salary_min: r.salary_min ?? null, skills: safeParse(r.skills, {}) }));
-      return res.json({ success: true, bands: addCount(rows) });
+      const rows = result.rows.map(r => ({ 
+        salary_min: safeNumber(r.salary_min, null), 
+        skills: safeJsonParse(r.skills, {}) 
+      }));
+      const bands = addCount(rows);
+      const duration = Date.now() - startTime;
+      logRequest('GET', `/api/skills/${skill}/bands`, 200, duration, 'skill-bands: ok');
+      return res.json({ success: true, bands });
     } else {
-      const rows = candidates.map(c => ({ salary_min: c.salaryMin ?? null, skills: c.skills || {} }));
-      return res.json({ success: true, bands: addCount(rows) });
+      const rows = candidates.map(c => ({ 
+        salary_min: safeNumber(c.salaryMin, null), 
+        skills: safeObject(c.skills, {}) 
+      }));
+      const bands = addCount(rows);
+      const duration = Date.now() - startTime;
+      logRequest('GET', `/api/skills/${skill}/bands`, 200, duration, 'skill-bands: ok');
+      return res.json({ success: true, bands });
     }
   } catch (err) {
+    const duration = Date.now() - startTime;
+    logRequest('GET', `/api/skills/${skill}/bands`, 200, duration, 'skill-bands: fallback');
     console.error('[skill bands] Error:', err);
     return res.json({ success: true, bands: [] });
   }
@@ -840,24 +972,35 @@ app.get('/api/skills/:skill/bands', async (req, res) => {
 
 // Total counts per skill
 app.get('/api/skills/counts', async (_req, res) => {
+  const startTime = Date.now();
+  
   const sumCounts = (rows) => {
     const tot = { 'Public Affairs': 0, 'Communications': 0, 'Policy': 0, 'Campaigns': 0 };
     rows.forEach(r => {
-      const set = candidateToSkillSet({ skills: r.skills || {} });
+      const set = candidateToSkillSet({ skills: safeObject(r.skills, {}) });
       set.forEach(s => tot[s] = (tot[s] || 0) + 1);
     });
     return tot;
   };
+  
   try {
     if (useDatabase && db) {
       const result = await db.query(`SELECT skills FROM candidates`);
-      const rows = result.rows.map(r => ({ skills: safeParse(r.skills, {}) }));
-      return res.json({ success: true, counts: sumCounts(rows) });
+      const rows = result.rows.map(r => ({ skills: safeJsonParse(r.skills, {}) }));
+      const counts = sumCounts(rows);
+      const duration = Date.now() - startTime;
+      logRequest('GET', '/api/skills/counts', 200, duration, 'skill-counts: ok');
+      return res.json({ success: true, counts });
     } else {
-      const rows = candidates.map(c => ({ skills: c.skills || {} }));
-      return res.json({ success: true, counts: sumCounts(rows) });
+      const rows = candidates.map(c => ({ skills: safeObject(c.skills, {}) }));
+      const counts = sumCounts(rows);
+      const duration = Date.now() - startTime;
+      logRequest('GET', '/api/skills/counts', 200, duration, 'skill-counts: ok');
+      return res.json({ success: true, counts });
     }
   } catch (err) {
+    const duration = Date.now() - startTime;
+    logRequest('GET', '/api/skills/counts', 200, duration, 'skill-counts: fallback');
     console.error('[skill counts] Error:', err);
     return res.json({ success: true, counts: { 'Public Affairs': 0, 'Communications': 0, 'Policy': 0, 'Campaigns': 0 } });
   }
@@ -865,9 +1008,10 @@ app.get('/api/skills/counts', async (_req, res) => {
 
 // Candidates by skill + band (simple paging)
 app.get('/api/skills/:skill/bands/:band/candidates', async (req, res) => {
+  const startTime = Date.now();
   const { skill, band } = req.params;
-  const page = Math.max(1, parseInt(req.query.page || '1', 10));
-  const pageSize = Math.min(50, Math.max(1, parseInt(req.query.pageSize || '20', 10)));
+  const page = Math.max(1, safeNumber(req.query.page, 1));
+  const pageSize = Math.min(50, Math.max(1, safeNumber(req.query.pageSize, 20)));
 
   const skillKeyMap = {
     'Public Affairs': 'publicAffairs',
@@ -876,7 +1020,11 @@ app.get('/api/skills/:skill/bands/:band/candidates', async (req, res) => {
     'Campaigns': 'campaigns'
   };
   const skillKey = skillKeyMap[skill] || '';
-  if (!skillKey) return res.json({ success: true, candidates: [], total: 0, page, pageSize });
+  if (!skillKey) {
+    const duration = Date.now() - startTime;
+    logRequest('GET', `/api/skills/${skill}/bands/${band}/candidates`, 200, duration, 'skill-band-candidates: invalid-skill');
+    return res.json({ success: true, candidates: [], total: 0, page, pageSize });
+  }
 
   const inBand = (min) => toBandLabel(min) === band;
 
@@ -886,17 +1034,17 @@ app.get('/api/skills/:skill/bands/:band/candidates', async (req, res) => {
       const result = await db.query(`SELECT id, full_name, email, phone, current_title, current_employer, salary_min, salary_max, band_label, skills, tags, notes, email_ok, created_at, updated_at FROM candidates ORDER BY created_at DESC LIMIT 500`);
       rows = result.rows.map(r => ({
         id: r.id,
-        full_name: r.full_name || '',
-        email: r.email || '',
-        phone: r.phone || '',
-        current_title: r.current_title || '',
-        current_employer: r.current_employer || '',
+        full_name: safeString(r.full_name, ''),
+        email: safeString(r.email, ''),
+        phone: safeString(r.phone, ''),
+        current_title: safeString(r.current_title, ''),
+        current_employer: safeString(r.current_employer, ''),
         salary_min: r.salary_min ?? null,
         salary_max: r.salary_max ?? null,
-        band_label: r.band_label || null,
-        skills: safeParse(r.skills),
-        tags: safeParse(r.tags, []),
-        notes: r.notes || '',
+        band_label: safeString(r.band_label, null),
+        skills: safeJsonParse(r.skills, {}),
+        tags: safeJsonParse(r.tags, []),
+        notes: safeString(r.notes, ''),
         email_ok: r.email_ok !== false,
         created_at: r.created_at,
         updated_at: r.updated_at || r.created_at
@@ -905,16 +1053,16 @@ app.get('/api/skills/:skill/bands/:band/candidates', async (req, res) => {
       rows = candidates.map(c => ({
         id: c.id,
         full_name: `${c.firstName} ${c.lastName}`,
-        email: c.email || '',
-        phone: c.phone || '',
-        current_title: c.currentTitle || '',
-        current_employer: c.currentEmployer || '',
+        email: safeString(c.email, ''),
+        phone: safeString(c.phone, ''),
+        current_title: safeString(c.currentTitle, ''),
+        current_employer: safeString(c.currentEmployer, ''),
         salary_min: c.salaryMin ?? null,
         salary_max: c.salaryMax ?? null,
-        band_label: c.bandLabel || null,
-        skills: c.skills || {},
-        tags: c.tags || [],
-        notes: c.notes || '',
+        band_label: safeString(c.bandLabel, null),
+        skills: safeObject(c.skills, {}),
+        tags: safeArray(c.tags, []),
+        notes: safeString(c.notes, ''),
         email_ok: c.emailOk !== false,
         created_at: c.createdAt,
         updated_at: c.updatedAt || c.createdAt
@@ -925,8 +1073,13 @@ app.get('/api/skills/:skill/bands/:band/candidates', async (req, res) => {
     const total = filtered.length;
     const start = (page - 1) * pageSize;
     const slice = filtered.slice(start, start + pageSize);
+    
+    const duration = Date.now() - startTime;
+    logRequest('GET', `/api/skills/${skill}/bands/${band}/candidates`, 200, duration, `skill-band-candidates: ${slice.length}`);
     return res.json({ success: true, candidates: slice, total, page, pageSize });
   } catch (err) {
+    const duration = Date.now() - startTime;
+    logRequest('GET', `/api/skills/${skill}/bands/${band}/candidates`, 200, duration, 'skill-band-candidates: fallback');
     console.error('[skill+band] Error:', err);
     return res.json({ success: true, candidates: [], total: 0, page, pageSize });
   }
@@ -934,46 +1087,54 @@ app.get('/api/skills/:skill/bands/:band/candidates', async (req, res) => {
 
 // Advanced Search endpoints
 app.get('/api/candidates/search', async (req, res) => {
+  const startTime = Date.now();
+  
   try {
     const { q, limit = 10, offset = 0 } = req.query;
     
     if (!q) {
-      return res.status(400).json({
-        success: false,
-        error: 'Search query required',
-        message: 'Please provide a search query'
-      });
+      const duration = Date.now() - startTime;
+      logRequest('GET', '/api/candidates/search', 400, duration, 'search: no-query');
+      return res.status(400).json(createErrorResponse(400, 'Search query required'));
     }
 
-    const results = await searchService.searchCandidates(q, { limit: parseInt(limit), offset: parseInt(offset) });
+    const results = await searchService.searchCandidates(q, { 
+      limit: safeNumber(limit, 10), 
+      offset: safeNumber(offset, 0) 
+    });
     
-    res.json({
+    const duration = Date.now() - startTime;
+    logRequest('GET', '/api/candidates/search', 200, duration, `search: ${results.candidates.length}`);
+    
+    return res.json({
       success: true,
-      results: results.candidates,
-      total: results.total,
-      suggestions: results.suggestions,
-      query: q,
+      results: safeArray(results.candidates, []),
+      total: safeNumber(results.total, 0),
+      suggestions: safeArray(results.suggestions, []),
+      query: safeString(q, ''),
       pagination: {
-        limit: parseInt(limit),
-        offset: parseInt(offset),
-        hasMore: results.total > parseInt(offset) + parseInt(limit)
+        limit: safeNumber(limit, 10),
+        offset: safeNumber(offset, 0),
+        hasMore: safeNumber(results.total, 0) > safeNumber(offset, 0) + safeNumber(limit, 10)
       }
     });
   } catch (error) {
+    const duration = Date.now() - startTime;
+    logRequest('GET', '/api/candidates/search', 500, duration, 'search: error');
     console.error('[search] Error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Search failed',
-      message: error.message
-    });
+    return res.status(500).json(createErrorResponse(500, 'Search failed'));
   }
 });
 
 app.get('/api/candidates/suggestions', async (req, res) => {
+  const startTime = Date.now();
+  
   try {
     const { q } = req.query;
     
     if (!q) {
+      const duration = Date.now() - startTime;
+      logRequest('GET', '/api/candidates/suggestions', 200, duration, 'suggestions: empty');
       return res.json({
         success: true,
         suggestions: []
@@ -982,17 +1143,18 @@ app.get('/api/candidates/suggestions', async (req, res) => {
 
     const suggestions = await searchService.getSearchSuggestions(q);
     
-    res.json({
+    const duration = Date.now() - startTime;
+    logRequest('GET', '/api/candidates/suggestions', 200, duration, `suggestions: ${suggestions.length}`);
+    
+    return res.json({
       success: true,
-      suggestions
+      suggestions: safeArray(suggestions, [])
     });
   } catch (error) {
+    const duration = Date.now() - startTime;
+    logRequest('GET', '/api/candidates/suggestions', 500, duration, 'suggestions: error');
     console.error('[suggestions] Error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to get suggestions',
-      message: error.message
-    });
+    return res.status(500).json(createErrorResponse(500, 'Failed to get suggestions'));
   }
 });
 
