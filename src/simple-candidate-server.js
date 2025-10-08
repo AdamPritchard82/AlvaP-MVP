@@ -1256,6 +1256,302 @@ app.get('/', (req, res) => {
   });
 });
 
+// Job Management and Matching System
+// In-memory job storage (for MVP)
+let jobs = [];
+let nextJobId = 1;
+
+// Helper function to calculate skill overlap score
+function calculateSkillOverlapScore(candidateSkills, jobSkills) {
+  const candidateSkillKeys = Object.keys(candidateSkills).filter(key => candidateSkills[key]);
+  const jobSkillKeys = Object.keys(jobSkills).filter(key => jobSkills[key]);
+  
+  if (jobSkillKeys.length === 0) return 0;
+  
+  const overlap = candidateSkillKeys.filter(skill => jobSkillKeys.includes(skill));
+  return (overlap.length / jobSkillKeys.length) * 0.7; // 70% weight for skills
+}
+
+// Helper function to calculate salary proximity score
+function calculateSalaryProximityScore(candidateMin, candidateMax, jobMin, jobMax) {
+  // Handle missing candidate max using same logic as banding
+  let resolvedCandidateMax = candidateMax;
+  if (candidateMin && (candidateMax === null || candidateMax === undefined || Number.isNaN(candidateMax))) {
+    resolvedCandidateMax = candidateMin < 100000 ? candidateMin + 30000 : candidateMin + 50000;
+  }
+  
+  // Check if salary ranges overlap
+  const candidateRange = [candidateMin, resolvedCandidateMax];
+  const jobRange = [jobMin, jobMax];
+  
+  // Sort ranges
+  candidateRange.sort((a, b) => a - b);
+  jobRange.sort((a, b) => a - b);
+  
+  // Check for overlap
+  const overlap = Math.max(0, Math.min(candidateRange[1], jobRange[1]) - Math.max(candidateRange[0], jobRange[0]));
+  
+  if (overlap === 0) return 0; // No overlap
+  
+  // Calculate proximity score (30% weight for salary)
+  const totalRange = Math.max(candidateRange[1], jobRange[1]) - Math.min(candidateRange[0], jobRange[0]);
+  const proximityScore = overlap / totalRange;
+  
+  return proximityScore * 0.3; // 30% weight for salary
+}
+
+// Create job
+app.post('/api/jobs', async (req, res) => {
+  console.log('=== CREATE JOB ===');
+  console.log('Request body:', JSON.stringify(req.body, null, 2));
+  
+  try {
+    const { title, description, requiredSkills, salaryMin, salaryMax, location, company } = req.body;
+    
+    // Basic validation
+    if (!title || !requiredSkills || !salaryMin || !salaryMax) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields',
+        message: 'Title, required skills, salary min, and salary max are required'
+      });
+    }
+    
+    const job = {
+      id: nextJobId++,
+      title: title || '',
+      description: description || '',
+      requiredSkills: requiredSkills || {},
+      salaryMin: Number(salaryMin),
+      salaryMax: Number(salaryMax),
+      location: location || '',
+      company: company || '',
+      createdAt: new Date().toISOString(),
+      createdBy: 'system'
+    };
+    
+    jobs.push(job);
+    console.log('✅ Job created:', job);
+    
+    res.status(201).json({
+      success: true,
+      data: job,
+      message: 'Job created successfully'
+    });
+    
+  } catch (error) {
+    console.error('❌ Create job error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to create job',
+      message: error.message
+    });
+  }
+});
+
+// Get all jobs
+app.get('/api/jobs', async (req, res) => {
+  console.log('=== GET JOBS ===');
+  
+  try {
+    const sortedJobs = [...jobs].reverse();
+    console.log('✅ Returning jobs:', sortedJobs.length);
+    
+    res.json({
+      success: true,
+      jobs: sortedJobs,
+      total: sortedJobs.length
+    });
+    
+  } catch (error) {
+    console.error('❌ Get jobs error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get jobs',
+      message: error.message
+    });
+  }
+});
+
+// Get job by ID
+app.get('/api/jobs/:id', async (req, res) => {
+  console.log('=== GET JOB ===');
+  const jobId = parseInt(req.params.id);
+  
+  try {
+    const job = jobs.find(j => j.id === jobId);
+    
+    if (!job) {
+      return res.status(404).json({
+        success: false,
+        error: 'Job not found'
+      });
+    }
+    
+    console.log('✅ Job found:', job.title);
+    
+    res.json({
+      success: true,
+      data: job
+    });
+    
+  } catch (error) {
+    console.error('❌ Get job error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get job',
+      message: error.message
+    });
+  }
+});
+
+// Match candidates for a job
+app.get('/api/match/:jobId', async (req, res) => {
+  console.log('=== MATCH CANDIDATES FOR JOB ===');
+  const jobId = parseInt(req.params.id);
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit || '10', 10)));
+  
+  const startTime = Date.now();
+  
+  try {
+    const job = jobs.find(j => j.id === jobId);
+    
+    if (!job) {
+      return res.status(404).json({
+        success: false,
+        error: 'Job not found'
+      });
+    }
+    
+    console.log(`Matching candidates for job: ${job.title}`);
+    
+    let candidates = [];
+    
+    if (useDatabase && db) {
+      // Get candidates from database
+      try {
+        const result = await db.query(`
+          SELECT id, full_name, email, phone, current_title, current_employer, 
+                 salary_min, salary_max, band_label, skills, tags, notes, email_ok, 
+                 created_at, updated_at
+          FROM candidates 
+          ORDER BY created_at DESC 
+          LIMIT 500
+        `);
+        
+        candidates = result.rows.map(row => ({
+          id: row.id,
+          full_name: row.full_name || '',
+          email: row.email || '',
+          phone: row.phone || '',
+          current_title: row.current_title || '',
+          current_employer: row.current_employer || '',
+          salary_min: row.salary_min ?? null,
+          salary_max: row.salary_max ?? null,
+          band_label: row.band_label || null,
+          skills: row.skills ? JSON.parse(row.skills) : { communications: false, campaigns: false, policy: false, publicAffairs: false },
+          tags: row.tags ? JSON.parse(row.tags) : [],
+          notes: row.notes || '',
+          email_ok: row.email_ok !== false,
+          created_at: row.created_at,
+          updated_at: row.updated_at || row.created_at
+        }));
+      } catch (dbError) {
+        console.error('❌ [DB] Match error:', dbError.message);
+        // Fallback to memory
+        candidates = candidates.map(c => ({
+          id: c.id,
+          full_name: `${c.firstName} ${c.lastName}`,
+          email: c.email || '',
+          phone: c.phone || '',
+          current_title: c.currentTitle || '',
+          current_employer: c.currentEmployer || '',
+          salary_min: c.salaryMin || null,
+          salary_max: c.salaryMax || null,
+          band_label: c.bandLabel || null,
+          skills: c.skills || { communications: false, campaigns: false, policy: false, publicAffairs: false },
+          tags: c.tags || [],
+          notes: c.notes || '',
+          email_ok: c.emailOk !== false,
+          created_at: c.createdAt,
+          updated_at: c.updatedAt || c.createdAt
+        }));
+      }
+    } else {
+      // Get candidates from memory
+      candidates = candidates.map(c => ({
+        id: c.id,
+        full_name: `${c.firstName} ${c.lastName}`,
+        email: c.email || '',
+        phone: c.phone || '',
+        current_title: c.currentTitle || '',
+        current_employer: c.currentEmployer || '',
+        salary_min: c.salaryMin || null,
+        salary_max: c.salaryMax || null,
+        band_label: c.bandLabel || null,
+        skills: c.skills || { communications: false, campaigns: false, policy: false, publicAffairs: false },
+        tags: c.tags || [],
+        notes: c.notes || '',
+        email_ok: c.emailOk !== false,
+        created_at: c.createdAt,
+        updated_at: c.updatedAt || c.createdAt
+      }));
+    }
+    
+    // Calculate matches with scoring
+    const matches = candidates.map(candidate => {
+      const skillScore = calculateSkillOverlapScore(candidate.skills, job.requiredSkills);
+      const salaryScore = calculateSalaryProximityScore(
+        candidate.salary_min, 
+        candidate.salary_max, 
+        job.salaryMin, 
+        job.salaryMax
+      );
+      
+      const totalScore = skillScore + salaryScore;
+      
+      return {
+        candidate_id: candidate.id,
+        name: candidate.full_name,
+        current_title: candidate.current_title,
+        current_employer: candidate.current_employer,
+        salary_range: {
+          min: candidate.salary_min,
+          max: candidate.salary_max,
+          band_label: candidate.band_label
+        },
+        skills: candidate.skills,
+        match_score: Math.round(totalScore * 100) / 100, // Round to 2 decimal places
+        skill_score: Math.round(skillScore * 100) / 100,
+        salary_score: Math.round(salaryScore * 100) / 100
+      };
+    })
+    .filter(match => match.match_score > 0) // Only include matches with some overlap
+    .sort((a, b) => b.match_score - a.match_score) // Sort by score descending
+    .slice(0, limit); // Limit results
+    
+    const duration = Date.now() - startTime;
+    console.log(`✅ Matched ${matches.length} candidates for job ${jobId} in ${duration}ms`);
+    
+    res.json({
+      success: true,
+      job_id: jobId,
+      job_title: job.title,
+      matches: matches,
+      total_matches: matches.length,
+      search_time_ms: duration
+    });
+    
+  } catch (error) {
+    console.error('❌ Match candidates error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to match candidates',
+      message: error.message
+    });
+  }
+});
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({
