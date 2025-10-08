@@ -1,5 +1,5 @@
 // Simple Candidate Server - Bulletproof Version with Advanced Services
-console.log('=== SIMPLE CANDIDATE SERVER STARTING v3 - WITH ADVANCED SERVICES ===');
+console.log('=== SIMPLE CANDIDATE SERVER STARTING v3.1 - WITH ADVANCED SERVICES ===');
 
 const express = require('express');
 const cors = require('cors');
