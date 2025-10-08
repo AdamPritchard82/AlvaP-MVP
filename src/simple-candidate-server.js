@@ -84,10 +84,19 @@ const upload = multer({
 
 // Helpers: salary banding
 function toBandLabel(amount) {
-  if (!amount || isNaN(amount)) return null;
-  const band = Math.floor(Number(amount) / 10000) * 10000;
+  // Handle edge cases safely
+  if (amount === null || amount === undefined || amount === '') return null;
+  if (isNaN(amount) || Number(amount) <= 0) return null;
+  
+  const numAmount = Number(amount);
+  const band = Math.floor(numAmount / 10000) * 10000;
+  
+  // Ensure minimum band of £10,000
   if (band < 10000) return '£10,000';
+  
+  // Cap at £950,000 for very high salaries
   if (band > 950000) return '£950,000';
+  
   return `£${band.toLocaleString('en-GB')}`;
 }
 
@@ -469,21 +478,24 @@ app.post('/api/candidates', async (req, res) => {
       candidate.salaryMax = candidate.salaryMin < 100000 ? candidate.salaryMin + 30000 : candidate.salaryMin + 50000;
     }
     
+    // Calculate band_label from salary_min
+    candidate.bandLabel = toBandLabel(candidate.salaryMin);
+    
     if (useDatabase && db) {
       // Use database with existing schema
       try {
         const result = await db.query(`
           INSERT INTO candidates (
             id, full_name, email, phone, current_title, current_employer,
-            salary_min, salary_max, skills, tags, notes, email_ok,
+            salary_min, salary_max, band_label, skills, tags, notes, email_ok,
             created_by, created_at, updated_at
           )
           VALUES (
             gen_random_uuid(), $1, $2, $3, $4, $5,
-            $6, $7, $8, $9, $10, $11,
-            gen_random_uuid(), $12, $13
+            $6, $7, $8, $9, $10, $11, $12,
+            gen_random_uuid(), $13, $14
           )
-          RETURNING id, full_name, email, phone, current_title, current_employer, salary_min, salary_max, skills, tags, notes, email_ok, created_at, updated_at
+          RETURNING id, full_name, email, phone, current_title, current_employer, salary_min, salary_max, band_label, skills, tags, notes, email_ok, created_at, updated_at
         `, [
           `${candidate.firstName} ${candidate.lastName}`,
           candidate.email,
@@ -492,6 +504,7 @@ app.post('/api/candidates', async (req, res) => {
           candidate.currentEmployer,
           candidate.salaryMin,
           candidate.salaryMax,
+          candidate.bandLabel,
           JSON.stringify(candidate.skills),
           JSON.stringify(candidate.tags),
           candidate.notes,
@@ -534,6 +547,131 @@ app.post('/api/candidates', async (req, res) => {
   }
 });
 
+// Update candidate
+app.put('/api/candidates/:id', async (req, res) => {
+  console.log('=== UPDATE CANDIDATE ===');
+  console.log('Request body:', JSON.stringify(req.body, null, 2));
+  
+  try {
+    const candidateId = req.params.id;
+    const { firstName, lastName, email, phone, currentTitle, currentEmployer, salaryMin, salaryMax, skills, tags, notes, emailOk } = req.body;
+    
+    // Basic validation
+    if (!firstName || !lastName || !email) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields',
+        message: 'First name, last name, and email are required'
+      });
+    }
+    
+    // Apply salary default rule for missing max
+    let resolvedSalaryMax = salaryMax;
+    if (salaryMin && (salaryMax === null || salaryMax === undefined || Number.isNaN(salaryMax))) {
+      resolvedSalaryMax = salaryMin < 100000 ? salaryMin + 30000 : salaryMin + 50000;
+    }
+    
+    // Calculate new band_label
+    const newBandLabel = toBandLabel(salaryMin);
+    
+    if (useDatabase && db) {
+      // Update in database
+      try {
+        const result = await db.query(`
+          UPDATE candidates 
+          SET full_name = $1, email = $2, phone = $3, current_title = $4, current_employer = $5,
+              salary_min = $6, salary_max = $7, band_label = $8, skills = $9, tags = $10, 
+              notes = $11, email_ok = $12, updated_at = $13
+          WHERE id = $14
+          RETURNING id, full_name, email, phone, current_title, current_employer, salary_min, salary_max, band_label, skills, tags, notes, email_ok, created_at, updated_at
+        `, [
+          `${firstName} ${lastName}`,
+          email,
+          phone || '',
+          currentTitle || '',
+          currentEmployer || '',
+          salaryMin || null,
+          resolvedSalaryMax || null,
+          newBandLabel,
+          JSON.stringify(skills || {}),
+          JSON.stringify(tags || []),
+          notes || '',
+          emailOk !== false,
+          new Date().toISOString(),
+          candidateId
+        ]);
+        
+        if (result.rows.length === 0) {
+          return res.status(404).json({
+            success: false,
+            error: 'Candidate not found'
+          });
+        }
+        
+        const updatedCandidate = result.rows[0];
+        console.log('✅ [DB] Candidate updated:', updatedCandidate);
+        
+        res.json({
+          success: true,
+          data: updatedCandidate,
+          message: 'Candidate updated successfully'
+        });
+      } catch (dbError) {
+        console.error('❌ [DB] Update error:', dbError.message);
+        res.status(500).json({
+          success: false,
+          error: 'Database update failed',
+          message: dbError.message
+        });
+      }
+    } else {
+      // Update in memory
+      const candidateIndex = candidates.findIndex(c => c.id == candidateId);
+      if (candidateIndex === -1) {
+        return res.status(404).json({
+          success: false,
+          error: 'Candidate not found'
+        });
+      }
+      
+      const updatedCandidate = {
+        ...candidates[candidateIndex],
+        firstName: firstName || '',
+        lastName: lastName || '',
+        email: email || '',
+        phone: phone || '',
+        currentTitle: currentTitle || '',
+        currentEmployer: currentEmployer || '',
+        salaryMin: salaryMin || null,
+        salaryMax: resolvedSalaryMax || null,
+        bandLabel: newBandLabel,
+        skills: skills || {},
+        tags: tags || [],
+        notes: notes || '',
+        emailOk: emailOk !== false,
+        updatedAt: new Date().toISOString()
+      };
+      
+      candidates[candidateIndex] = updatedCandidate;
+      console.log('✅ [MEM] Candidate updated:', updatedCandidate);
+      
+      res.json({
+        success: true,
+        data: updatedCandidate,
+        message: 'Candidate updated successfully'
+      });
+    }
+    
+  } catch (error) {
+    console.error('❌ Update candidate error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update candidate',
+      message: error.message
+    });
+  }
+});
+
 // Get candidates - SIMPLE VERSION
 app.get('/api/candidates', async (req, res) => {
   console.log('=== GET CANDIDATES ===');
@@ -546,7 +684,7 @@ app.get('/api/candidates', async (req, res) => {
       // Use database
       try {
         const result = await db.query(`
-          SELECT id, full_name, email, phone, current_title, current_employer, salary_min, salary_max, skills, tags, notes, email_ok, created_at, updated_at
+          SELECT id, full_name, email, phone, current_title, current_employer, salary_min, salary_max, band_label, skills, tags, notes, email_ok, created_at, updated_at
           FROM candidates 
           ORDER BY created_at DESC 
           LIMIT 50
@@ -561,6 +699,7 @@ app.get('/api/candidates', async (req, res) => {
           current_employer: row.current_employer || '',
           salary_min: row.salary_min ?? null,
           salary_max: row.salary_max ?? null,
+          band_label: row.band_label || null,
           skills: row.skills ? safeJson(row.skills, { communications: false, campaigns: false, policy: false, publicAffairs: false }) : { communications: false, campaigns: false, policy: false, publicAffairs: false },
           tags: row.tags ? safeJson(row.tags, []) : [],
           notes: row.notes || '',
@@ -588,6 +727,7 @@ app.get('/api/candidates', async (req, res) => {
           current_employer: candidate.currentEmployer || '',
           salary_min: candidate.salaryMin || null,
           salary_max: candidate.salaryMax || null,
+          band_label: candidate.bandLabel || null,
           skills: candidate.skills || { communications: false, campaigns: false, policy: false, publicAffairs: false },
           tags: candidate.tags || [],
           notes: candidate.notes || '',
@@ -609,6 +749,7 @@ app.get('/api/candidates', async (req, res) => {
         current_employer: candidate.currentEmployer || '',
         salary_min: candidate.salaryMin ?? null,
         salary_max: candidate.salaryMax ?? null,
+        band_label: candidate.bandLabel || null,
         skills: candidate.skills || { communications: false, campaigns: false, policy: false, publicAffairs: false },
         tags: candidate.tags || [],
         notes: candidate.notes || '',
@@ -742,7 +883,7 @@ app.get('/api/skills/:skill/bands/:band/candidates', async (req, res) => {
   try {
     let rows = [];
     if (useDatabase && db) {
-      const result = await db.query(`SELECT id, full_name, email, phone, current_title, current_employer, salary_min, salary_max, skills, tags, notes, email_ok, created_at, updated_at FROM candidates ORDER BY created_at DESC LIMIT 500`);
+      const result = await db.query(`SELECT id, full_name, email, phone, current_title, current_employer, salary_min, salary_max, band_label, skills, tags, notes, email_ok, created_at, updated_at FROM candidates ORDER BY created_at DESC LIMIT 500`);
       rows = result.rows.map(r => ({
         id: r.id,
         full_name: r.full_name || '',
@@ -752,6 +893,7 @@ app.get('/api/skills/:skill/bands/:band/candidates', async (req, res) => {
         current_employer: r.current_employer || '',
         salary_min: r.salary_min ?? null,
         salary_max: r.salary_max ?? null,
+        band_label: r.band_label || null,
         skills: safeParse(r.skills),
         tags: safeParse(r.tags, []),
         notes: r.notes || '',
@@ -769,6 +911,7 @@ app.get('/api/skills/:skill/bands/:band/candidates', async (req, res) => {
         current_employer: c.currentEmployer || '',
         salary_min: c.salaryMin ?? null,
         salary_max: c.salaryMax ?? null,
+        band_label: c.bandLabel || null,
         skills: c.skills || {},
         tags: c.tags || [],
         notes: c.notes || '',
