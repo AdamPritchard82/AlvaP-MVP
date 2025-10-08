@@ -597,6 +597,69 @@ app.get('/api/skills/bands', async (req, res) => {
   }
 });
 
+// Bands with counts for a specific skill
+app.get('/api/skills/:skill/bands', async (req, res) => {
+  const { skill } = req.params;
+  const skillKeyMap = {
+    'Public Affairs': 'publicAffairs',
+    'Communications': 'communications',
+    'Policy': 'policy',
+    'Campaigns': 'campaigns'
+  };
+  const skillKey = skillKeyMap[skill] || '';
+  const addCount = (rows) => {
+    const counts = new Map();
+    rows.forEach(r => {
+      if (!r.salary_min) return;
+      if (!r.skills || !r.skills[skillKey]) return;
+      const band = toBandLabel(r.salary_min);
+      if (!band) return;
+      counts.set(band, (counts.get(band) || 0) + 1);
+    });
+    return Array.from(counts.entries())
+      .sort((a,b)=>Number(a[0].replace(/[^\d]/g,''))-Number(b[0].replace(/[^\d]/g,'')))
+      .map(([band, count]) => ({ band, count }));
+  };
+  try {
+    if (useDatabase && db) {
+      const result = await db.query(`SELECT salary_min, skills FROM candidates`);
+      const rows = result.rows.map(r => ({ salary_min: r.salary_min ?? null, skills: safeParse(r.skills, {}) }));
+      return res.json({ success: true, bands: addCount(rows) });
+    } else {
+      const rows = candidates.map(c => ({ salary_min: c.salaryMin ?? null, skills: c.skills || {} }));
+      return res.json({ success: true, bands: addCount(rows) });
+    }
+  } catch (err) {
+    console.error('[skill bands] Error:', err);
+    return res.json({ success: true, bands: [] });
+  }
+});
+
+// Total counts per skill
+app.get('/api/skills/counts', async (_req, res) => {
+  const sumCounts = (rows) => {
+    const tot = { 'Public Affairs': 0, 'Communications': 0, 'Policy': 0, 'Campaigns': 0 };
+    rows.forEach(r => {
+      const set = candidateToSkillSet({ skills: r.skills || {} });
+      set.forEach(s => tot[s] = (tot[s] || 0) + 1);
+    });
+    return tot;
+  };
+  try {
+    if (useDatabase && db) {
+      const result = await db.query(`SELECT skills FROM candidates`);
+      const rows = result.rows.map(r => ({ skills: safeParse(r.skills, {}) }));
+      return res.json({ success: true, counts: sumCounts(rows) });
+    } else {
+      const rows = candidates.map(c => ({ skills: c.skills || {} }));
+      return res.json({ success: true, counts: sumCounts(rows) });
+    }
+  } catch (err) {
+    console.error('[skill counts] Error:', err);
+    return res.json({ success: true, counts: { 'Public Affairs': 0, 'Communications': 0, 'Policy': 0, 'Campaigns': 0 } });
+  }
+});
+
 // Candidates by skill + band (simple paging)
 app.get('/api/skills/:skill/bands/:band/candidates', async (req, res) => {
   const { skill, band } = req.params;

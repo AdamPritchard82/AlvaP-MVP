@@ -383,6 +383,294 @@ app.post('/api/candidates/parse-cv', upload.single('file'), async (req, res) => 
 
 console.log("Mounted POST /api/candidates/parse-cv");
 
+// Create candidate endpoint
+app.post('/api/candidates', async (req, res) => {
+  try {
+    console.log('[create-candidate] Route started');
+    console.log('Request body:', req.body);
+    
+    const { getDb } = require('./src/db-commonjs');
+    const db = getDb();
+    const { nanoid } = require('nanoid');
+    const id = nanoid();
+    const now = new Date().toISOString();
+
+    const {
+      firstName,
+      lastName,
+      email,
+      phone,
+      currentTitle,
+      currentEmployer,
+      salaryMin,
+      salaryMax,
+      seniority,
+      tags = [],
+      notes = '',
+      skills = {},
+      emailOk = true
+    } = req.body;
+
+    // Generate unsubscribe token
+    const unsubscribeToken = nanoid(32);
+    
+    const candidateData = {
+      id,
+      firstName: (firstName || '').trim(),
+      lastName: (lastName || '').trim(),
+      email: (email || '').trim().toLowerCase(),
+      phone: (phone || '').trim(),
+      currentTitle: (currentTitle || '').trim(),
+      currentEmployer: (currentEmployer || '').trim(),
+      salaryMin: salaryMin ? Number(salaryMin) : null,
+      salaryMax: salaryMax ? Number(salaryMax) : null,
+      seniority: seniority || null,
+      tags: Array.isArray(tags) ? tags : (tags ? tags.split(',').map(t => t.trim()) : []),
+      notes: (notes || '').trim(),
+      skills: {
+        communications: Number(skills.communications || 0),
+        campaigns: Number(skills.campaigns || 0),
+        policy: Number(skills.policy || 0),
+        publicAffairs: Number(skills.publicAffairs || 0)
+      },
+      emailOk: emailOk === true || emailOk === 'true',
+      unsubscribeToken,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    // Enhanced validation
+    const validationErrors = [];
+    
+    if (!candidateData.firstName) {
+      validationErrors.push('First name is required');
+    }
+    
+    if (!candidateData.lastName) {
+      validationErrors.push('Last name is required');
+    }
+    
+    if (candidateData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(candidateData.email)) {
+      validationErrors.push('Invalid email format');
+    }
+    
+    if (candidateData.salaryMin && candidateData.salaryMax && candidateData.salaryMin > candidateData.salaryMax) {
+      validationErrors.push('Minimum salary cannot be greater than maximum salary');
+    }
+    
+    if (validationErrors.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation failed',
+        details: validationErrors
+      });
+    }
+
+    // Insert into database
+    const stmt = db.prepare(`
+      INSERT INTO candidates (
+        id, full_name, email, phone, current_title, current_employer,
+        salary_min, salary_max, seniority, tags, notes, skills,
+        email_ok, unsubscribe_token, created_by, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(
+      candidateData.id,
+      `${candidateData.firstName} ${candidateData.lastName}`.trim(),
+      candidateData.email,
+      candidateData.phone,
+      candidateData.currentTitle,
+      candidateData.currentEmployer,
+      candidateData.salaryMin,
+      candidateData.salaryMax,
+      candidateData.seniority,
+      JSON.stringify(candidateData.tags),
+      candidateData.notes,
+      JSON.stringify(candidateData.skills),
+      candidateData.emailOk ? 1 : 0,
+      candidateData.unsubscribeToken,
+      'system', // created_by
+      candidateData.createdAt,
+      candidateData.updatedAt
+    );
+    
+    console.log(`✅ Candidate created successfully: ${candidateData.id}`);
+    console.log(`Name: ${candidateData.firstName} ${candidateData.lastName}`);
+    console.log(`Email: ${candidateData.email}`);
+    
+    res.status(201).json({ 
+      success: true, 
+      id: candidateData.id,
+      message: 'Candidate created successfully'
+    });
+
+  } catch (error) {
+    console.error('❌ Error creating candidate:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to create candidate',
+      details: error.message 
+    });
+  }
+});
+
+console.log("Mounted POST /api/candidates");
+
+// Get candidates endpoint
+app.get('/api/candidates', (req, res) => {
+  try {
+    const { getDb } = require('./src/db-commonjs');
+    const db = getDb();
+    
+    // Test database connection first
+    try {
+      const testQuery = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='candidates'").get();
+      console.log('[get-candidates] Database test - candidates table exists:', !!testQuery);
+      
+      if (!testQuery) {
+        console.log('[get-candidates] Creating candidates table...');
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS candidates (
+            id TEXT PRIMARY KEY,
+            full_name TEXT NOT NULL,
+            email TEXT,
+            phone TEXT,
+            current_title TEXT,
+            current_employer TEXT,
+            salary_min INTEGER,
+            salary_max INTEGER,
+            seniority TEXT,
+            tags TEXT NOT NULL DEFAULT '[]',
+            notes TEXT,
+            skills TEXT NOT NULL DEFAULT '{"communications":false,"campaigns":false,"policy":false,"publicAffairs":false}',
+            cv_original_path TEXT,
+            cv_light TEXT,
+            parsed_raw TEXT,
+            parse_status TEXT NOT NULL DEFAULT 'unparsed',
+            needs_review INTEGER NOT NULL DEFAULT 0,
+            email_ok INTEGER NOT NULL DEFAULT 1,
+            unsubscribe_token TEXT UNIQUE,
+            welcome_sent_at TEXT,
+            created_by TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+          )
+        `);
+        console.log('[get-candidates] Table created successfully');
+      }
+    } catch (dbTestError) {
+      console.error('[get-candidates] Database test failed:', dbTestError);
+    }
+    
+    const { 
+      search, 
+      tags, 
+      salaryMin, 
+      salaryMax, 
+      skills, 
+      mode = 'AND', 
+      page = 1, 
+      limit = 50 
+    } = req.query;
+
+    let query = 'SELECT * FROM candidates';
+    const conditions = [];
+    const params = [];
+
+    if (search) {
+      conditions.push('(full_name LIKE ? OR notes LIKE ? OR current_title LIKE ? OR current_employer LIKE ?)');
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
+    }
+
+    if (tags) {
+      const tagList = Array.isArray(tags) ? tags : tags.split(',');
+      if (tagList.length > 0) {
+        if (mode === 'AND') {
+          const tagConditions = tagList.map(() => 'tags LIKE ?');
+          conditions.push(`(${tagConditions.join(' AND ')})`);
+          tagList.forEach(tag => params.push(`%"${tag}"%`));
+        } else {
+          const tagConditions = tagList.map(() => 'tags LIKE ?');
+          conditions.push(`(${tagConditions.join(' OR ')})`);
+          tagList.forEach(tag => params.push(`%"${tag}"%`));
+        }
+      }
+    }
+
+    if (salaryMin) {
+      conditions.push('(salary_min >= ? OR salary_max >= ?)');
+      params.push(Number(salaryMin), Number(salaryMin));
+    }
+
+    if (salaryMax) {
+      conditions.push('(salary_max <= ? OR salary_min <= ?)');
+      params.push(Number(salaryMax), Number(salaryMax));
+    }
+
+    if (skills) {
+      const skillList = Array.isArray(skills) ? skills : skills.split(',');
+      if (skillList.length > 0) {
+        const skillConditions = skillList.map(skill => {
+          const skillKey = skill.toLowerCase().replace(/\s+/g, '');
+          return `JSON_EXTRACT(skills, '$.${skillKey}') >= 3`;
+        });
+        conditions.push(`(${skillConditions.join(' AND ')})`);
+      }
+    }
+
+    if (conditions.length) {
+      query += ' WHERE ' + conditions.join(' AND ');
+    }
+
+    // Get total count
+    const countQuery = query.replace('SELECT *', 'SELECT COUNT(*) as count');
+    const countResult = db.prepare(countQuery).get(params);
+    const total = countResult ? countResult.count : 0;
+
+    // Add pagination
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    query += ' ORDER BY updated_at DESC LIMIT ? OFFSET ?';
+    params.push(parseInt(limit), offset);
+
+    console.log('[get-candidates] Executing query:', query);
+    console.log('[get-candidates] With params:', params);
+    
+    const candidates = db.prepare(query).all(params) || [];
+    console.log('[get-candidates] Raw query result:', candidates);
+    console.log('[get-candidates] Candidates type:', typeof candidates);
+    console.log('[get-candidates] Is array:', Array.isArray(candidates));
+    
+    // Parse JSON fields
+    const parsedCandidates = candidates.map(candidate => ({
+      ...candidate,
+      tags: JSON.parse(candidate.tags || '[]'),
+      skills: JSON.parse(candidate.skills || '{}')
+    }));
+
+    console.log(`📊 Retrieved ${parsedCandidates.length} candidates (total: ${total})`);
+
+    res.json({
+      success: true,
+      candidates: parsedCandidates,
+      total,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      totalPages: Math.ceil(total / parseInt(limit))
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching candidates:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch candidates',
+      details: error.message 
+    });
+  }
+});
+
+console.log("Mounted GET /api/candidates");
+
 // Start server
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Working server running on port ${PORT}`);

@@ -150,17 +150,49 @@ async function parseCVContent(filePath, mimetype) {
   
   const lines = cleanText.split('\n').map(line => line.trim()).filter(line => line.length > 0);
     
-    // Extract name from first line
+    // Enhanced name extraction with better validation
     let firstName = '';
     let lastName = '';
     if (lines.length > 0) {
-      const firstLine = lines[0];
-      const words = firstLine.split(/\s+/);
-      if (words.length >= 2) {
-        firstName = words[0];
-        lastName = words.slice(1).join(' ');
-      } else if (words.length === 1) {
-        firstName = words[0];
+      const firstLine = lines[0].trim();
+      
+      // Skip lines that look like headers or contact info
+      const skipPatterns = [
+        /^(cv|resume|curriculum vitae)$/i,
+        /^(contact|personal|details)$/i,
+        /^[a-zA-Z\s]*@[a-zA-Z\s]*$/i, // email-like
+        /^[\d\s\-\+\(\)]+$/i, // phone-like
+        /^(mr|mrs|ms|dr|prof)\.?\s/i
+      ];
+      
+      if (!skipPatterns.some(pattern => pattern.test(firstLine))) {
+        const words = firstLine.split(/\s+/).filter(word => word.length > 0);
+        
+        if (words.length >= 2) {
+          // Take first word as first name, rest as last name
+          firstName = words[0];
+          lastName = words.slice(1).join(' ');
+          
+          // Validate names (should be mostly letters)
+          if (!/^[a-zA-Z\s\-']+$/.test(firstName)) firstName = '';
+          if (!/^[a-zA-Z\s\-']+$/.test(lastName)) lastName = '';
+        } else if (words.length === 1 && words[0].length > 1) {
+          firstName = words[0];
+        }
+      }
+      
+      // If no name found in first line, try second line
+      if (!firstName && lines.length > 1) {
+        const secondLine = lines[1].trim();
+        if (!skipPatterns.some(pattern => pattern.test(secondLine))) {
+          const words = secondLine.split(/\s+/).filter(word => word.length > 0);
+          if (words.length >= 2) {
+            firstName = words[0];
+            lastName = words.slice(1).join(' ');
+          } else if (words.length === 1) {
+            firstName = words[0];
+          }
+        }
       }
     }
     
@@ -168,17 +200,25 @@ async function parseCVContent(filePath, mimetype) {
   const emailMatch = cleanText.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
     const email = emailMatch ? emailMatch[1] : '';
     
-    // Enhanced phone number extraction with multiple regex patterns
+    // Enhanced phone number extraction with improved patterns
     const phoneRegexes = [
-      /(\+91\s?[0-9]{4}\s?[0-9]{5})/g,                   // India: +91 7838 82147
+      // International formats (highest priority)
       /(\+44\s?[0-9]{2,4}\s?[0-9]{3,4}\s?[0-9]{3,4})/g,  // UK: +44 20 1234 5678
       /(\+1\s?[0-9]{3}\s?[0-9]{3}\s?[0-9]{4})/g,         // US: +1 555 123 4567
+      /(\+91\s?[0-9]{4}\s?[0-9]{5})/g,                   // India: +91 7838 82147
       /(\+[0-9]{1,3}\s?[0-9]{4,5}\s?[0-9]{4,5})/g,       // International: +XX XXXX XXXX
+      
+      // UK formats
       /(0[0-9]{2,4}\s?[0-9]{3,4}\s?[0-9]{3,4})/g,        // UK: 020 1234 5678
+      /(\(0[0-9]{2,4}\)\s?[0-9]{3,4}\s?[0-9]{3,4})/g,     // UK: (020) 1234 5678
+      
+      // US formats
       /([0-9]{3}\s?[0-9]{3}\s?[0-9]{4})/g,               // US: 555 123 4567
-      /(\([0-9]{2,4}\)\s?[0-9]{3,4}\s?[0-9]{3,4})/g,     // (020) 1234 5678
+      /(\([0-9]{3}\)\s?[0-9]{3}\s?[0-9]{4})/g,            // US: (555) 123 4567
+      
+      // Generic patterns
       /([0-9]{10,})/g,                                    // 10+ digits
-      /(\+?[\d\s\-\(\)]{10,})/g                          // Original fallback
+      /(\+?[\d\s\-\(\)]{10,})/g                          // Fallback
     ];
     
     let phone = '';
@@ -354,14 +394,42 @@ async function parseCVContent(filePath, mimetype) {
     if (skills.policy) tags.push('policy');
     if (skills.publicAffairs) tags.push('public-affairs');
   
-  // Calculate confidence based on text length and extracted data
+  // Enhanced confidence calculation with better scoring
   let confidence = Math.min(1, cleanText.length / 8000);
-  if (firstName && lastName) confidence += 0.1;
-  if (email) confidence += 0.1;
-  if (phone) confidence += 0.05;
-  if (currentTitle) confidence += 0.1;
+  
+  // Name validation bonus (more weight for complete names)
+  if (firstName && lastName) {
+    confidence += 0.15; // Increased from 0.1
+    // Bonus for realistic name patterns
+    if (firstName.length > 1 && lastName.length > 1) confidence += 0.05;
+  }
+  
+  // Email validation bonus (with format check)
+  if (email && email.includes('@') && email.includes('.')) {
+    confidence += 0.15; // Increased from 0.1
+  }
+  
+  // Phone validation bonus (with format check)
+  if (phone && phone.replace(/\D/g, '').length >= 10) {
+    confidence += 0.1; // Increased from 0.05
+  }
+  
+  // Job title and employer bonus
+  if (currentTitle && currentTitle.length > 2) confidence += 0.1;
+  if (currentEmployer && currentEmployer.length > 2) confidence += 0.1;
+  
+  // Skills bonus (more weight for detected skills)
   const skillCount = Object.values(skills).filter(Boolean).length;
-  confidence += skillCount * 0.05;
+  confidence += skillCount * 0.08; // Increased from 0.05
+  
+  // Text quality bonus
+  if (cleanText.length > 1000) confidence += 0.05;
+  if (cleanText.length > 2000) confidence += 0.05;
+  
+  // Penalty for very short text
+  if (cleanText.length < 300) confidence = Math.min(confidence, 0.4);
+  if (cleanText.length < 100) confidence = Math.min(confidence, 0.2);
+  
   confidence = Math.min(confidence, 1.0);
     
     const parsedData = {
@@ -509,20 +577,20 @@ router.post('/', upload.single('cv'), async (req, res) => {
     // Generate unsubscribe token
     const unsubscribeToken = nanoid(32);
     
-    // Use parsed data if available, otherwise use form data
+    // Enhanced candidate data with validation and fallbacks
     const candidateData = {
       id,
-      firstName: parsedData?.firstName || firstName || '',
-      lastName: parsedData?.lastName || lastName || '',
-      email: parsedData?.email || email || '',
-      phone: parsedData?.phone || phone || '',
-      currentTitle: parsedData?.currentTitle || currentTitle || '',
-      currentEmployer: parsedData?.currentEmployer || currentEmployer || '',
+      firstName: (parsedData?.firstName || firstName || '').trim(),
+      lastName: (parsedData?.lastName || lastName || '').trim(),
+      email: (parsedData?.email || email || '').trim().toLowerCase(),
+      phone: (parsedData?.phone || phone || '').trim(),
+      currentTitle: (parsedData?.currentTitle || currentTitle || '').trim(),
+      currentEmployer: (parsedData?.currentEmployer || currentEmployer || '').trim(),
       salaryMin: salaryMin ? Number(salaryMin) : null,
       salaryMax: salaryMax ? Number(salaryMax) : null,
       seniority: seniority || null,
       tags: Array.isArray(tags) ? tags : (tags ? tags.split(',').map(t => t.trim()) : []),
-      notes: notes || '',
+      notes: (notes || '').trim(),
       skills: {
         communications: Number(skills.communications || parsedData?.skills?.communications || 0),
         campaigns: Number(skills.campaigns || parsedData?.skills?.campaigns || 0),
@@ -536,37 +604,97 @@ router.post('/', upload.single('cv'), async (req, res) => {
       updatedAt: now
     };
 
+    // Enhanced validation with better error messages
+    const validationErrors = [];
+    
+    if (!candidateData.firstName) {
+      validationErrors.push('First name is required');
+    }
+    
+    if (!candidateData.lastName) {
+      validationErrors.push('Last name is required');
+    }
+    
+    if (candidateData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(candidateData.email)) {
+      validationErrors.push('Invalid email format');
+    }
+    
+    if (candidateData.salaryMin && candidateData.salaryMax && candidateData.salaryMin > candidateData.salaryMax) {
+      validationErrors.push('Minimum salary cannot be greater than maximum salary');
+    }
+    
+    if (validationErrors.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation failed',
+        details: validationErrors
+      });
+    }
+
     // Format data for database storage
     const formattedData = formatJsonFields(candidateData, ['tags', 'skills']);
 
-    // Insert into database
-    await execute(`
-      INSERT INTO candidates (
-        id, full_name, email, phone, current_title, current_employer,
-        salary_min, salary_max, seniority, tags, notes, skills,
-        cv_original_path, email_ok, unsubscribe_token, created_at, updated_at
-      ) VALUES (@id, @full_name, @email, @phone, @current_title, @current_employer,
-        @salary_min, @salary_max, @seniority, @tags, @notes, @skills,
-        @cv_original_path, @email_ok, @unsubscribe_token, @created_at, @updated_at)
-    `, {
-      id: formattedData.id,
-      full_name: `${formattedData.firstName} ${formattedData.lastName}`.trim(),
-      email: formattedData.email,
-      phone: formattedData.phone,
-      current_title: formattedData.currentTitle,
-      current_employer: formattedData.currentEmployer,
-      salary_min: formattedData.salaryMin,
-      salary_max: formattedData.salaryMax,
-      seniority: formattedData.seniority,
-      tags: formattedData.tags,
-      notes: formattedData.notes,
-      skills: formattedData.skills,
-      cv_original_path: formattedData.cvPath,
-      email_ok: formattedData.emailOk ? 1 : 0,
-      unsubscribe_token: formattedData.unsubscribeToken,
-      created_at: formattedData.createdAt,
-      updated_at: formattedData.updatedAt
-    });
+    // Insert into database with enhanced error handling
+    try {
+      await execute(`
+        INSERT INTO candidates (
+          id, full_name, email, phone, current_title, current_employer,
+          salary_min, salary_max, seniority, tags, notes, skills,
+          cv_original_path, email_ok, unsubscribe_token, created_by, created_at, updated_at
+        ) VALUES (@id, @full_name, @email, @phone, @current_title, @current_employer,
+          @salary_min, @salary_max, @seniority, @tags, @notes, @skills,
+          @cv_original_path, @email_ok, @unsubscribe_token, @created_by, @created_at, @updated_at)
+      `, {
+        id: formattedData.id,
+        full_name: `${formattedData.firstName} ${formattedData.lastName}`.trim(),
+        email: formattedData.email,
+        phone: formattedData.phone,
+        current_title: formattedData.currentTitle,
+        current_employer: formattedData.currentEmployer,
+        salary_min: formattedData.salaryMin,
+        salary_max: formattedData.salaryMax,
+        seniority: formattedData.seniority,
+        tags: formattedData.tags,
+        notes: formattedData.notes,
+        skills: formattedData.skills,
+        cv_original_path: formattedData.cvPath,
+        email_ok: formattedData.emailOk ? 1 : 0,
+        unsubscribe_token: formattedData.unsubscribeToken,
+        created_by: 'system',
+        created_at: formattedData.createdAt,
+        updated_at: formattedData.updatedAt
+      });
+      
+      console.log('✅ Candidate saved successfully:', formattedData.id);
+      // Verify row exists (debug)
+      try {
+        const verify = await queryOne('SELECT COUNT(1) as count FROM candidates WHERE id = @id', { id: formattedData.id });
+        console.log('🔎 Post-insert verify count for id', formattedData.id, ':', verify?.count);
+      } catch (verifyErr) {
+        console.warn('⚠️ Post-insert verify failed:', verifyErr.message);
+      }
+    } catch (dbError) {
+      console.error('❌ Database error:', dbError);
+      
+      // Handle specific database errors
+      if (dbError.message.includes('UNIQUE constraint failed')) {
+        return res.status(409).json({
+          success: false,
+          error: 'Candidate already exists',
+          details: 'A candidate with this email already exists in the system'
+        });
+      }
+      
+      if (dbError.message.includes('FOREIGN KEY constraint failed')) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid reference',
+          details: 'One or more referenced records do not exist'
+        });
+      }
+      
+      throw dbError; // Re-throw for general error handling
+    }
 
     // Send welcome email if email is provided and email_ok is true
     if (candidateData.email && candidateData.emailOk) {
