@@ -1408,7 +1408,7 @@ app.get('/api/jobs/:id', async (req, res) => {
 // Match candidates for a job
 app.get('/api/match/:jobId', async (req, res) => {
   console.log('=== MATCH CANDIDATES FOR JOB ===');
-  const jobId = parseInt(req.params.id);
+  const jobId = parseInt(req.params.jobId);
   const limit = Math.min(50, Math.max(1, parseInt(req.query.limit || '10', 10)));
   
   const startTime = Date.now();
