@@ -1,0 +1,13 @@
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "npm start"
+healthcheckPath = "/health"
+healthcheckTimeout = 150
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+[env]
+ENABLE_DOTNET_PARSER = "true"
+DOTNET_CV_API_URL = "https://alvap-mvp-production.up.railway.app"
