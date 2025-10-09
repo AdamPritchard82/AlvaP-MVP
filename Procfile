@@ -1,1 +1,1 @@
-web: node build-and-start.js
+web: node server-simple.js
