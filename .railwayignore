@@ -1,0 +1,14 @@
+# Ignore .NET CV Parser project
+CVDocumentParser.API/
+CVDocumentParser.API/**
+*.csproj
+*.sln
+*.cs
+
+# Ignore other unnecessary files
+backend/
+data/
+uploads/
+tests/
+*.test.js
+test-*.js
