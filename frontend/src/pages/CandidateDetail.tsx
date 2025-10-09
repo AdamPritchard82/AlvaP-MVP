@@ -76,6 +76,36 @@ export default function CandidateDetail() {
     }
   };
 
+  const handleGeneratePortalLink = async () => {
+    if (!candidate) return;
+    
+    try {
+      const response = await api.generatePortalLink(candidate.id);
+      
+      if (response.success) {
+        // Copy to clipboard
+        await navigator.clipboard.writeText(response.portalUrl);
+        toast.success('Portal link copied to clipboard!');
+        
+        // Also show the URL in a more detailed toast
+        toast.success(
+          <div>
+            <p className="font-medium">Portal link generated!</p>
+            <p className="text-sm text-gray-600 mt-1">
+              Link expires in {response.expiresIn}. Copied to clipboard.
+            </p>
+          </div>,
+          { duration: 5000 }
+        );
+      } else {
+        toast.error('Failed to generate portal link');
+      }
+    } catch (error) {
+      console.error('Failed to generate portal link:', error);
+      toast.error('Failed to generate portal link');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -130,6 +160,13 @@ export default function CandidateDetail() {
             <Edit className="h-4 w-4 mr-2" />
             Edit
           </Link>
+          <button
+            onClick={handleGeneratePortalLink}
+            className="btn btn-primary btn-md"
+          >
+            <User className="h-4 w-4 mr-2" />
+            Generate Portal Link
+          </button>
         </div>
       </div>
 

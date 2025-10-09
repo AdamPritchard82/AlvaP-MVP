@@ -18,6 +18,7 @@ import Clients from './pages/Clients';
 import ClientNew from './pages/ClientNew';
 import Pricing from './pages/Pricing';
 import Analytics from './pages/Analytics';
+import Portal from './pages/Portal';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -41,6 +42,7 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/portal" element={<Portal />} />
       <Route
         path="/*"
         element={

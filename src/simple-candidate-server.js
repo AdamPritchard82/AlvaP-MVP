@@ -8,6 +8,7 @@ const fs = require('fs');
 const multer = require('multer');
 const mammoth = require('mammoth');
 const pdfParse = require('pdf-parse');
+const jwt = require('jsonwebtoken');
 
 // Import all advanced services
 const FileStorage = require('./storage');
@@ -34,6 +35,57 @@ const userPreferencesService = new UserPreferencesService();
 const exportService = new ExportService();
 const optimisticUIService = new OptimisticUIService();
 
+// JWT Configuration for Portal
+const JWT_SECRET = process.env.JWT_SECRET || 'portal-secret-key-change-in-production';
+const PORTAL_TOKEN_EXPIRY = '24h';
+
+// Portal Authentication Middleware
+const authenticatePortalToken = (req, res, next) => {
+  const startTime = Date.now();
+  
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ 
+        error: 'Portal access denied', 
+        message: 'Valid token required' 
+      });
+    }
+
+    const token = authHeader.substring(7);
+    const decoded = jwt.verify(token, JWT_SECRET);
+    
+    if (decoded.scope !== 'portal') {
+      return res.status(403).json({ 
+        error: 'Invalid token scope', 
+        message: 'Portal access only' 
+      });
+    }
+
+    req.candidateId = decoded.candidate_id;
+    req.portalToken = token;
+    
+    const duration = Date.now() - startTime;
+    console.log(`[PORTAL-AUTH] Candidate ${req.candidateId} authenticated in ${duration}ms`);
+    next();
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    console.log(`[PORTAL-AUTH] Token validation failed in ${duration}ms: ${error.message}`);
+    
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({ 
+        error: 'Token expired', 
+        message: 'Please request a new portal link' 
+      });
+    }
+    
+    return res.status(401).json({ 
+      error: 'Invalid token', 
+      message: 'Please request a new portal link' 
+    });
+  }
+};
+
 // Middleware
 app.use(cors({
   origin: process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : ['https://alvap-mvp-production.up.railway.app', 'http://localhost:5173'],
@@ -45,6 +97,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(rateLimitService.getGeneralLimiter());
 app.use('/api/candidates', rateLimitService.getStrictLimiter());
 app.use('/api/candidates/parse-cv', rateLimitService.getUploadLimiter());
+app.use('/api/portal', rateLimitService.getStrictLimiter());
 
 // Simple in-memory storage (will persist during server uptime)
 let candidates = [];
@@ -2338,6 +2391,132 @@ function calculateSalaryProximity(candidateMin, candidateMax, jobMin, jobMax) {
   
   return overlap / totalRange;
 }
+
+// ============================================================================
+// PORTAL ENDPOINTS - Candidate Portal with Magic Link Authentication
+// ============================================================================
+
+// Generate magic link for candidate portal (admin/recruiter only)
+app.post('/api/candidates/:id/portal-link', async (req, res) => {
+  const startTime = Date.now();
+  const candidateId = req.params.id;
+  
+  try {
+    // Find candidate
+    const candidate = candidates.find(c => c.id == candidateId);
+    if (!candidate) {
+      return res.status(404).json({ 
+        error: 'Candidate not found',
+        message: 'No candidate found with this ID'
+      });
+    }
+
+    // Generate JWT token for portal access
+    const token = jwt.sign(
+      { 
+        candidate_id: candidateId,
+        scope: 'portal',
+        iat: Math.floor(Date.now() / 1000)
+      },
+      JWT_SECRET,
+      { expiresIn: PORTAL_TOKEN_EXPIRY }
+    );
+
+    const portalUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/portal?token=${token}`;
+    
+    const duration = Date.now() - startTime;
+    console.log(`[PORTAL-LINK] Generated portal link for candidate ${candidateId} in ${duration}ms`);
+    
+    res.json({
+      success: true,
+      portalUrl,
+      expiresIn: PORTAL_TOKEN_EXPIRY,
+      message: 'Portal link generated successfully'
+    });
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    console.log(`[PORTAL-LINK] Error generating link for candidate ${candidateId} in ${duration}ms: ${error.message}`);
+    res.status(500).json({ 
+      error: 'Failed to generate portal link',
+      message: error.message 
+    });
+  }
+});
+
+// Get candidate profile (portal-safe data only)
+app.get('/api/portal/me', authenticatePortalToken, async (req, res) => {
+  const startTime = Date.now();
+  
+  try {
+    const candidate = candidates.find(c => c.id == req.candidateId);
+    if (!candidate) {
+      return res.status(404).json({ 
+        error: 'Candidate not found',
+        message: 'Your profile could not be found'
+      });
+    }
+
+    // Return only safe, public-facing data
+    const safeProfile = {
+      id: candidate.id,
+      firstName: candidate.firstName,
+      lastName: candidate.lastName,
+      currentTitle: candidate.currentTitle,
+      currentEmployer: candidate.currentEmployer,
+      email: candidate.email,
+      phone: candidate.phone,
+      skills: candidate.skills || {},
+      salaryMin: candidate.salaryMin,
+      salaryMax: candidate.salaryMax,
+      lastUpdated: candidate.updatedAt || candidate.createdAt
+    };
+
+    const duration = Date.now() - startTime;
+    console.log(`[PORTAL-ME] Retrieved profile for candidate ${req.candidateId} in ${duration}ms`);
+    
+    res.json({
+      success: true,
+      profile: safeProfile
+    });
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    console.log(`[PORTAL-ME] Error retrieving profile for candidate ${req.candidateId} in ${duration}ms: ${error.message}`);
+    res.status(500).json({ 
+      error: 'Failed to retrieve profile',
+      message: 'Please try again later'
+    });
+  }
+});
+
+// Get candidate applications (portal-safe data only)
+app.get('/api/portal/me/applications', authenticatePortalToken, async (req, res) => {
+  const startTime = Date.now();
+  
+  try {
+    // For now, return empty applications array since we don't have job applications yet
+    // This endpoint is ready for when job applications are implemented
+    const applications = [];
+    
+    // TODO: When job applications are implemented, query them here
+    // const applications = await getCandidateApplications(req.candidateId);
+    
+    const duration = Date.now() - startTime;
+    console.log(`[PORTAL-APPLICATIONS] Retrieved ${applications.length} applications for candidate ${req.candidateId} in ${duration}ms`);
+    
+    res.json({
+      success: true,
+      applications,
+      message: applications.length === 0 ? 'No applications found' : 'Applications retrieved successfully'
+    });
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    console.log(`[PORTAL-APPLICATIONS] Error retrieving applications for candidate ${req.candidateId} in ${duration}ms: ${error.message}`);
+    res.status(500).json({ 
+      error: 'Failed to retrieve applications',
+      message: 'Please try again later'
+    });
+  }
+});
 
 // 404 handler
 app.use((req, res) => {

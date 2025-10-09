@@ -57,6 +57,35 @@ export interface SavedFilter {
   lastUpdated?: string;
 }
 
+// Portal interfaces
+export interface PortalProfile {
+  id: string;
+  firstName: string;
+  lastName: string;
+  currentTitle: string;
+  currentEmployer: string;
+  email: string;
+  phone: string;
+  skills: {
+    communications?: number;
+    campaigns?: number;
+    policy?: number;
+    publicAffairs?: number;
+  };
+  salaryMin?: number;
+  salaryMax?: number;
+  lastUpdated: string;
+}
+
+export interface PortalApplication {
+  id: string;
+  jobTitle: string;
+  client: string;
+  stage: string;
+  lastMovementDate: string;
+  status: 'active' | 'closed' | 'placed';
+}
+
 export interface Client {
   id: string;
   name: string;
@@ -636,6 +665,29 @@ class ApiClient {
   async resendWelcomeEmail(candidateId: string): Promise<{ success: boolean; message: string }> {
     return this.request(`/candidates/${candidateId}/resend-welcome`, {
       method: 'POST',
+    });
+  }
+
+  // Portal methods
+  async generatePortalLink(candidateId: string): Promise<{ success: boolean; portalUrl: string; expiresIn: string; message: string }> {
+    return this.request(`/candidates/${candidateId}/portal-link`, {
+      method: 'POST'
+    });
+  }
+
+  async getPortalProfile(token: string): Promise<{ success: boolean; profile: PortalProfile }> {
+    return this.request('/portal/me', {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+  }
+
+  async getPortalApplications(token: string): Promise<{ success: boolean; applications: PortalApplication[]; message: string }> {
+    return this.request('/portal/me/applications', {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
     });
   }
 }
