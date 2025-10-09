@@ -86,6 +86,43 @@ export interface PortalApplication {
   status: 'active' | 'closed' | 'placed';
 }
 
+// Job Board interfaces
+export interface PublicJob {
+  id: string;
+  title: string;
+  publicSummary: string;
+  clientPublicName: string;
+  location: string;
+  employmentType: string;
+  salaryMin: number;
+  salaryMax: number;
+  requiredSkills: {
+    communications?: boolean;
+    campaigns?: boolean;
+    policy?: boolean;
+    publicAffairs?: boolean;
+  };
+  publicSlug: string;
+  createdAt: string;
+}
+
+export interface JobPublishResponse {
+  success: boolean;
+  data: {
+    id: string;
+    isPublic: boolean;
+    publicSlug: string;
+    publicUrl: string | null;
+  };
+  message: string;
+}
+
+export interface JobInterestData {
+  name: string;
+  email: string;
+  message?: string;
+}
+
 export interface Client {
   id: string;
   name: string;
@@ -688,6 +725,57 @@ class ApiClient {
       headers: {
         'Authorization': `Bearer ${token}`
       }
+    });
+  }
+
+  // Job Board methods
+  async publishJob(jobId: string): Promise<JobPublishResponse> {
+    return this.request(`/jobs/${jobId}/publish`, {
+      method: 'POST'
+    });
+  }
+
+  async updateJobPublicFields(jobId: string, fields: {
+    publicSummary?: string;
+    clientPublicName?: string;
+    location?: string;
+    employmentType?: string;
+  }): Promise<{ success: boolean; data: any; message: string }> {
+    return this.request(`/jobs/${jobId}/public-fields`, {
+      method: 'PUT',
+      body: JSON.stringify(fields)
+    });
+  }
+
+  async getPublicJobs(params?: {
+    page?: number;
+    pageSize?: number;
+    skill?: string;
+    band?: string;
+    location?: string;
+    employmentType?: string;
+    search?: string;
+  }): Promise<{ success: boolean; data: PublicJob[]; pagination: any }> {
+    const queryParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined) {
+          queryParams.append(key, value.toString());
+        }
+      });
+    }
+    const query = queryParams.toString();
+    return this.request(`/public/jobs${query ? `?${query}` : ''}`);
+  }
+
+  async getPublicJob(slug: string): Promise<{ success: boolean; data: PublicJob }> {
+    return this.request(`/public/jobs/${slug}`);
+  }
+
+  async submitJobInterest(slug: string, data: JobInterestData): Promise<{ success: boolean; message: string; data: any }> {
+    return this.request(`/public/jobs/${slug}/interest`, {
+      method: 'POST',
+      body: JSON.stringify(data)
     });
   }
 }

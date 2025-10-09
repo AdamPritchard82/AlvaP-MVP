@@ -16,7 +16,10 @@ import {
   Calendar,
   CheckCircle,
   Clock,
-  AlertCircle
+  AlertCircle,
+  Globe,
+  Copy,
+  Settings
 } from 'lucide-react';
 import { api, Job, Candidate, Match } from '../lib/api';
 import { SuggestedCandidates } from '../components/SuggestedCandidates';
@@ -46,7 +49,15 @@ export default function JobDetail() {
   const [loading, setLoading] = useState(true);
   const [showAttachModal, setShowAttachModal] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
+  const [showPublicFieldsModal, setShowPublicFieldsModal] = useState(false);
   const [selectedCandidates, setSelectedCandidates] = useState<string[]>([]);
+  const [publishing, setPublishing] = useState(false);
+  const [publicFields, setPublicFields] = useState({
+    publicSummary: '',
+    clientPublicName: '',
+    location: '',
+    employmentType: 'Full-time'
+  });
   const [emailForm, setEmailForm] = useState({
     to: '',
     subject: '',
@@ -73,6 +84,14 @@ export default function JobDetail() {
       setJob(jobData);
       setMatches(matchesData.matches);
       setRecommendations(recommendationsData);
+      
+      // Initialize public fields
+      setPublicFields({
+        publicSummary: jobData.publicSummary || '',
+        clientPublicName: jobData.clientPublicName || '',
+        location: jobData.location || '',
+        employmentType: jobData.employmentType || 'Full-time'
+      });
       
       // Load email log from backend
       try {
@@ -169,6 +188,54 @@ export default function JobDetail() {
       ...prev,
       body: prev.body + cvLights
     }));
+  };
+
+  const handleTogglePublic = async () => {
+    if (!job) return;
+    
+    try {
+      setPublishing(true);
+      const response = await api.publishJob(job.id);
+      
+      if (response.success) {
+        setJob(prev => prev ? { ...prev, isPublic: response.data.isPublic, publicSlug: response.data.publicSlug } : null);
+        toast.success(response.message);
+      } else {
+        toast.error('Failed to toggle job visibility');
+      }
+    } catch (error) {
+      console.error('Error toggling job visibility:', error);
+      toast.error('Failed to toggle job visibility');
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  const handleUpdatePublicFields = async () => {
+    if (!job) return;
+    
+    try {
+      const response = await api.updateJobPublicFields(job.id, publicFields);
+      
+      if (response.success) {
+        setJob(prev => prev ? { ...prev, ...publicFields } : null);
+        toast.success('Public fields updated successfully');
+        setShowPublicFieldsModal(false);
+      } else {
+        toast.error('Failed to update public fields');
+      }
+    } catch (error) {
+      console.error('Error updating public fields:', error);
+      toast.error('Failed to update public fields');
+    }
+  };
+
+  const handleCopyPublicLink = async () => {
+    if (!job?.publicSlug) return;
+    
+    const publicUrl = `${window.location.origin}/jobs/${job.publicSlug}`;
+    await navigator.clipboard.writeText(publicUrl);
+    toast.success('Public link copied to clipboard!');
   };
 
   const getStageColor = (stage: string) => {
@@ -270,6 +337,37 @@ export default function JobDetail() {
             <Plus className="h-4 w-4 mr-2" />
             Attach Candidate
           </button>
+          
+          {/* Public Visibility Controls */}
+          <div className="flex items-center space-x-2 border-l pl-2">
+            <button
+              onClick={handleTogglePublic}
+              className={`btn ${job.isPublic ? 'btn-success' : 'btn-outline'}`}
+              disabled={publishing}
+            >
+              <Globe className="h-4 w-4 mr-2" />
+              {publishing ? 'Publishing...' : (job.isPublic ? 'Public' : 'Make Public')}
+            </button>
+            
+            {job.isPublic && (
+              <>
+                <button
+                  onClick={() => setShowPublicFieldsModal(true)}
+                  className="btn btn-outline"
+                >
+                  <Settings className="h-4 w-4 mr-2" />
+                  Edit Public
+                </button>
+                <button
+                  onClick={handleCopyPublicLink}
+                  className="btn btn-outline"
+                >
+                  <Copy className="h-4 w-4 mr-2" />
+                  Copy Link
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -503,6 +601,82 @@ export default function JobDetail() {
                 disabled={!emailForm.to || !emailForm.subject}
               >
                 Send Email
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Public Fields Modal */}
+      {showPublicFieldsModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-2xl">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Edit Public Job Details</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Public Summary</label>
+                <textarea
+                  value={publicFields.publicSummary}
+                  onChange={(e) => setPublicFields(prev => ({ ...prev, publicSummary: e.target.value }))}
+                  rows={4}
+                  className="input w-full"
+                  placeholder="Write a public-friendly summary of this role..."
+                />
+                <p className="text-xs text-gray-500 mt-1">This will be visible to candidates on the public job board</p>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Client Public Name</label>
+                  <input
+                    type="text"
+                    value={publicFields.clientPublicName}
+                    onChange={(e) => setPublicFields(prev => ({ ...prev, clientPublicName: e.target.value }))}
+                    className="input w-full"
+                    placeholder="e.g., Leading Consultancy"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Employment Type</label>
+                  <select
+                    value={publicFields.employmentType}
+                    onChange={(e) => setPublicFields(prev => ({ ...prev, employmentType: e.target.value }))}
+                    className="input w-full"
+                  >
+                    <option value="Full-time">Full-time</option>
+                    <option value="Part-time">Part-time</option>
+                    <option value="Contract">Contract</option>
+                    <option value="Freelance">Freelance</option>
+                  </select>
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                <input
+                  type="text"
+                  value={publicFields.location}
+                  onChange={(e) => setPublicFields(prev => ({ ...prev, location: e.target.value }))}
+                  className="input w-full"
+                  placeholder="e.g., London, UK or Remote"
+                />
+              </div>
+            </div>
+            
+            <div className="flex justify-end space-x-2 mt-6">
+              <button
+                onClick={() => setShowPublicFieldsModal(false)}
+                className="btn btn-outline"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleUpdatePublicFields}
+                className="btn btn-primary"
+              >
+                Update Public Fields
               </button>
             </div>
           </div>

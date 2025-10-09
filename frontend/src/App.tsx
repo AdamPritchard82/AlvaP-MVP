@@ -19,6 +19,8 @@ import ClientNew from './pages/ClientNew';
 import Pricing from './pages/Pricing';
 import Analytics from './pages/Analytics';
 import Portal from './pages/Portal';
+import PublicJobs from './pages/PublicJobs';
+import PublicJobDetail from './pages/PublicJobDetail';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -43,6 +45,8 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/portal" element={<Portal />} />
+      <Route path="/jobs" element={<PublicJobs />} />
+      <Route path="/jobs/:slug" element={<PublicJobDetail />} />
       <Route
         path="/*"
         element={

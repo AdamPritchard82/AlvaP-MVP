@@ -1,6 +1,9 @@
 // Simple Candidate Server - Bulletproof Version with Advanced Services
 console.log('=== SIMPLE CANDIDATE SERVER STARTING v3.1 - WITH ADVANCED SERVICES ===');
 
+// Load environment variables from .env file
+require('dotenv').config();
+
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -20,6 +23,7 @@ const SearchService = require('./search-service');
 const UserPreferencesService = require('./user-preferences-service');
 const ExportService = require('./export-service');
 const OptimisticUIService = require('./optimistic-ui-service');
+const WeeklyDigestService = require('./services/weekly-digest');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -34,6 +38,7 @@ const searchService = new SearchService();
 const userPreferencesService = new UserPreferencesService();
 const exportService = new ExportService();
 const optimisticUIService = new OptimisticUIService();
+let weeklyDigestService = null; // Will be initialized after database setup
 
 // JWT Configuration for Portal
 const JWT_SECRET = process.env.JWT_SECRET || 'portal-secret-key-change-in-production';
@@ -98,6 +103,8 @@ app.use(rateLimitService.getGeneralLimiter());
 app.use('/api/candidates', rateLimitService.getStrictLimiter());
 app.use('/api/candidates/parse-cv', rateLimitService.getUploadLimiter());
 app.use('/api/portal', rateLimitService.getStrictLimiter());
+app.use('/api/public', rateLimitService.getGeneralLimiter());
+app.use('/api/admin', rateLimitService.getStrictLimiter());
 
 // Simple in-memory storage (will persist during server uptime)
 let candidates = [];
@@ -124,6 +131,9 @@ try {
   console.log('⚠️ Database module not available, using in-memory storage');
   useDatabase = false;
 }
+
+// Initialize weekly digest service after database is set up
+weeklyDigestService = new WeeklyDigestService(emailService, db);
 
 // Uploads directory for parsing
 const uploadsDir = path.join(process.cwd(), 'uploads');
@@ -393,6 +403,13 @@ app.get('/health/detailed', async (req, res) => {
       totalRequests: uptimeStats.totalRequests || 0
     };
 
+    // Weekly digest status
+    const digestStatus = weeklyDigestService ? weeklyDigestService.getStatus() : {
+      enabled: false,
+      lastSent: null,
+      isRunning: false
+    };
+    
     const healthCheck = {
       ok: true,
       timestamp: new Date().toISOString(),
@@ -403,7 +420,12 @@ app.get('/health/detailed', async (req, res) => {
         email: emailHealth,
         parsers: parserHealth,
         rateLimits: rateLimitHealth,
-        metrics: metricsHealth
+        metrics: metricsHealth,
+        digest: {
+          enabled: digestStatus.enabled,
+          lastSent: digestStatus.lastSent,
+          isRunning: digestStatus.isRunning
+        }
       }
     };
 
@@ -2086,13 +2108,37 @@ function calculateSalaryProximityScore(candidateMin, candidateMax, jobMin, jobMa
   return proximityScore * 0.3; // 30% weight for salary
 }
 
+// Helper function to generate URL-safe slugs for public jobs
+function generateJobSlug(title) {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '') // Remove special characters
+    .replace(/\s+/g, '-') // Replace spaces with hyphens
+    .replace(/-+/g, '-') // Replace multiple hyphens with single
+    .replace(/^-|-$/g, '') // Remove leading/trailing hyphens
+    .substring(0, 50) // Limit length
+    + '-' + Date.now().toString(36); // Add timestamp for uniqueness
+}
+
 // Create job
 app.post('/api/jobs', async (req, res) => {
   console.log('=== CREATE JOB ===');
   console.log('Request body:', JSON.stringify(req.body, null, 2));
   
   try {
-    const { title, description, requiredSkills, salaryMin, salaryMax, location, company } = req.body;
+    const { 
+      title, 
+      description, 
+      requiredSkills, 
+      salaryMin, 
+      salaryMax, 
+      location, 
+      company,
+      isPublic = false,
+      publicSummary = '',
+      clientPublicName = '',
+      employmentType = 'Full-time'
+    } = req.body;
     
     // Basic validation
     if (!title || !requiredSkills || !salaryMin || !salaryMax) {
@@ -2103,6 +2149,9 @@ app.post('/api/jobs', async (req, res) => {
       });
     }
     
+    // Generate public slug if job is public
+    const publicSlug = isPublic ? generateJobSlug(title) : null;
+    
     const job = {
       id: nextJobId++,
       title: title || '',
@@ -2112,6 +2161,11 @@ app.post('/api/jobs', async (req, res) => {
       salaryMax: Number(salaryMax),
       location: location || '',
       company: company || '',
+      isPublic: Boolean(isPublic),
+      publicSlug: publicSlug,
+      publicSummary: publicSummary || '',
+      clientPublicName: clientPublicName || '',
+      employmentType: employmentType || 'Full-time',
       createdAt: new Date().toISOString(),
       createdBy: 'system'
     };
@@ -2391,6 +2445,415 @@ function calculateSalaryProximity(candidateMin, candidateMax, jobMin, jobMax) {
   
   return overlap / totalRange;
 }
+
+// ============================================================================
+// JOB BOARD ADMIN ENDPOINTS - Internal job publishing controls
+// ============================================================================
+
+// Toggle job public visibility
+app.post('/api/jobs/:id/publish', async (req, res) => {
+  const startTime = Date.now();
+  const jobId = parseInt(req.params.id);
+  
+  try {
+    const job = jobs.find(j => j.id === jobId);
+    if (!job) {
+      return res.status(404).json({
+        success: false,
+        error: 'Job not found'
+      });
+    }
+
+    // Toggle public status
+    job.isPublic = !job.isPublic;
+    
+    // Generate slug if making public and doesn't have one
+    if (job.isPublic && !job.publicSlug) {
+      job.publicSlug = generateJobSlug(job.title);
+    }
+    
+    // Remove slug if making private
+    if (!job.isPublic) {
+      job.publicSlug = null;
+    }
+
+    const duration = Date.now() - startTime;
+    logRequest('POST', `/api/jobs/${jobId}/publish`, 200, duration, 'job: publish toggled');
+    
+    res.json({
+      success: true,
+      data: {
+        id: job.id,
+        isPublic: job.isPublic,
+        publicSlug: job.publicSlug,
+        publicUrl: job.isPublic ? `${process.env.FRONTEND_URL || 'http://localhost:5173'}/jobs/${job.publicSlug}` : null
+      },
+      message: job.isPublic ? 'Job published successfully' : 'Job unpublished successfully'
+    });
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    logRequest('POST', `/api/jobs/${jobId}/publish`, 500, duration, 'job: publish error');
+    console.error('[job-publish] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to toggle job visibility',
+      message: error.message
+    });
+  }
+});
+
+// Update public fields only
+app.put('/api/jobs/:id/public-fields', async (req, res) => {
+  const startTime = Date.now();
+  const jobId = parseInt(req.params.id);
+  const { publicSummary, clientPublicName, location, employmentType } = req.body;
+  
+  try {
+    const job = jobs.find(j => j.id === jobId);
+    if (!job) {
+      return res.status(404).json({
+        success: false,
+        error: 'Job not found'
+      });
+    }
+
+    // Update only public-safe fields
+    if (publicSummary !== undefined) job.publicSummary = publicSummary;
+    if (clientPublicName !== undefined) job.clientPublicName = clientPublicName;
+    if (location !== undefined) job.location = location;
+    if (employmentType !== undefined) job.employmentType = employmentType;
+
+    const duration = Date.now() - startTime;
+    logRequest('PUT', `/api/jobs/${jobId}/public-fields`, 200, duration, 'job: public fields updated');
+    
+    res.json({
+      success: true,
+      data: {
+        id: job.id,
+        publicSummary: job.publicSummary,
+        clientPublicName: job.clientPublicName,
+        location: job.location,
+        employmentType: job.employmentType
+      },
+      message: 'Public fields updated successfully'
+    });
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    logRequest('PUT', `/api/jobs/${jobId}/public-fields`, 500, duration, 'job: public fields error');
+    console.error('[job-public-fields] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update public fields',
+      message: error.message
+    });
+  }
+});
+
+// ============================================================================
+// PUBLIC JOB BOARD ENDPOINTS - Unauthenticated public access
+// ============================================================================
+
+// Get all public jobs (with filtering and pagination)
+app.get('/api/public/jobs', async (req, res) => {
+  const startTime = Date.now();
+  const page = Math.max(1, parseInt(req.query.page || '1', 10));
+  const pageSize = Math.min(50, Math.max(1, parseInt(req.query.pageSize || '20', 10)));
+  const skill = req.query.skill;
+  const band = req.query.band;
+  const location = req.query.location;
+  const employmentType = req.query.employmentType;
+  const search = req.query.search;
+  
+  try {
+    let publicJobs = jobs.filter(job => job.isPublic);
+    
+    // Apply filters
+    if (skill) {
+      publicJobs = publicJobs.filter(job => 
+        job.requiredSkills && job.requiredSkills[skill] === true
+      );
+    }
+    
+    if (band) {
+      const bandMin = parseInt(band);
+      publicJobs = publicJobs.filter(job => {
+        const jobBand = Math.floor(job.salaryMin / 10000) * 10000;
+        return jobBand === bandMin;
+      });
+    }
+    
+    if (location) {
+      publicJobs = publicJobs.filter(job => 
+        job.location && job.location.toLowerCase().includes(location.toLowerCase())
+      );
+    }
+    
+    if (employmentType) {
+      publicJobs = publicJobs.filter(job => 
+        job.employmentType && job.employmentType.toLowerCase() === employmentType.toLowerCase()
+      );
+    }
+    
+    if (search) {
+      const searchLower = search.toLowerCase();
+      publicJobs = publicJobs.filter(job => 
+        job.title.toLowerCase().includes(searchLower) ||
+        (job.publicSummary && job.publicSummary.toLowerCase().includes(searchLower)) ||
+        (job.clientPublicName && job.clientPublicName.toLowerCase().includes(searchLower))
+      );
+    }
+    
+    // Sort by creation date (newest first)
+    publicJobs.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    
+    // Pagination
+    const total = publicJobs.length;
+    const startIndex = (page - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    const paginatedJobs = publicJobs.slice(startIndex, endIndex);
+    
+    // Return safe projection (no internal data)
+    const safeJobs = paginatedJobs.map(job => ({
+      id: job.id,
+      title: job.title,
+      publicSummary: job.publicSummary,
+      clientPublicName: job.clientPublicName || job.company,
+      location: job.location,
+      employmentType: job.employmentType,
+      salaryMin: job.salaryMin,
+      salaryMax: job.salaryMax,
+      requiredSkills: job.requiredSkills,
+      publicSlug: job.publicSlug,
+      createdAt: job.createdAt
+    }));
+
+    const duration = Date.now() - startTime;
+    logRequest('GET', '/api/public/jobs', 200, duration, `public-jobs: ${safeJobs.length}/${total}`);
+    
+    res.json({
+      success: true,
+      data: safeJobs,
+      pagination: {
+        page,
+        pageSize,
+        total,
+        totalPages: Math.ceil(total / pageSize)
+      }
+    });
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    logRequest('GET', '/api/public/jobs', 500, duration, 'public-jobs: error');
+    console.error('[public-jobs] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve public jobs',
+      message: 'Please try again later'
+    });
+  }
+});
+
+// Get public job detail by slug
+app.get('/api/public/jobs/:slug', async (req, res) => {
+  const startTime = Date.now();
+  const slug = req.params.slug;
+  
+  try {
+    const job = jobs.find(j => j.isPublic && j.publicSlug === slug);
+    
+    if (!job) {
+      return res.status(404).json({
+        success: false,
+        error: 'Job not found',
+        message: 'This job is no longer available'
+      });
+    }
+
+    // Return safe projection
+    const safeJob = {
+      id: job.id,
+      title: job.title,
+      publicSummary: job.publicSummary,
+      clientPublicName: job.clientPublicName || job.company,
+      location: job.location,
+      employmentType: job.employmentType,
+      salaryMin: job.salaryMin,
+      salaryMax: job.salaryMax,
+      requiredSkills: job.requiredSkills,
+      publicSlug: job.publicSlug,
+      createdAt: job.createdAt
+    };
+
+    const duration = Date.now() - startTime;
+    logRequest('GET', `/api/public/jobs/${slug}`, 200, duration, 'public-job: retrieved');
+    
+    res.json({
+      success: true,
+      data: safeJob
+    });
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    logRequest('GET', `/api/public/jobs/${slug}`, 500, duration, 'public-job: error');
+    console.error('[public-job] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve job details',
+      message: 'Please try again later'
+    });
+  }
+});
+
+// Submit interest in a job
+app.post('/api/public/jobs/:slug/interest', async (req, res) => {
+  const startTime = Date.now();
+  const slug = req.params.slug;
+  const { name, email, message = '' } = req.body;
+  
+  try {
+    // Basic validation
+    if (!name || !email) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields',
+        message: 'Name and email are required'
+      });
+    }
+
+    // Find the job
+    const job = jobs.find(j => j.isPublic && j.publicSlug === slug);
+    if (!job) {
+      return res.status(404).json({
+        success: false,
+        error: 'Job not found',
+        message: 'This job is no longer available'
+      });
+    }
+
+    // Create interest record (simple in-memory for now)
+    const interest = {
+      id: Date.now(),
+      jobId: job.id,
+      jobTitle: job.title,
+      name: name.trim(),
+      email: email.trim().toLowerCase(),
+      message: message.trim(),
+      createdAt: new Date().toISOString(),
+      ip: req.ip || req.connection.remoteAddress
+    };
+
+    // TODO: Store interest in database
+    // For now, just log it
+    console.log('[job-interest] New interest:', interest);
+
+    // TODO: Send notification email to consultant
+    // await emailService.sendInterestNotification(job, interest);
+
+    const duration = Date.now() - startTime;
+    logRequest('POST', `/api/public/jobs/${slug}/interest`, 200, duration, 'job-interest: submitted');
+    
+    res.json({
+      success: true,
+      message: 'Thank you for your interest! We will be in touch soon.',
+      data: {
+        interestId: interest.id,
+        jobTitle: job.title
+      }
+    });
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    logRequest('POST', `/api/public/jobs/${slug}/interest`, 500, duration, 'job-interest: error');
+    console.error('[job-interest] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to submit interest',
+      message: 'Please try again later'
+    });
+  }
+});
+
+// ============================================================================
+// ADMIN ENDPOINTS - Weekly Digest and System Management
+// ============================================================================
+
+// Manual trigger for weekly digest (admin only)
+app.post('/api/admin/weekly-digest/test', async (req, res) => {
+  const startTime = Date.now();
+  
+  try {
+    // Basic admin check (in production, you'd use proper auth)
+    const adminKey = req.headers['x-admin-key'] || req.body.adminKey;
+    if (adminKey !== process.env.ADMIN_KEY && process.env.NODE_ENV === 'production') {
+      return res.status(403).json({
+        success: false,
+        error: 'Admin access required'
+      });
+    }
+
+    if (!weeklyDigestService) {
+      return res.status(500).json({
+        success: false,
+        error: 'Weekly digest service not initialized'
+      });
+    }
+
+    console.log('📊 Manual weekly digest triggered');
+    const result = await weeklyDigestService.sendWeeklyDigest();
+    
+    const duration = Date.now() - startTime;
+    logRequest('POST', '/api/admin/weekly-digest/test', 200, duration, 'digest: manual trigger');
+    
+    res.json({
+      success: true,
+      message: `Weekly digest sent to ${result.sent} recipients`,
+      data: {
+        sent: result.sent,
+        failed: result.failed,
+        duration: result.duration,
+        recipients: result.recipients.map(r => ({
+          email: r.email,
+          success: r.success
+        }))
+      }
+    });
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    logRequest('POST', '/api/admin/weekly-digest/test', 500, duration, 'digest: error');
+    console.error('📊 Manual digest error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to send weekly digest',
+      message: error.message
+    });
+  }
+});
+
+// Get digest status
+app.get('/api/admin/weekly-digest/status', async (req, res) => {
+  try {
+    if (!weeklyDigestService) {
+      return res.json({
+        success: true,
+        data: {
+          enabled: false,
+          lastSent: null,
+          isRunning: false,
+          error: 'Service not initialized'
+        }
+      });
+    }
+    
+    const status = weeklyDigestService.getStatus();
+    res.json({
+      success: true,
+      data: status
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get digest status',
+      message: error.message
+    });
+  }
+});
 
 // ============================================================================
 // PORTAL ENDPOINTS - Candidate Portal with Magic Link Authentication
