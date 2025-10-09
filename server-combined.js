@@ -17,8 +17,14 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Serve static frontend files
-app.use(express.static(path.join(__dirname, 'frontend/dist')));
+// Serve static frontend files (if they exist)
+const frontendDistPath = path.join(__dirname, 'frontend/dist');
+if (fs.existsSync(frontendDistPath)) {
+  app.use(express.static(frontendDistPath));
+  console.log('✅ Frontend files found, serving static files');
+} else {
+  console.log('⚠️ Frontend dist folder not found, API-only mode');
+}
 
 // Test jobs data (same as simple-candidate-server.js)
 let jobs = [
@@ -195,7 +201,24 @@ app.patch('/api/jobs/:id/status', (req, res) => {
 
 // Catch-all handler: send back React's index.html file for client-side routing
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'frontend/dist/index.html'));
+  const indexPath = path.join(__dirname, 'frontend/dist/index.html');
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    // If frontend not built, return a simple API info page
+    res.json({
+      message: 'AlvaP API Server Running',
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      endpoints: {
+        health: '/health',
+        jobs: '/api/jobs',
+        createJob: 'POST /api/jobs',
+        updateJobStatus: 'PATCH /api/jobs/:id/status'
+      },
+      note: 'Frontend not built. This is API-only mode.'
+    });
+  }
 });
 
 // Start server

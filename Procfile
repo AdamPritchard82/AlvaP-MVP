@@ -1,1 +1,1 @@
-web: node server-combined.js
+web: node build-and-start.js
