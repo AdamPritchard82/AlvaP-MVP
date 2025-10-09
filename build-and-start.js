@@ -3,7 +3,7 @@ const { execSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
-console.log('=== BUILDING FRONTEND AND STARTING SERVER ===');
+console.log('=== BUILDING FRONTEND AND STARTING SERVER v2 ===');
 
 try {
   // Check if frontend dist exists
