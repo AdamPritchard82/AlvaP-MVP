@@ -17,14 +17,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Serve static frontend files (if they exist)
-const frontendDistPath = path.join(__dirname, 'frontend/dist');
-if (fs.existsSync(frontendDistPath)) {
-  app.use(express.static(frontendDistPath));
-  console.log('✅ Frontend files found, serving static files');
-} else {
-  console.log('⚠️ Frontend dist folder not found, API-only mode');
-}
+// Note: Static file serving moved after API routes to prevent interference
 
 // Test jobs data (same as simple-candidate-server.js)
 let jobs = [
@@ -198,6 +191,15 @@ app.patch('/api/jobs/:id/status', (req, res) => {
     });
   }
 });
+
+// Serve static frontend files (if they exist) - AFTER API routes
+const frontendDistPath = path.join(__dirname, 'frontend/dist');
+if (fs.existsSync(frontendDistPath)) {
+  app.use(express.static(frontendDistPath));
+  console.log('✅ Frontend files found, serving static files');
+} else {
+  console.log('⚠️ Frontend dist folder not found, API-only mode');
+}
 
 // Catch-all handler: send back React's index.html file for client-side routing
 app.get('*', (req, res) => {
