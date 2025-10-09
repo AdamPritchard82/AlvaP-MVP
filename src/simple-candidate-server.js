@@ -188,6 +188,72 @@ function safeObject(val, fallback = {}) {
   return typeof val === 'object' && val !== null ? val : fallback;
 }
 
+function safeJsonParse(val, fallback = {}) {
+  if (!val) return fallback;
+  if (typeof val === 'object') return val;
+  if (typeof val === 'string') {
+    try {
+      return JSON.parse(val);
+    } catch (e) {
+      return fallback;
+    }
+  }
+  return fallback;
+}
+
+// Normalize skills to canonical format
+function normalizeSkills(skillsInput) {
+  const canonicalSkills = {
+    communications: false,
+    campaigns: false,
+    policy: false,
+    publicAffairs: false
+  };
+  
+  if (!skillsInput) return canonicalSkills;
+  
+  // Handle array format: ["Public Affairs", "Communications"]
+  if (Array.isArray(skillsInput)) {
+    skillsInput.forEach(skill => {
+      const normalized = String(skill).toLowerCase().trim();
+      switch (normalized) {
+        case 'communications':
+        case 'comms':
+          canonicalSkills.communications = true;
+          break;
+        case 'campaigns':
+        case 'campaign':
+          canonicalSkills.campaigns = true;
+          break;
+        case 'policy':
+          canonicalSkills.policy = true;
+          break;
+        case 'public affairs':
+        case 'publicaffairs':
+        case 'public_affairs':
+          canonicalSkills.publicAffairs = true;
+          break;
+      }
+    });
+    return canonicalSkills;
+  }
+  
+  // Handle object format: {communications: true, publicAffairs: true}
+  if (typeof skillsInput === 'object') {
+    Object.keys(canonicalSkills).forEach(key => {
+      canonicalSkills[key] = !!(skillsInput[key] || skillsInput[capitalizeFirst(key)] || skillsInput[key.toUpperCase()]);
+    });
+    return canonicalSkills;
+  }
+  
+  return canonicalSkills;
+}
+
+// Helper to capitalize first letter
+function capitalizeFirst(str) {
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
 // Helpers: salary banding
 function toBandLabel(amount) {
   // Handle edge cases safely
@@ -764,10 +830,13 @@ app.post('/api/candidates', async (req, res) => {
     const currentEmployer = safeString(req.body.currentEmployer, '');
     const salaryMinRaw = req.body.salaryMin;
     const salaryMaxRaw = req.body.salaryMax;
-    const skillsInput = safeObject(req.body.skills, {});
+    const skillsInput = req.body.skills;
     const tagsInput = safeArray(req.body.tags, []);
     const notesInput = safeString(req.body.notes, '');
     const emailOkInput = req.body.emailOk !== undefined ? !!req.body.emailOk : true;
+    
+    // Normalize skills - handle both array and object formats
+    const normalizedSkills = normalizeSkills(skillsInput);
     
     // Validation with clear error messages
     const validationErrors = [];
@@ -795,13 +864,8 @@ app.post('/api/candidates', async (req, res) => {
       currentEmployer: currentEmployer,
       salaryMin: safeNumber(salaryMinRaw, null),
       salaryMax: safeNumber(salaryMaxRaw, null),
-      // Normalize skills booleans safely
-      skills: {
-        communications: !!(skillsInput.communications || skillsInput.Communications),
-        campaigns: !!(skillsInput.campaigns || skillsInput.Campaigns),
-        policy: !!(skillsInput.policy || skillsInput.Policy),
-        publicAffairs: !!(skillsInput.publicAffairs || skillsInput['Public Affairs'])
-      },
+      // Use normalized skills
+      skills: normalizedSkills,
       tags: tagsInput,
       notes: notesInput,
       emailOk: emailOkInput,
@@ -1329,6 +1393,211 @@ app.get('/api/skills/:skill/bands/:band/candidates', async (req, res) => {
     logRequest('GET', `/api/skills/${skill}/bands/${band}/candidates`, 200, duration, 'skill-band-candidates: fallback');
     console.error('[skill+band] Error:', err);
     return res.json({ success: true, candidates: [], total: 0, page, pageSize });
+  }
+});
+
+// ============================================================================
+// LIBRARY ENDPOINTS - Skills and Bands for Library View
+// ============================================================================
+
+// Get skills tiles with counts
+app.get('/api/candidates/skills', async (req, res) => {
+  const startTime = Date.now();
+  
+  try {
+    let candidates = [];
+    
+    if (useDatabase && db) {
+      try {
+        const result = await db.query(`
+          SELECT skills, band_label, salary_min, salary_max
+          FROM candidates 
+          WHERE email_ok = true
+          ORDER BY created_at DESC
+        `);
+        candidates = result.rows.map(row => ({
+          skills: row.skills ? JSON.parse(row.skills) : {},
+          bandLabel: row.band_label,
+          salaryMin: row.salary_min,
+          salaryMax: row.salary_max
+        }));
+      } catch (dbError) {
+        console.error('[skills] DB error, falling back to memory:', dbError.message);
+        // Fallback to in-memory array
+        const allCandidates = candidates || [];
+        candidates = allCandidates.filter(c => c.emailOk !== false).map(c => ({
+          skills: c.skills || {},
+          bandLabel: c.bandLabel,
+          salaryMin: c.salaryMin,
+          salaryMax: c.salaryMax
+        }));
+      }
+    } else {
+      // Use in-memory candidates array - access the global candidates array
+      const allCandidates = candidates || [];
+      candidates = allCandidates.filter(c => c.emailOk !== false).map(c => ({
+        skills: c.skills || {},
+        bandLabel: c.bandLabel,
+        salaryMin: c.salaryMin,
+        salaryMax: c.salaryMax
+      }));
+    }
+
+    const skillCounts = {
+      communications: 0,
+      campaigns: 0,
+      policy: 0,
+      publicAffairs: 0
+    };
+
+    candidates.forEach(candidate => {
+      if (candidate.skills) {
+        Object.keys(skillCounts).forEach(skill => {
+          if (candidate.skills[skill] === true) {
+            skillCounts[skill]++;
+          }
+        });
+      }
+    });
+
+    const skillsData = [
+      { name: 'Communications', key: 'communications', count: skillCounts.communications },
+      { name: 'Campaigns', key: 'campaigns', count: skillCounts.campaigns },
+      { name: 'Policy', key: 'policy', count: skillCounts.policy },
+      { name: 'Public Affairs', key: 'publicAffairs', count: skillCounts.publicAffairs }
+    ];
+
+    const duration = Date.now() - startTime;
+    logRequest('GET', '/api/candidates/skills', 200, duration, `skills: ${candidates.length}`);
+    res.json({ success: true, data: skillsData });
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    logRequest('GET', '/api/candidates/skills', 500, duration, 'skills: error');
+    console.error('[skills] Error:', error);
+    res.json({ success: false, error: 'Failed to load skills data', data: [] });
+  }
+});
+
+// Get bands with counts
+app.get('/api/candidates/bands', async (req, res) => {
+  const startTime = Date.now();
+  
+  try {
+    let candidates = [];
+    
+    if (useDatabase && db) {
+      const result = await db.query(`
+        SELECT band_label, salary_min, salary_max
+        FROM candidates 
+        WHERE email_ok = true AND band_label IS NOT NULL
+        ORDER BY salary_min ASC
+      `);
+      candidates = result.rows.map(row => ({
+        bandLabel: row.band_label,
+        salaryMin: row.salary_min,
+        salaryMax: row.salary_max
+      }));
+    } else {
+      const allCandidates = candidates || [];
+      candidates = allCandidates.filter(c => c.emailOk !== false && c.bandLabel).map(c => ({
+        bandLabel: c.bandLabel,
+        salaryMin: c.salaryMin,
+        salaryMax: c.salaryMax
+      }));
+    }
+
+    const bandCounts = {};
+    candidates.forEach(candidate => {
+      const band = candidate.bandLabel || 'Unknown';
+      bandCounts[band] = (bandCounts[band] || 0) + 1;
+    });
+
+    const bandsData = Object.entries(bandCounts)
+      .map(([band, count]) => ({ band, count }))
+      .sort((a, b) => {
+        const aNum = parseInt(a.band.replace(/[£,]/g, ''));
+        const bNum = parseInt(b.band.replace(/[£,]/g, ''));
+        return aNum - bNum;
+      });
+
+    const duration = Date.now() - startTime;
+    logRequest('GET', '/api/candidates/bands', 200, duration, `bands: ${candidates.length}`);
+    res.json({ success: true, data: bandsData });
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    logRequest('GET', '/api/candidates/bands', 500, duration, 'bands: error');
+    console.error('[bands] Error:', error);
+    res.json({ success: false, error: 'Failed to load bands data', data: [] });
+  }
+});
+
+// Get bands for a specific skill
+app.get('/api/candidates/skills/:skill/bands', async (req, res) => {
+  const startTime = Date.now();
+  const skill = req.params.skill;
+  
+  try {
+    const skillMap = {
+      'communications': 'communications',
+      'campaigns': 'campaigns', 
+      'policy': 'policy',
+      'public-affairs': 'publicAffairs',
+      'Public Affairs': 'publicAffairs'
+    };
+    
+    const skillKey = skillMap[skill] || skill.toLowerCase();
+    
+    let candidates = [];
+    
+    if (useDatabase && db) {
+      const result = await db.query(`
+        SELECT skills, band_label, salary_min, salary_max
+        FROM candidates 
+        WHERE email_ok = true AND skills ? $1
+        ORDER BY salary_min ASC
+      `, [skillKey]);
+      candidates = result.rows.map(row => ({
+        skills: row.skills ? JSON.parse(row.skills) : {},
+        bandLabel: row.band_label,
+        salaryMin: row.salary_min,
+        salaryMax: row.salary_max
+      }));
+    } else {
+      const allCandidates = candidates || [];
+      candidates = allCandidates.filter(c => 
+        c.emailOk !== false && 
+        c.skills && 
+        c.skills[skillKey] === true
+      ).map(c => ({
+        skills: c.skills,
+        bandLabel: c.bandLabel,
+        salaryMin: c.salaryMin,
+        salaryMax: c.salaryMax
+      }));
+    }
+
+    const bandCounts = {};
+    candidates.forEach(candidate => {
+      const band = candidate.bandLabel || 'Unknown';
+      bandCounts[band] = (bandCounts[band] || 0) + 1;
+    });
+
+    const bandsData = Object.entries(bandCounts)
+      .map(([band, count]) => ({ band, count }))
+      .sort((a, b) => {
+        const aNum = parseInt(a.band.replace(/[£,]/g, ''));
+        const bNum = parseInt(b.band.replace(/[£,]/g, ''));
+        return aNum - bNum;
+      });
+
+    const duration = Date.now() - startTime;
+    logRequest('GET', `/api/candidates/skills/${skill}/bands`, 200, duration, `skill-bands: ${candidates.length}`);
+    res.json({ success: true, data: bandsData });
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    logRequest('GET', `/api/candidates/skills/${skill}/bands`, 500, duration, 'skill-bands: error');
+    console.error('[skill-bands] Error:', error);
+    res.json({ success: false, error: 'Failed to load skill bands data', data: [] });
   }
 });
 
