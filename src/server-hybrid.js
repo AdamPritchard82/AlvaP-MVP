@@ -1962,13 +1962,250 @@ app.get('/health/detailed', async (req, res) => {
   }
 });
 
-// Additional API endpoints for frontend compatibility
+// Jobs Pipeline API endpoints
 app.get('/api/jobs', async (req, res) => {
   try {
-    const limit = req.query.limit || 10;
-    res.json({ success: true, jobs: [], total: 0, limit: parseInt(limit) });
+    const { search, status, limit = 50, offset = 0 } = req.query;
+    
+    let query = 'SELECT * FROM jobs';
+    const params = [];
+    let paramCount = 0;
+    
+    const conditions = [];
+    
+    if (search) {
+      paramCount++;
+      conditions.push(`(title ILIKE $${paramCount} OR company ILIKE $${paramCount} OR description ILIKE $${paramCount})`);
+      params.push(`%${search}%`);
+    }
+    
+    if (status) {
+      paramCount++;
+      conditions.push(`status = $${paramCount}`);
+      params.push(status);
+    }
+    
+    if (conditions.length > 0) {
+      query += ' WHERE ' + conditions.join(' AND ');
+    }
+    
+    query += ` ORDER BY created_at DESC LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`;
+    params.push(parseInt(limit), parseInt(offset));
+    
+    const result = await db.query(query, params);
+    
+    // Get total count
+    let countQuery = 'SELECT COUNT(*) FROM jobs';
+    if (conditions.length > 0) {
+      countQuery += ' WHERE ' + conditions.join(' AND ');
+    }
+    const countResult = await db.query(countQuery, params.slice(0, -2));
+    const total = parseInt(countResult.rows[0].count);
+    
+    res.json({
+      success: true,
+      jobs: result.rows,
+      total,
+      limit: parseInt(limit),
+      offset: parseInt(offset)
+    });
   } catch (error) {
     console.error('[get-jobs] Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/jobs', async (req, res) => {
+  try {
+    const { title, description, requiredSkills, salaryMin, salaryMax, location, company, isPublic, publicSlug, publicSummary, clientPublicName, employmentType } = req.body;
+    
+    const result = await db.query(`
+      INSERT INTO jobs (title, description, required_skills, salary_min, salary_max, location, company, is_public, public_slug, public_summary, client_public_name, employment_type, status, created_at, created_by)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+      RETURNING *
+    `, [
+      title || '',
+      description || '',
+      JSON.stringify(requiredSkills || {}),
+      Number(salaryMin) || 0,
+      Number(salaryMax) || 0,
+      location || '',
+      company || '',
+      Boolean(isPublic),
+      publicSlug || null,
+      publicSummary || '',
+      clientPublicName || '',
+      employmentType || 'Full-time',
+      'New', // Default status for pipeline
+      new Date().toISOString(),
+      'system'
+    ]);
+    
+    res.json({
+      success: true,
+      data: result.rows[0],
+      message: 'Job created successfully'
+    });
+  } catch (error) {
+    console.error('[create-job] Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.patch('/api/jobs/:id/status', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    
+    const validStatuses = ['New', 'Reviewed', 'Contacted', 'Interviewed', 'Offered', 'Placed', 'Rejected'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ success: false, error: 'Invalid status' });
+    }
+    
+    const result = await db.query(
+      'UPDATE jobs SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
+      [status, id]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Job not found' });
+    }
+    
+    res.json({
+      success: true,
+      data: result.rows[0],
+      message: 'Job status updated successfully'
+    });
+  } catch (error) {
+    console.error('[update-job-status] Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/jobs/:jobId/matches', async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    
+    const result = await db.query(`
+      SELECT 
+        jm.id as match_id,
+        jm.stage,
+        jm.match_score,
+        jm.created_at as matched_at,
+        c.id,
+        c.name,
+        c.email,
+        c.current_title,
+        c.current_employer,
+        c.skills,
+        c.salary_min,
+        c.salary_max,
+        c.location,
+        c.created_at
+      FROM job_matches jm
+      JOIN candidates c ON jm.candidate_id = c.id
+      WHERE jm.job_id = $1
+      ORDER BY jm.created_at DESC
+    `, [jobId]);
+    
+    res.json({
+      success: true,
+      data: {
+        candidates: result.rows
+      }
+    });
+  } catch (error) {
+    console.error('[get-job-matches] Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/jobs/:jobId/matches', async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const { candidateId, stage = 'New' } = req.body;
+    
+    // Check if match already exists
+    const existingMatch = await db.query(
+      'SELECT id FROM job_matches WHERE job_id = $1 AND candidate_id = $2',
+      [jobId, candidateId]
+    );
+    
+    if (existingMatch.rows.length > 0) {
+      return res.status(400).json({ success: false, error: 'Candidate already matched to this job' });
+    }
+    
+    const result = await db.query(`
+      INSERT INTO job_matches (job_id, candidate_id, stage, match_score, created_at)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING *
+    `, [jobId, candidateId, stage, 0, new Date().toISOString()]);
+    
+    res.json({
+      success: true,
+      data: result.rows[0],
+      message: 'Candidate added to job pipeline'
+    });
+  } catch (error) {
+    console.error('[add-job-match] Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.patch('/api/matches/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { stage } = req.body;
+    
+    const validStages = ['New', 'Reviewed', 'Contacted', 'Interviewed', 'Offered', 'Placed', 'Rejected'];
+    if (!validStages.includes(stage)) {
+      return res.status(400).json({ success: false, error: 'Invalid stage' });
+    }
+    
+    const result = await db.query(
+      'UPDATE job_matches SET stage = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
+      [stage, id]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Match not found' });
+    }
+    
+    res.json({
+      success: true,
+      data: result.rows[0],
+      message: 'Match stage updated successfully'
+    });
+  } catch (error) {
+    console.error('[update-match-stage] Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/candidates/search', async (req, res) => {
+  try {
+    const { q } = req.query;
+    
+    if (!q) {
+      return res.json({ success: true, data: { candidates: [] } });
+    }
+    
+    const result = await db.query(`
+      SELECT id, name, email, current_title, current_employer, skills, salary_min, salary_max, location
+      FROM candidates 
+      WHERE name ILIKE $1 OR email ILIKE $1 OR current_title ILIKE $1
+      ORDER BY name
+      LIMIT 20
+    `, [`%${q}%`]);
+    
+    res.json({
+      success: true,
+      data: {
+        candidates: result.rows
+      }
+    });
+  } catch (error) {
+    console.error('[search-candidates] Error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
