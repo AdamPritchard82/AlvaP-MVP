@@ -192,11 +192,17 @@ app.patch('/api/jobs/:id/status', (req, res) => {
   }
 });
 
-// Serve static frontend files (if they exist) - AFTER API routes
+// Serve static frontend files (if they exist) - ONLY for non-API routes
 const frontendDistPath = path.join(__dirname, 'frontend/dist');
 if (fs.existsSync(frontendDistPath)) {
-  app.use(express.static(frontendDistPath));
-  console.log('✅ Frontend files found, serving static files');
+  // Only serve static files for non-API routes
+  app.use((req, res, next) => {
+    if (req.path.startsWith('/api/')) {
+      return next(); // Skip static serving for API routes
+    }
+    return express.static(frontendDistPath)(req, res, next);
+  });
+  console.log('✅ Frontend files found, serving static files (excluding API routes)');
 } else {
   console.log('⚠️ Frontend dist folder not found, API-only mode');
 }
