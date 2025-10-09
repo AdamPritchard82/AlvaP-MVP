@@ -1,5 +1,5 @@
 [deploy]
-startCommand = "npm start"
+startCommand = "node server-combined.js"
 healthcheckPath = "/health"
 healthcheckTimeout = 150
 restartPolicyType = "ON_FAILURE"
