@@ -10,7 +10,6 @@ import LibraryEntry, { LibrarySkills, LibraryBands, LibraryCandidates } from './
 import Candidates from './pages/Candidates';
 import CandidateNew from './pages/CandidateNew';
 import CandidateDetail from './pages/CandidateDetail';
-import Jobs from './pages/Jobs';
 import JobNew from './pages/JobNew';
 import JobDetail from './pages/JobDetail';
 import JobsPipeline from './pages/JobsPipeline';
@@ -47,8 +46,8 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/portal" element={<Portal />} />
-      <Route path="/jobs" element={<PublicJobs />} />
-      <Route path="/jobs/:slug" element={<PublicJobDetail />} />
+      <Route path="/public/jobs" element={<PublicJobs />} />
+      <Route path="/public/jobs/:slug" element={<PublicJobDetail />} />
       <Route
         path="/*"
         element={
