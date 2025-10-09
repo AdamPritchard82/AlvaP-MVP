@@ -787,11 +787,11 @@ class ApiClient {
     });
   }
 
-  async getJobMatches(jobId: string): Promise<{ success: boolean; data: { candidates: any[] } }> {
+  async getJobPipelineMatches(jobId: string): Promise<{ success: boolean; data: { candidates: any[] } }> {
     return this.request(`/jobs/${jobId}/matches`);
   }
 
-  async addJobMatch(jobId: string, candidateId: string): Promise<{ success: boolean; data: any }> {
+  async addJobPipelineMatch(jobId: string, candidateId: string): Promise<{ success: boolean; data: any }> {
     return this.request(`/jobs/${jobId}/matches`, {
       method: 'POST',
       body: JSON.stringify({ candidateId, stage: 'New' })

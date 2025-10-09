@@ -91,7 +91,7 @@ const JobPipelineDetail: React.FC<JobPipelineDetailProps> = ({ onAddCandidate })
 
   const fetchJobCandidates = async () => {
     try {
-      const response = await api.getJobMatches(jobId!);
+      const response = await api.getJobPipelineMatches(jobId!);
       if (response.success) {
         setCandidates(response.data.candidates || []);
       } else {
@@ -149,7 +149,7 @@ const JobPipelineDetail: React.FC<JobPipelineDetailProps> = ({ onAddCandidate })
 
   const handleAddCandidate = async (candidateId: string) => {
     try {
-      await api.addJobMatch(jobId!, candidateId);
+      await api.addJobPipelineMatch(jobId!, candidateId);
       setShowAddModal(false);
       setSearchQuery('');
       setSearchResults([]);
