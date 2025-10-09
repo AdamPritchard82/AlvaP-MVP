@@ -778,6 +778,36 @@ class ApiClient {
       body: JSON.stringify(data)
     });
   }
+
+  // Jobs Pipeline API
+  async updateJobStatus(jobId: string, status: string): Promise<{ success: boolean; data: any }> {
+    return this.request(`/jobs/${jobId}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status })
+    });
+  }
+
+  async getJobMatches(jobId: string): Promise<{ success: boolean; data: { candidates: any[] } }> {
+    return this.request(`/jobs/${jobId}/matches`);
+  }
+
+  async addJobMatch(jobId: string, candidateId: string): Promise<{ success: boolean; data: any }> {
+    return this.request(`/jobs/${jobId}/matches`, {
+      method: 'POST',
+      body: JSON.stringify({ candidateId, stage: 'New' })
+    });
+  }
+
+  async updateMatchStage(matchId: string, stage: string): Promise<{ success: boolean; data: any }> {
+    return this.request(`/matches/${matchId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ stage })
+    });
+  }
+
+  async searchCandidates(query: string): Promise<{ success: boolean; data: { candidates: any[] } }> {
+    return this.request(`/candidates/search?q=${encodeURIComponent(query)}`);
+  }
 }
 
 export const api = new ApiClient();

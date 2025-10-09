@@ -2435,6 +2435,7 @@ app.post('/api/jobs', async (req, res) => {
       publicSummary: publicSummary || '',
       clientPublicName: clientPublicName || '',
       employmentType: employmentType || 'Full-time',
+      status: 'New', // Default status for pipeline
       createdAt: new Date().toISOString(),
       createdBy: 'system'
     };
@@ -2813,6 +2814,264 @@ app.put('/api/jobs/:id/public-fields', async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to update public fields',
+      message: error.message
+    });
+  }
+});
+
+// ============================================================================
+// JOB PIPELINE ENDPOINTS - Internal Recruitment Pipeline
+// ============================================================================
+
+// Update job status (for drag & drop)
+app.patch('/api/jobs/:id/status', async (req, res) => {
+  const startTime = Date.now();
+  const jobId = req.params.id;
+  const { status } = req.body;
+  
+  try {
+    if (!status) {
+      return res.status(400).json({
+        success: false,
+        error: 'Status is required'
+      });
+    }
+
+    const validStatuses = ['New', 'Reviewed', 'Contacted', 'Interviewed', 'Offered', 'Placed', 'Rejected'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid status'
+      });
+    }
+
+    if (useDatabase && db) {
+      await db.query(`
+        UPDATE jobs 
+        SET status = $1, updated_at = NOW()
+        WHERE id = $2
+      `, [status, jobId]);
+    } else {
+      const job = jobs.find(j => j.id == jobId);
+      if (job) {
+        job.status = status;
+        job.updatedAt = new Date().toISOString();
+      }
+    }
+
+    const duration = Date.now() - startTime;
+    logRequest('PATCH', `/api/jobs/${jobId}/status`, 200, duration, `status: ${status}`);
+    
+    res.json({
+      success: true,
+      data: { id: jobId, status },
+      message: 'Job status updated successfully'
+    });
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    logRequest('PATCH', `/api/jobs/${jobId}/status`, 500, duration, 'status: error');
+    console.error('Error updating job status:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update job status',
+      message: error.message
+    });
+  }
+});
+
+// Get job matches (candidates attached to a job)
+app.get('/api/jobs/:jobId/matches', async (req, res) => {
+  const startTime = Date.now();
+  const jobId = req.params.jobId;
+  
+  try {
+    let matches = [];
+    
+    if (useDatabase && db) {
+      const result = await db.query(`
+        SELECT 
+          m.id as match_id,
+          m.stage,
+          m.attached_at,
+          c.id,
+          c.first_name,
+          c.last_name,
+          c.email,
+          c.phone,
+          c.current_title,
+          c.current_employer,
+          c.salary_min,
+          c.salary_max,
+          c.skills
+        FROM job_matches m
+        JOIN candidates c ON m.candidate_id = c.id
+        WHERE m.job_id = $1
+        ORDER BY m.attached_at DESC
+      `, [jobId]);
+      
+      matches = result.rows.map(row => ({
+        id: row.id,
+        matchId: row.match_id,
+        firstName: row.first_name,
+        lastName: row.last_name,
+        email: row.email,
+        phone: row.phone,
+        currentTitle: row.current_title,
+        currentEmployer: row.current_employer,
+        salaryMin: row.salary_min,
+        salaryMax: row.salary_max,
+        skills: row.skills ? JSON.parse(row.skills) : {},
+        stage: row.stage,
+        attachedAt: row.attached_at
+      }));
+    } else {
+      // For in-memory mode, we'd need to implement job_matches storage
+      matches = [];
+    }
+
+    const duration = Date.now() - startTime;
+    logRequest('GET', `/api/jobs/${jobId}/matches`, 200, duration, `matches: ${matches.length}`);
+    
+    res.json({
+      success: true,
+      data: { candidates: matches }
+    });
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    logRequest('GET', `/api/jobs/${jobId}/matches`, 500, duration, 'matches: error');
+    console.error('Error fetching job matches:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch job matches',
+      message: error.message
+    });
+  }
+});
+
+// Add candidate to job pipeline
+app.post('/api/jobs/:jobId/matches', async (req, res) => {
+  const startTime = Date.now();
+  const jobId = req.params.jobId;
+  const { candidateId, stage = 'New' } = req.body;
+  
+  try {
+    if (!candidateId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Candidate ID is required'
+      });
+    }
+
+    const validStages = ['New', 'Contacted', 'Interviewed', 'Offered', 'Placed', 'Rejected'];
+    if (!validStages.includes(stage)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid stage'
+      });
+    }
+
+    if (useDatabase && db) {
+      // Check if match already exists
+      const existingMatch = await db.query(`
+        SELECT id FROM job_matches 
+        WHERE job_id = $1 AND candidate_id = $2
+      `, [jobId, candidateId]);
+      
+      if (existingMatch.rows.length > 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Candidate is already attached to this job'
+        });
+      }
+
+      // Create new match
+      const result = await db.query(`
+        INSERT INTO job_matches (job_id, candidate_id, stage, attached_at)
+        VALUES ($1, $2, $3, NOW())
+        RETURNING id
+      `, [jobId, candidateId, stage]);
+      
+      const matchId = result.rows[0].id;
+      
+      const duration = Date.now() - startTime;
+      logRequest('POST', `/api/jobs/${jobId}/matches`, 201, duration, `match: ${matchId}`);
+      
+      res.status(201).json({
+        success: true,
+        data: { matchId, jobId, candidateId, stage },
+        message: 'Candidate added to job pipeline'
+      });
+    } else {
+      // For in-memory mode, we'd need to implement job_matches storage
+      res.status(501).json({
+        success: false,
+        error: 'Job matches not supported in memory mode'
+      });
+    }
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    logRequest('POST', `/api/jobs/${jobId}/matches`, 500, duration, 'match: error');
+    console.error('Error adding job match:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to add candidate to job',
+      message: error.message
+    });
+  }
+});
+
+// Update match stage (for drag & drop)
+app.patch('/api/matches/:id', async (req, res) => {
+  const startTime = Date.now();
+  const matchId = req.params.id;
+  const { stage } = req.body;
+  
+  try {
+    if (!stage) {
+      return res.status(400).json({
+        success: false,
+        error: 'Stage is required'
+      });
+    }
+
+    const validStages = ['New', 'Contacted', 'Interviewed', 'Offered', 'Placed', 'Rejected'];
+    if (!validStages.includes(stage)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid stage'
+      });
+    }
+
+    if (useDatabase && db) {
+      await db.query(`
+        UPDATE job_matches 
+        SET stage = $1, updated_at = NOW()
+        WHERE id = $2
+      `, [stage, matchId]);
+    } else {
+      // For in-memory mode, we'd need to implement job_matches storage
+      res.status(501).json({
+        success: false,
+        error: 'Job matches not supported in memory mode'
+      });
+      return;
+    }
+
+    const duration = Date.now() - startTime;
+    logRequest('PATCH', `/api/matches/${matchId}`, 200, duration, `stage: ${stage}`);
+    
+    res.json({
+      success: true,
+      data: { id: matchId, stage },
+      message: 'Match stage updated successfully'
+    });
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    logRequest('PATCH', `/api/matches/${matchId}`, 500, duration, 'stage: error');
+    console.error('Error updating match stage:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update match stage',
       message: error.message
     });
   }

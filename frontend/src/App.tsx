@@ -13,6 +13,8 @@ import CandidateDetail from './pages/CandidateDetail';
 import Jobs from './pages/Jobs';
 import JobNew from './pages/JobNew';
 import JobDetail from './pages/JobDetail';
+import JobsPipeline from './pages/JobsPipeline';
+import JobPipelineDetail from './pages/JobPipelineDetail';
 import UpdatesAndOpenRoles from './pages/UpdatesAndOpenRoles';
 import Clients from './pages/Clients';
 import ClientNew from './pages/ClientNew';
@@ -58,9 +60,10 @@ function AppRoutes() {
                 <Route path="/candidates" element={<Candidates />} />
                 <Route path="/candidates/new" element={<CandidateNew />} />
                 <Route path="/candidates/:candidateId" element={<CandidateDetail />} />
-                <Route path="/jobs" element={<Jobs />} />
+                <Route path="/jobs" element={<JobsPipeline onCreateJob={() => navigate('/jobs/new')} />} />
                 <Route path="/jobs/new" element={<JobNew />} />
-                <Route path="/jobs/:jobId" element={<JobDetail />} />
+                <Route path="/jobs/:jobId" element={<JobPipelineDetail onAddCandidate={(candidateId) => console.log('Add candidate:', candidateId)} />} />
+                <Route path="/jobs/:id/detail" element={<JobDetail />} />
                 <Route path="/updates" element={<UpdatesAndOpenRoles />} />
                 <Route path="/library" element={<LibrarySkills />} />
                 <Route path="/library/:skill" element={<LibraryBands />} />
