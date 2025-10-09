@@ -3043,6 +3043,70 @@ app.post('/api/public/jobs/:slug/interest', async (req, res) => {
 // ADMIN ENDPOINTS - Weekly Digest and System Management
 // ============================================================================
 
+// Migrate existing candidates to fix skills normalization
+app.post('/api/admin/migrate-candidates', async (req, res) => {
+  const startTime = Date.now();
+  
+  try {
+    let updatedCount = 0;
+    
+    if (useDatabase && db) {
+      // Get all candidates from database
+      const result = await db.query(`
+        SELECT id, skills, salary_min, salary_max
+        FROM candidates 
+        ORDER BY created_at DESC
+      `);
+      
+      for (const row of result.rows) {
+        const oldSkills = row.skills ? JSON.parse(row.skills) : {};
+        const normalizedSkills = normalizeSkills(oldSkills);
+        const bandLabel = toBandLabel(row.salary_min);
+        
+        // Update the candidate with normalized skills and band_label
+        await db.query(`
+          UPDATE candidates 
+          SET skills = $1, band_label = $2
+          WHERE id = $3
+        `, [JSON.stringify(normalizedSkills), bandLabel, row.id]);
+        
+        updatedCount++;
+      }
+    } else {
+      // Update in-memory candidates
+      candidates.forEach(candidate => {
+        if (candidate.skills) {
+          candidate.skills = normalizeSkills(candidate.skills);
+          candidate.bandLabel = toBandLabel(candidate.salaryMin);
+          updatedCount++;
+        }
+      });
+    }
+    
+    const duration = Date.now() - startTime;
+    logRequest('POST', '/api/admin/migrate-candidates', 200, duration, `migrated: ${updatedCount}`);
+    
+    res.json({
+      success: true,
+      message: `Migrated ${updatedCount} candidates`,
+      data: { updatedCount }
+    });
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    logRequest('POST', '/api/admin/migrate-candidates', 500, duration, 'migrate: error');
+    console.error('Migration error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Migration failed',
+      message: error.message
+    });
+  }
+});
+
+// ============================================================================
+// ADMIN ENDPOINTS - Weekly Digest and System Management
+// ============================================================================
+
 // Manual trigger for weekly digest (admin only)
 app.post('/api/admin/weekly-digest/test', async (req, res) => {
   const startTime = Date.now();
