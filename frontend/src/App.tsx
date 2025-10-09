@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -53,29 +53,37 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <Layout>
-              <Routes>
-                <Route path="/" element={<Dashboard />} />
-                {/* /candidates shows the classic Candidates page (now embeds Library tiles) */}
-                <Route path="/candidates" element={<Candidates />} />
-                <Route path="/candidates/new" element={<CandidateNew />} />
-                <Route path="/candidates/:candidateId" element={<CandidateDetail />} />
-                <Route path="/jobs" element={<JobsPipeline onCreateJob={() => navigate('/jobs/new')} />} />
-                <Route path="/jobs/new" element={<JobNew />} />
-                <Route path="/jobs/:jobId" element={<JobPipelineDetail onAddCandidate={(candidateId) => console.log('Add candidate:', candidateId)} />} />
-                <Route path="/jobs/:id/detail" element={<JobDetail />} />
-                <Route path="/updates" element={<UpdatesAndOpenRoles />} />
-                <Route path="/library" element={<LibrarySkills />} />
-                <Route path="/library/:skill" element={<LibraryBands />} />
-                <Route path="/library/:skill/:band" element={<LibraryCandidates />} />
-                <Route path="/analytics" element={<Analytics />} />
-                <Route path="/clients" element={<Clients />} />
-                <Route path="/clients/new" element={<ClientNew />} />
-                <Route path="/pricing" element={<Pricing />} />
-              </Routes>
+              <InternalRoutes />
             </Layout>
           </ProtectedRoute>
         }
       />
+    </Routes>
+  );
+}
+
+function InternalRoutes() {
+  const navigate = useNavigate();
+  
+  return (
+    <Routes>
+      <Route path="/" element={<Dashboard />} />
+      {/* /candidates shows the classic Candidates page (now embeds Library tiles) */}
+      <Route path="/candidates" element={<Candidates />} />
+      <Route path="/candidates/new" element={<CandidateNew />} />
+      <Route path="/candidates/:candidateId" element={<CandidateDetail />} />
+      <Route path="/jobs" element={<JobsPipeline onCreateJob={() => navigate('/jobs/new')} />} />
+      <Route path="/jobs/new" element={<JobNew />} />
+      <Route path="/jobs/:jobId" element={<JobPipelineDetail onAddCandidate={(candidateId) => console.log('Add candidate:', candidateId)} />} />
+      <Route path="/jobs/:id/detail" element={<JobDetail />} />
+      <Route path="/updates" element={<UpdatesAndOpenRoles />} />
+      <Route path="/library" element={<LibrarySkills />} />
+      <Route path="/library/:skill" element={<LibraryBands />} />
+      <Route path="/library/:skill/:band" element={<LibraryCandidates />} />
+      <Route path="/analytics" element={<Analytics />} />
+      <Route path="/clients" element={<Clients />} />
+      <Route path="/clients/new" element={<ClientNew />} />
+      <Route path="/pricing" element={<Pricing />} />
     </Routes>
   );
 }
