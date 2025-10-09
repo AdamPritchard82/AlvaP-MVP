@@ -2335,7 +2335,62 @@ app.get('/', (req, res) => {
 
 // Job Management and Matching System
 // In-memory job storage (for MVP)
-let jobs = [];
+let jobs = [
+  {
+    id: 1,
+    title: "Senior Communications Manager",
+    description: "Lead communications strategy for a leading consultancy",
+    requiredSkills: { communications: true, campaigns: true, policy: false, publicAffairs: true },
+    salaryMin: 60000,
+    salaryMax: 80000,
+    location: "London, UK",
+    company: "Leading Consultancy",
+    isPublic: false,
+    publicSlug: null,
+    publicSummary: "",
+    clientPublicName: "Leading Consultancy",
+    employmentType: "Full-time",
+    status: "New",
+    createdAt: new Date().toISOString(),
+    createdBy: "system"
+  },
+  {
+    id: 2,
+    title: "Policy Advisor",
+    description: "Develop policy recommendations for government clients",
+    requiredSkills: { communications: false, campaigns: false, policy: true, publicAffairs: true },
+    salaryMin: 45000,
+    salaryMax: 60000,
+    location: "Manchester, UK",
+    company: "Policy Institute",
+    isPublic: false,
+    publicSlug: null,
+    publicSummary: "",
+    clientPublicName: "Policy Institute",
+    employmentType: "Full-time",
+    status: "Reviewed",
+    createdAt: new Date().toISOString(),
+    createdBy: "system"
+  },
+  {
+    id: 3,
+    title: "Campaign Director",
+    description: "Lead high-profile political campaigns",
+    requiredSkills: { communications: true, campaigns: true, policy: false, publicAffairs: true },
+    salaryMin: 70000,
+    salaryMax: 90000,
+    location: "Birmingham, UK",
+    company: "Campaign Agency",
+    isPublic: false,
+    publicSlug: null,
+    publicSummary: "",
+    clientPublicName: "Campaign Agency",
+    employmentType: "Full-time",
+    status: "Contacted",
+    createdAt: new Date().toISOString(),
+    createdBy: "system"
+  }
+];
 let nextJobId = 1;
 
 // Helper function to calculate skill overlap score
