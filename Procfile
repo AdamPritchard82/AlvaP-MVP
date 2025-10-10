@@ -1,1 +1,1 @@
-web: node working-server.js
+web: node simple-server.js
