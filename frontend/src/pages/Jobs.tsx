@@ -242,6 +242,16 @@ export default function Jobs() {
       setPipelineStages(stages || []);
     } catch (error) {
       console.error('Failed to load pipeline stages:', error);
+      // Set default stages if API fails
+      setPipelineStages([
+        { id: 'New', name: 'New', color: 'bg-blue-50', border_color: 'border-blue-200', position: 1, is_default: true, is_first: true, created_at: '', updated_at: '' },
+        { id: 'Reviewed', name: 'Reviewed', color: 'bg-yellow-50', border_color: 'border-yellow-200', position: 2, is_default: false, is_first: false, created_at: '', updated_at: '' },
+        { id: 'Contacted', name: 'Contacted', color: 'bg-orange-50', border_color: 'border-orange-200', position: 3, is_default: false, is_first: false, created_at: '', updated_at: '' },
+        { id: 'Interviewed', name: 'Interviewed', color: 'bg-purple-50', border_color: 'border-purple-200', position: 4, is_default: false, is_first: false, created_at: '', updated_at: '' },
+        { id: 'Offered', name: 'Offered', color: 'bg-green-50', border_color: 'border-green-200', position: 5, is_default: false, is_first: false, created_at: '', updated_at: '' },
+        { id: 'Placed', name: 'Placed', color: 'bg-emerald-50', border_color: 'border-emerald-200', position: 6, is_default: false, is_first: false, created_at: '', updated_at: '' },
+        { id: 'Rejected', name: 'Rejected', color: 'bg-red-50', border_color: 'border-red-200', position: 7, is_default: false, is_first: false, created_at: '', updated_at: '' }
+      ]);
     }
   };
 
@@ -273,7 +283,7 @@ export default function Jobs() {
 
     try {
       // Update the job status on the backend
-      await api.updateJob(jobId, { status: newStage });
+      await api.updateJobStatus(jobId, newStage);
       toast.success('Job moved successfully');
     } catch (error) {
       // Revert the optimistic update on error
@@ -492,7 +502,7 @@ export default function Jobs() {
                       const newStage = nextStage(job.status);
                       if (newStage !== job.status) {
                         try {
-                          await api.updateJob(job.id, { status: newStage });
+                          await api.updateJobStatus(job.id, newStage);
                           setJobs(prevJobs => 
                             prevJobs.map(j => 
                               j.id === job.id ? { ...j, status: newStage as any } : j
