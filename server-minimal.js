@@ -14,7 +14,7 @@ const server = http.createServer((req, res) => {
     res.writeHead(200);
     res.end(JSON.stringify({
       ok: true,
-      message: 'Minimal Node.js server running on Railway',
+      message: 'Minimal Node.js server running on Railway v2',
       timestamp: new Date().toISOString(),
       port: PORT
     }));
