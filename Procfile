@@ -1,1 +1,1 @@
-web: npm run simple
+web: node index.js
