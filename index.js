@@ -195,46 +195,17 @@ const server = http.createServer((req, res) => {
       }
     });
   } else {
-    // Serve static frontend files
-    const frontendPath = path.join(__dirname, 'frontend/dist');
-    let filePath = path.join(frontendPath, req.url === '/' ? 'index.html' : req.url);
-    
-    // Check if file exists
-    if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
-      const ext = path.extname(filePath);
-      const contentType = {
-        '.html': 'text/html',
-        '.js': 'text/javascript',
-        '.css': 'text/css',
-        '.json': 'application/json',
-        '.png': 'image/png',
-        '.jpg': 'image/jpeg',
-        '.gif': 'image/gif',
-        '.svg': 'image/svg+xml',
-        '.ico': 'image/x-icon'
-      }[ext] || 'text/plain';
-      
-      res.setHeader('Content-Type', contentType);
-      res.writeHead(200);
-      fs.createReadStream(filePath).pipe(res);
-    } else {
-      // Fallback to index.html for client-side routing
-      const indexPath = path.join(frontendPath, 'index.html');
-      if (fs.existsSync(indexPath)) {
-        res.setHeader('Content-Type', 'text/html');
-        res.writeHead(200);
-        fs.createReadStream(indexPath).pipe(res);
-      } else {
-        console.log('404 - Route not found:', req.url);
-        res.writeHead(404);
-        res.end(JSON.stringify({ 
-          error: 'Not Found',
-          message: 'Route not found',
-          url: req.url,
-          availableEndpoints: ['/health', '/api/jobs']
-        }));
-      }
-    }
+    // API-only mode - no frontend serving
+    console.log('404 - Route not found:', req.url);
+    res.setHeader('Content-Type', 'application/json');
+    res.writeHead(404);
+    res.end(JSON.stringify({ 
+      error: 'Not Found',
+      message: 'Route not found',
+      url: req.url,
+      availableEndpoints: ['/health', '/api/jobs'],
+      note: 'This is API-only mode. Frontend not served.'
+    }));
   }
 });
 
