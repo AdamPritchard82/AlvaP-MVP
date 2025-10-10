@@ -1,1 +1,1 @@
-web: node src/simple-candidate-server.js
+web: node working-server.js
