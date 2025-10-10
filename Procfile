@@ -1,1 +1,1 @@
-web: node server-combined.js
+web: node src/simple-candidate-server.js
