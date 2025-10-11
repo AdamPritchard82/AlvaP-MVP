@@ -439,13 +439,34 @@ app.get('/health/detailed', async (req, res) => {
       configured: emailInfo.configured
     };
 
-    // Parser health
-    const parserHealth = {
-      status: 'ok',
-      message: 'Local parsers available',
-      parsers: ['PDF (pdf-parse)', 'DOCX (mammoth)', 'TXT (native)'],
-      externalParser: 'Available via .NET API'
-    };
+    // Parser health - check for dummy data
+    const parserMode = process.env.PARSER_MODE || 'real';
+    const allowDummy = process.env.ALLOW_DUMMY === 'true';
+    
+    let parserHealth;
+    if (parserMode === 'dummy' && !allowDummy) {
+      parserHealth = {
+        status: 'fail',
+        message: 'Dummy parser detected - this should not happen in production',
+        parsers: ['DETECTED: Dummy parser active'],
+        externalParser: 'Disabled due to dummy mode'
+      };
+    } else if (parserMode === 'dummy' && allowDummy) {
+      parserHealth = {
+        status: 'degraded',
+        message: 'Dummy parser active (ALLOW_DUMMY=true)',
+        parsers: ['PDF (pdf-parse)', 'DOCX (mammoth)', 'TXT (native)'],
+        externalParser: 'Disabled - using dummy mode'
+      };
+    } else {
+      parserHealth = {
+        status: 'ok',
+        message: 'Real parsers available',
+        parsers: ['PDF (pdf-parse)', 'DOCX (mammoth)', 'TXT (native)'],
+        externalParser: 'Available via .NET API',
+        mode: 'real'
+      };
+    }
 
     // Rate limit config
     const rateLimitInfo = rateLimitService.getRateLimitInfo();
@@ -495,6 +516,19 @@ app.get('/health/detailed', async (req, res) => {
       }
     };
 
+    // Check if dummy parser is detected and fail if so
+    if (parserMode === 'dummy' && !allowDummy) {
+      const duration = Date.now() - startTime;
+      logRequest('GET', '/health/detailed', 500, duration, 'health-detailed: dummy-parser-detected');
+      return res.status(500).json({
+        ok: false,
+        timestamp: new Date().toISOString(),
+        error: 'Dummy parser detected in production',
+        message: 'This deployment is using dummy data instead of real CV parsing',
+        subsystems: healthCheck.subsystems
+      });
+    }
+
     const duration = Date.now() - startTime;
     logRequest('GET', '/health/detailed', 200, duration, 'health-detailed: ok');
     res.json(healthCheck);
@@ -507,6 +541,33 @@ app.get('/health/detailed', async (req, res) => {
       timestamp: new Date().toISOString(),
       error: 'Detailed health check failed',
       message: error.message
+    });
+  }
+});
+
+// Version endpoint - deployment verification
+app.get('/version', (req, res) => {
+  const startTime = Date.now();
+  
+  try {
+    const version = {
+      gitSha: process.env.GIT_SHA || 'unknown',
+      buildTime: process.env.BUILD_TIME || new Date().toISOString(),
+      parserMode: process.env.PARSER_MODE || 'real',
+      backend: 'src/simple-candidate-server.js',
+      nodeVersion: process.version,
+      timestamp: new Date().toISOString()
+    };
+    
+    const duration = Date.now() - startTime;
+    logRequest('GET', '/version', 200, duration, 'version: ok');
+    res.json(version);
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    logRequest('GET', '/version', 500, duration, 'version: error');
+    res.status(500).json({
+      error: 'Version check failed',
+      timestamp: new Date().toISOString()
     });
   }
 });
@@ -743,6 +804,20 @@ function parseCVContent(text) {
 app.post('/api/candidates/parse-cv', upload.single('file'), async (req, res) => {
   const startTime = Date.now();
   let filePath = null;
+  
+  // Check for dummy parser mode - fail hard if detected
+  const parserMode = process.env.PARSER_MODE || 'real';
+  const allowDummy = process.env.ALLOW_DUMMY === 'true';
+  
+  if (parserMode === 'dummy' && !allowDummy) {
+    const duration = Date.now() - startTime;
+    logRequest('POST', '/api/candidates/parse-cv', 502, duration, 'parse: dummy-parser-detected');
+    return res.status(502).json({
+      success: false,
+      error: 'ParserUnavailable',
+      message: 'CV parsing is not available - dummy parser detected'
+    });
+  }
   
   try {
     if (!req.file) {
