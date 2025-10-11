@@ -1,1 +1,1 @@
-web: node server-working.js
+web: npm run start:server

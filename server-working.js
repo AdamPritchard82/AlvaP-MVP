@@ -1,10 +1,20 @@
 // Working Combined Server - Serves both Frontend and Backend API
 console.log('=== WORKING COMBINED SERVER STARTING ===');
 
+// Load environment variables
+require('dotenv').config();
+
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const PORT = process.env.PORT || 3001;
+
+// Log environment variables for debugging
+console.log('Environment variables:');
+console.log('- PORT:', PORT);
+console.log('- NODE_ENV:', process.env.NODE_ENV);
+console.log('- DATABASE_URL:', process.env.DATABASE_URL ? 'Set' : 'Not set');
+console.log('- FRONTEND_URL:', process.env.FRONTEND_URL || 'Not set');
 
 // Test jobs data
 let jobs = [
@@ -101,7 +111,15 @@ const server = http.createServer((req, res) => {
       ok: true,
       message: 'Working combined server running',
       timestamp: new Date().toISOString(),
-      jobsLoaded: jobs.length
+      environment: {
+        nodeEnv: process.env.NODE_ENV || 'development',
+        port: PORT,
+        databaseUrl: process.env.DATABASE_URL ? 'Set' : 'Not set',
+        frontendUrl: process.env.FRONTEND_URL || 'Not set'
+      },
+      jobsLoaded: jobs.length,
+      uptime: process.uptime(),
+      memory: process.memoryUsage()
     }));
   } else if (req.url === '/api/jobs' && req.method === 'GET') {
     res.setHeader('Content-Type', 'application/json');

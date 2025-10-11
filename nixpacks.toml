@@ -8,4 +8,4 @@ cmds = ['npm install']
 cmds = ['echo "No build step needed for Node.js server"']
 
 [start]
-cmd = 'node server-working.js'
+cmd = 'npm run start:server'
