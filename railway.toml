@@ -1,5 +1,5 @@
 [deploy]
-startCommand = "node server-working.js"
+startCommand = "node src/simple-candidate-server.js"
 healthcheckPath = "/health"
 healthcheckTimeout = 150
 restartPolicyType = "ON_FAILURE"
@@ -7,4 +7,4 @@ restartPolicyMaxRetries = 10
 
 [env]
 NODE_ENV = "production"
-ENABLE_DOTNET_PARSER = "false"
+ENABLE_DOTNET_PARSER = "true"
