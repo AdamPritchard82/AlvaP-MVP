@@ -350,7 +350,7 @@ app.get('*', (req, res) => {
 // Start server
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📁 Database: ${dbPath}`);
+  console.log(`📁 Database: ${process.env.DATABASE_URL ? 'PostgreSQL (Railway)' : 'SQLite (local)'}`);
   console.log(`🔧 .NET Parser: ${dotNetParser ? 'enabled' : 'disabled'}`);
   console.log(`🌐 Frontend: http://localhost:${PORT}`);
   console.log(`🔍 API: http://localhost:${PORT}/api`);
