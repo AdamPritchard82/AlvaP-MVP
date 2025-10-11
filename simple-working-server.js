@@ -72,7 +72,7 @@ app.get('/version', (req, res) => {
   });
 });
 
-// Simple CV parsing function (local fallback)
+// Enhanced CV parsing function (local fallback)
 function parseCVContent(text) {
   console.log('Parsing CV content locally...');
   
@@ -86,6 +86,49 @@ function parseCVContent(text) {
   const nameParts = nameLine.split(' ');
   const firstName = nameParts[0] || '';
   const lastName = nameParts.slice(1).join(' ') || '';
+  
+  // Extract job title and employer
+  let currentTitle = '';
+  let currentEmployer = '';
+  
+  // Look for job title patterns
+  const titlePatterns = [
+    /(?:current|present|current role|position|title)[\s:]*([^\n]+)/i,
+    /(?:job title|role|position)[\s:]*([^\n]+)/i,
+    /^([^@\n]+(?:manager|director|coordinator|specialist|analyst|consultant|officer|executive|lead|head|chief)[^@\n]*)$/im
+  ];
+  
+  for (const pattern of titlePatterns) {
+    const match = text.match(pattern);
+    if (match && match[1]) {
+      currentTitle = match[1].trim();
+      break;
+    }
+  }
+  
+  // Look for employer patterns
+  const employerPatterns = [
+    /(?:current|present|current employer|company|organization)[\s:]*([^\n]+)/i,
+    /(?:at|@)\s*([A-Z][^@\n]+)/g,
+    /(?:working at|employed at|company)[\s:]*([^\n]+)/i
+  ];
+  
+  for (const pattern of employerPatterns) {
+    const match = text.match(pattern);
+    if (match && match[1]) {
+      currentEmployer = match[1].trim();
+      break;
+    }
+  }
+  
+  // If no specific patterns found, look in the first few lines for company names
+  if (!currentEmployer) {
+    const companyPattern = /(?:at|@)\s*([A-Z][a-zA-Z\s&]+(?:Ltd|Inc|Corp|LLC|Company|Group|Associates|Partners|Consulting|Solutions|Services|Limited))/i;
+    const match = text.match(companyPattern);
+    if (match && match[1]) {
+      currentEmployer = match[1].trim();
+    }
+  }
   
   // Simple skill detection
   const allText = text.toLowerCase();
@@ -101,6 +144,8 @@ function parseCVContent(text) {
     lastName,
     email: emailMatch ? emailMatch[1] : '',
     phone: phoneMatch ? phoneMatch[1].trim() : '',
+    currentTitle: currentTitle || '',
+    currentEmployer: currentEmployer || '',
     skills,
     experience: [],
     notes: text.substring(0, 200) + (text.length > 200 ? '...' : ''),
