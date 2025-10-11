@@ -192,8 +192,8 @@ const dotNetApiUrl = process.env.DOTNET_CV_API_URL || 'https://balanced-beauty-p
 // Fix for Railway truncation issue - hardcode the correct URL
 const actualDotNetApiUrl = 'https://balanced-beauty-production.up.railway.app';
 
-// Temporarily disable .NET parser to test local parsing
-if (false && (process.env.ENABLE_DOTNET_PARSER === 'true' || process.env.ENABLE_DOTNET_PARSER === '1')) {
+// Enable .NET parser - this was working previously
+if (true || (process.env.ENABLE_DOTNET_PARSER === 'true' || process.env.ENABLE_DOTNET_PARSER === '1')) {
   try {
     const { DotNetCvParser } = require('./parsers/dotnetCvParser');
     dotNetParser = new DotNetCvParser(actualDotNetApiUrl);
