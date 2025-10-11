@@ -1,5 +1,5 @@
 // Simple Candidate Server - Clean Version with .NET Parser Integration
-console.log('=== SIMPLE CANDIDATE SERVER STARTING - CLEAN VERSION WITH .NET PARSER ===');
+console.log('=== SIMPLE CANDIDATE SERVER STARTING - CLEAN VERSION WITH .NET PARSER v2 ===');
 
 // Load environment variables from .env file
 require('dotenv').config();
