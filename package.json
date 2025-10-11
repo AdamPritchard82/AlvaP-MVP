@@ -5,8 +5,8 @@
   "main": "index.js",
   "scripts": {
     "dev": "node src/server.js",
-    "start": "node main-server.js",
-    "start:server": "node main-server.js",
+    "start": "node src/simple-candidate-server.js",
+    "start:server": "node src/simple-candidate-server.js",
     "simple": "node simple-server.js",
     "main": "node main-server.js",
     "minimal": "node minimal-server.js",
