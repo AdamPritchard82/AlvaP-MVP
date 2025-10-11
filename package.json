@@ -5,8 +5,8 @@
   "main": "index.js",
   "scripts": {
     "dev": "node src/server.js",
-    "start": "node backend/simple-cv-server.js",
-    "start:server": "node backend/simple-cv-server.js",
+    "start": "node server-working.js",
+    "start:server": "node server-working.js",
     "simple": "node simple-server.js",
     "main": "node main-server.js",
     "minimal": "node minimal-server.js",

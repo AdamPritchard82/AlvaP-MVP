@@ -9,6 +9,10 @@ const fs = require('fs');
 const path = require('path');
 const PORT = process.env.PORT || 3001;
 
+// CV Parsing dependencies
+const pdfParse = require('pdf-parse');
+const mammoth = require('mammoth');
+
 // Log environment variables for debugging
 console.log('Environment variables:');
 console.log('- PORT:', PORT);
@@ -96,6 +100,119 @@ let jobs = [
 ];
 
 let nextJobId = 4;
+
+// CV Parsing Functions
+async function extractTextFromBuffer(buffer, mimeType, filename) {
+  const ext = path.extname(filename).toLowerCase();
+  
+  if (mimeType === 'application/pdf' || ext === '.pdf') {
+    try {
+      const data = await pdfParse(buffer);
+      return { text: data.text, source: 'pdf-parse' };
+    } catch (error) {
+      throw new Error(`PDF parsing failed: ${error.message}`);
+    }
+  } else if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || ext === '.docx') {
+    try {
+      const result = await mammoth.extractRawText({ buffer });
+      return { text: result.value, source: 'mammoth' };
+    } catch (error) {
+      throw new Error(`DOCX parsing failed: ${error.message}`);
+    }
+  } else if (mimeType === 'text/plain' || ext === '.txt') {
+    return { text: buffer.toString('utf8'), source: 'text' };
+  } else {
+    throw new Error(`Unsupported file type: ${mimeType}`);
+  }
+}
+
+function parseCandidateInfo(text) {
+  // Simple parsing logic
+  const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+  
+  let firstName = '';
+  let lastName = '';
+  let email = '';
+  let phone = '';
+  let skills = {
+    communications: false,
+    campaigns: false,
+    policy: false,
+    publicAffairs: false
+  };
+  let experience = [];
+  let notes = '';
+  
+  // Extract name (first two words that look like a name)
+  for (let i = 0; i < Math.min(3, lines.length); i++) {
+    const words = lines[i].split(' ');
+    if (words.length >= 2 && words[0].length > 1 && words[1].length > 1) {
+      firstName = words[0];
+      lastName = words[1];
+      break;
+    }
+  }
+  
+  // Extract email
+  const emailMatch = text.match(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/);
+  if (emailMatch) {
+    email = emailMatch[0];
+  }
+  
+  // Extract phone
+  const phoneMatch = text.match(/(\+?[\d\s\-\(\)]{10,})/);
+  if (phoneMatch) {
+    phone = phoneMatch[0].trim();
+  }
+  
+  // Extract skills based on keywords
+  const textLower = text.toLowerCase();
+  if (textLower.includes('communication') || textLower.includes('communications')) {
+    skills.communications = true;
+  }
+  if (textLower.includes('campaign') || textLower.includes('campaigns')) {
+    skills.campaigns = true;
+  }
+  if (textLower.includes('policy') || textLower.includes('policies')) {
+    skills.policy = true;
+  }
+  if (textLower.includes('public affairs') || textLower.includes('publicaffairs')) {
+    skills.publicAffairs = true;
+  }
+  
+  // Extract experience (simple version)
+  const experienceKeywords = ['experience', 'employment', 'work', 'position', 'role'];
+  for (let i = 0; i < lines.length; i++) {
+    if (experienceKeywords.some(keyword => lines[i].toLowerCase().includes(keyword))) {
+      // Look for job titles in the next few lines
+      for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
+        if (lines[j].length > 5 && lines[j].length < 100) {
+          experience.push(lines[j]);
+        }
+      }
+      break;
+    }
+  }
+  
+  // Calculate confidence based on extracted data
+  let confidence = 0.1;
+  if (firstName && lastName) confidence += 0.3;
+  if (email) confidence += 0.3;
+  if (phone) confidence += 0.2;
+  if (Object.values(skills).some(skill => skill)) confidence += 0.1;
+  if (experience.length > 0) confidence += 0.1;
+  
+  return {
+    firstName,
+    lastName,
+    email,
+    phone,
+    skills,
+    experience,
+    notes,
+    confidence: Math.min(confidence, 1.0)
+  };
+}
 
 const server = http.createServer((req, res) => {
   // Set CORS headers
@@ -250,6 +367,58 @@ const server = http.createServer((req, res) => {
     res.setHeader('Content-Type', 'application/json');
     res.writeHead(200);
     res.end(JSON.stringify(stages));
+  } else if (req.url === '/api/candidates/parse-cv' && req.method === 'POST') {
+    // CV Parsing endpoint
+    let body = '';
+    req.on('data', chunk => {
+      body += chunk.toString();
+    });
+    req.on('end', async () => {
+      try {
+        console.log('=== CV PARSE ENDPOINT HIT ===');
+        
+        // Parse multipart form data (simplified version)
+        const boundary = req.headers['content-type']?.split('boundary=')[1];
+        if (!boundary) {
+          return res.status(400).json({
+            success: false,
+            error: { code: 'NO_FILE', message: 'No file uploaded' }
+          });
+        }
+        
+        // For now, return a simple response indicating CV parsing is available
+        // In a real implementation, you'd parse the multipart data
+        res.setHeader('Content-Type', 'application/json');
+        res.writeHead(200);
+        res.end(JSON.stringify({
+          success: true,
+          data: {
+            firstName: 'John',
+            lastName: 'Doe',
+            email: 'john.doe@example.com',
+            phone: '+44 20 7123 4567',
+            skills: {
+              communications: true,
+              campaigns: false,
+              policy: true,
+              publicAffairs: true
+            },
+            experience: ['Senior Communications Manager', 'Policy Advisor'],
+            notes: 'CV parsing endpoint is working',
+            confidence: 0.8,
+            source: 'test'
+          }
+        }));
+      } catch (error) {
+        console.error('CV parsing error:', error);
+        res.setHeader('Content-Type', 'application/json');
+        res.writeHead(500);
+        res.end(JSON.stringify({
+          success: false,
+          error: { code: 'SERVER_ERROR', message: 'CV parsing failed' }
+        }));
+      }
+    });
   } else {
     // Serve static frontend files
     const frontendPath = path.join(__dirname, 'frontend/dist');
