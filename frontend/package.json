@@ -9,7 +9,7 @@
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "start": "npx serve -s dist -l $PORT",
-    "start:server": "cd .. && node server-working.js"
+    "start:server": "cd .. && node server-combined-with-cv.js"
   },
   "engines": {
     "node": ">=20.18.1"
