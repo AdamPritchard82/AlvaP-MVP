@@ -55,15 +55,29 @@ if (enableDotNetParser) {
   console.log('ℹ️ .NET CV Parser disabled (ENABLE_DOTNET_PARSER=false)');
 }
 
-// Simple database setup (SQLite for now)
-const sqlite3 = require('sqlite3').verbose();
-const dbPath = process.env.DATABASE_URL || path.join(__dirname, '../candidates.db');
-const db = new sqlite3.Database(dbPath);
+// Database setup - use PostgreSQL in production, SQLite locally
+let db;
+if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgres')) {
+  // Use PostgreSQL for production (Railway)
+  const { Pool } = require('pg');
+  db = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+  });
+  console.log('✅ Using PostgreSQL database');
+} else {
+  // Use SQLite for local development
+  const sqlite3 = require('sqlite3').verbose();
+  const dbPath = path.join(__dirname, '../candidates.db');
+  db = new sqlite3.Database(dbPath);
+  console.log('✅ Using SQLite database');
+}
 
 // Initialize database
-db.serialize(() => {
-  db.run(`CREATE TABLE IF NOT EXISTS candidates (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgres')) {
+  // PostgreSQL initialization
+  db.query(`CREATE TABLE IF NOT EXISTS candidates (
+    id SERIAL PRIMARY KEY,
     first_name TEXT NOT NULL,
     last_name TEXT NOT NULL,
     email TEXT UNIQUE NOT NULL,
@@ -73,12 +87,36 @@ db.serialize(() => {
     skills TEXT,
     experience TEXT,
     notes TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`);
-  
-  console.log('✅ Database initialized');
-});
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  )`, (err) => {
+    if (err) {
+      console.error('❌ Database initialization failed:', err);
+    } else {
+      console.log('✅ PostgreSQL database initialized');
+    }
+  });
+} else {
+  // SQLite initialization
+  db.serialize(() => {
+    db.run(`CREATE TABLE IF NOT EXISTS candidates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      first_name TEXT NOT NULL,
+      last_name TEXT NOT NULL,
+      email TEXT UNIQUE NOT NULL,
+      phone TEXT,
+      current_title TEXT,
+      current_employer TEXT,
+      skills TEXT,
+      experience TEXT,
+      notes TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
+    
+    console.log('✅ SQLite database initialized');
+  });
+}
 
 // Helper function to get database connection
 const getDb = () => db;
@@ -216,14 +254,27 @@ app.post('/api/candidates/parse-cv', upload.single('file'), async (req, res) => 
 app.get('/api/candidates', (req, res) => {
   const db = getDb();
   
-  db.all('SELECT * FROM candidates ORDER BY created_at DESC', (err, rows) => {
-    if (err) {
-      console.error('Database error:', err);
-      return res.status(500).json({ error: 'Database error' });
-    }
-    
-    res.json(rows);
-  });
+  if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgres')) {
+    // PostgreSQL query
+    db.query('SELECT * FROM candidates ORDER BY created_at DESC', (err, result) => {
+      if (err) {
+        console.error('Database error:', err);
+        return res.status(500).json({ error: 'Database error' });
+      }
+      
+      res.json(result.rows);
+    });
+  } else {
+    // SQLite query
+    db.all('SELECT * FROM candidates ORDER BY created_at DESC', (err, rows) => {
+      if (err) {
+        console.error('Database error:', err);
+        return res.status(500).json({ error: 'Database error' });
+      }
+      
+      res.json(rows);
+    });
+  }
 });
 
 // Create candidate
@@ -238,29 +289,57 @@ app.post('/api/candidates', (req, res) => {
   const skillsJson = JSON.stringify(skills || {});
   const experienceJson = JSON.stringify(experience || []);
   
-  db.run(
-    'INSERT INTO candidates (first_name, last_name, email, phone, current_title, current_employer, skills, experience, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    [firstName, lastName, email, phone, currentTitle, currentEmployer, skillsJson, experienceJson, notes],
-    function(err) {
-      if (err) {
-        console.error('Database error:', err);
-        return res.status(500).json({ error: 'Database error' });
+  if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgres')) {
+    // PostgreSQL query
+    db.query(
+      'INSERT INTO candidates (first_name, last_name, email, phone, current_title, current_employer, skills, experience, notes) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id',
+      [firstName, lastName, email, phone, currentTitle, currentEmployer, skillsJson, experienceJson, notes],
+      (err, result) => {
+        if (err) {
+          console.error('Database error:', err);
+          return res.status(500).json({ error: 'Database error' });
+        }
+        
+        res.json({
+          id: result.rows[0].id,
+          firstName,
+          lastName,
+          email,
+          phone,
+          currentTitle,
+          currentEmployer,
+          skills,
+          experience,
+          notes
+        });
       }
-      
-      res.json({
-        id: this.lastID,
-        firstName,
-        lastName,
-        email,
-        phone,
-        currentTitle,
-        currentEmployer,
-        skills,
-        experience,
-        notes
-      });
-    }
-  );
+    );
+  } else {
+    // SQLite query
+    db.run(
+      'INSERT INTO candidates (first_name, last_name, email, phone, current_title, current_employer, skills, experience, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [firstName, lastName, email, phone, currentTitle, currentEmployer, skillsJson, experienceJson, notes],
+      function(err) {
+        if (err) {
+          console.error('Database error:', err);
+          return res.status(500).json({ error: 'Database error' });
+        }
+        
+        res.json({
+          id: this.lastID,
+          firstName,
+          lastName,
+          email,
+          phone,
+          currentTitle,
+          currentEmployer,
+          skills,
+          experience,
+          notes
+        });
+      }
+    );
+  }
 });
 
 // Serve frontend
