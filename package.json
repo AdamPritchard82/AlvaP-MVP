@@ -5,8 +5,8 @@
   "main": "index.js",
   "scripts": {
     "dev": "node src/server.js",
-    "start": "node src/server-hybrid.js",
-    "start:server": "node src/server-hybrid.js",
+    "start": "node server-hybrid.js",
+    "start:server": "node server-hybrid.js",
     "simple": "node simple-server.js",
     "main": "node main-server.js",
     "minimal": "node minimal-server.js",
