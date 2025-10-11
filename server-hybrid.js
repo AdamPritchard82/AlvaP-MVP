@@ -1,5 +1,5 @@
 // Hybrid Production Server with .NET CV Parser Integration and Form Validation
-console.log('=== HYBRID PRODUCTION SERVER STARTING ===');
+console.log('=== HYBRID PRODUCTION SERVER STARTING - CV PARSING ENABLED ===');
 console.log('Node version:', process.version);
 console.log('Working directory:', process.cwd());
 
