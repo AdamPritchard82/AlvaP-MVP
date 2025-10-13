@@ -83,6 +83,9 @@ function parseCVContent(text) {
   const phonePatterns = [
     /(\+44\s?\d{2}\s?\d{4}\s?\d{4})/,  // UK format: +44 78 808 62437
     /(\+44\s?\d{5}\s?\d{6})/,          // UK format: +44 78808 62437
+    /(\+44\s?\d{4}\s?\d{3}\s?\d{3})/,  // UK format: +44 7880 862 437
+    /(\+44\s?\d{3}\s?\d{3}\s?\d{4})/,  // UK format: +44 788 086 2437
+    /(\+44\s?\d{10})/,                 // UK format: +44 7880862437
     /(\+?[0-9\s\-\(\)]{10,})/,         // General format
     /(\(?\d{3}\)?[-.\s]*\d{3}[-.\s]*\d{4})/, // US format
     /(\+\d{1,3}\s?\d{1,4}\s?\d{1,4}\s?\d{1,4})/ // International format
@@ -109,9 +112,10 @@ function parseCVContent(text) {
   const titlePatterns = [
     /(?:current|present|current role|position|title)[\s:]*([^\n]+)/i,
     /(?:job title|role|position)[\s:]*([^\n]+)/i,
-    /^([^@\n]+(?:manager|director|coordinator|specialist|analyst|consultant|officer|executive|lead|head|chief)[^@\n]*)$/im,
-    // Look for common job titles in the first few lines
-    /^(Director|Manager|Consultant|Specialist|Coordinator|Analyst|Officer|Executive|Lead|Head|Chief)[^@\n]*$/im
+    // Look for clean job titles (avoid bullet points and descriptions)
+    /^([A-Z][a-z]*(?:\s+[A-Z][a-z]*)*)\s*$/m,  // Clean title on its own line
+    /^(Director|Manager|Consultant|Specialist|Coordinator|Analyst|Officer|Executive|Lead|Head|Chief)\s*$/m,  // Common titles
+    /^([A-Z][a-z]*(?:\s+[A-Z][a-z]*)*)\s*-\s*[A-Z]/m  // Title - Company format
   ];
   
   // Check first 10 lines for job titles
@@ -129,8 +133,10 @@ function parseCVContent(text) {
     /(?:current|present|current employer|company|organization)[\s:]*([^\n]+)/i,
     /(?:at|@)\s*([A-Z][^@\n]+)/g,
     /(?:working at|employed at|company)[\s:]*([^\n]+)/i,
-    // Look for company names in the first few lines
-    /^([A-Z][a-zA-Z\s&]+(?:Ltd|Inc|Corp|LLC|Company|Group|Associates|Partners|Consulting|Solutions|Services|Limited|Door|Dore|AECOM|Crown Estate))/im
+    // Look for clean company names (avoid bullet points and descriptions)
+    /^([A-Z][a-zA-Z\s&]+(?:Ltd|Inc|Corp|LLC|Company|Group|Associates|Partners|Consulting|Solutions|Services|Limited))\s*$/m,
+    /^(Door\s+\d+|Dore\s+People|AECOM|Crown\s+Estate|The\s+Crown\s+Estate)\s*$/m,
+    /^([A-Z][a-zA-Z\s&]+)\s*-\s*[A-Z]/m  // Company - Title format
   ];
   
   for (const pattern of employerPatterns) {
