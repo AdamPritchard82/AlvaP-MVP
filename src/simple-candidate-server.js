@@ -295,16 +295,16 @@ async function parseWithLocalParser(buffer, mimetype, originalname) {
     }
   }
   
-  // Look for company patterns - ultra precise
+  // Look for company patterns - surgical precision
   const companyPatterns = [
-    // Look for "Director at Company" or "Manager at Company" patterns
-    /(?:director|manager|engineer|consultant|analyst|specialist|coordinator|executive|officer|lead|senior|junior|assistant|developer|designer|architect)\s+(?:at|@|of|for)\s*([A-Za-z\s&.,-]{2,25}?)(?:\n|$|title|position|role|experience|with|preparation|brexit|professional)/i,
-    // Look for company names with business suffixes
-    /([A-Za-z\s&.,-]+(?:ltd|limited|inc|corp|corporation|llc|plc|group|company|software|solutions|systems|services|consulting|consultancy))(?:\s|$|\n|preparation|brexit|professional)/i,
-    // Look for standalone company names (short, clean)
-    /(?:company|employer|organization|firm|corporation)[\s:]*([A-Za-z\s&.,-]{2,25}?)(?:\n|$|title|position|role|experience|with|preparation|brexit|professional)/i,
-    // Look for "at Company" patterns
-    /(?:at|@)\s*([A-Za-z\s&.,-]{2,25}?)(?:\n|$|title|position|role|experience|with|preparation|brexit|professional)/i
+    // Look for "Director at Company" or "Manager at Company" patterns - very specific
+    /(?:director|manager|engineer|consultant|analyst|specialist|coordinator|executive|officer|lead|senior|junior|assistant|developer|designer|architect)\s+(?:at|@|of|for)\s*([A-Za-z\s&.,-]{2,20}?)(?:\n|$|title|position|role|experience|with|preparation|brexit|professional|level|heading|governme|government|department|ministry|agency|authority)/i,
+    // Look for company names with business suffixes - stop at common CV words
+    /([A-Za-z\s&.,-]+(?:ltd|limited|inc|corp|corporation|llc|plc|group|company|software|solutions|systems|services|consulting|consultancy))(?:\s|$|\n|preparation|brexit|professional|level|heading|governme|government|department|ministry|agency|authority)/i,
+    // Look for standalone company names (short, clean) - stop at CV buzzwords
+    /(?:company|employer|organization|firm|corporation)[\s:]*([A-Za-z\s&.,-]{2,20}?)(?:\n|$|title|position|role|experience|with|preparation|brexit|professional|level|heading|governme|government|department|ministry|agency|authority)/i,
+    // Look for "at Company" patterns - stop at CV buzzwords
+    /(?:at|@)\s*([A-Za-z\s&.,-]{2,20}?)(?:\n|$|title|position|role|experience|with|preparation|brexit|professional|level|heading|governme|government|department|ministry|agency|authority)/i
   ];
   
   for (const pattern of companyPatterns) {
