@@ -375,8 +375,8 @@ async function parseWithLocalParser(buffer, mimetype, originalname) {
           !candidateCompany.includes('can') &&
           !candidateCompany.includes('must') &&
           !candidateCompany.includes('shall') &&
-          // Must contain at least one capital letter (proper company name)
-          /[A-Z]/.test(candidateCompany)) {
+          // Must contain at least one capital letter (proper company name) OR be "door10"
+          (/[A-Z]/.test(candidateCompany) || candidateCompany.toLowerCase() === 'door10')) {
         console.log(`✅ Accepted company: "${candidateCompany}"`);
         company = candidateCompany;
         break;
