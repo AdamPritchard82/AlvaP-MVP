@@ -39,7 +39,20 @@ if (-not (Test-Path $CvPath)) {
 }
 
 try {
-  $parserResult = curl -s -F "file=@$CvPath" "$Parser/api/documentparser/parse" | ConvertFrom-Json
+  $file = Get-Item $CvPath
+  $boundary = [System.Guid]::NewGuid().ToString()
+  $LF = "`r`n"
+  $bodyLines = (
+    "--$boundary",
+    "Content-Disposition: form-data; name=`"file`"; filename=`"$($file.Name)`"",
+    "Content-Type: application/pdf",
+    "",
+    [System.IO.File]::ReadAllText($file.FullName),
+    "--$boundary--",
+    ""
+  ) -join $LF
+  
+  $parserResult = Invoke-RestMethod -Uri "$Parser/api/documentparser/parse" -Method POST -Body $bodyLines -ContentType "multipart/form-data; boundary=$boundary" | ConvertFrom-Json
   if (-not $parserResult.success) {
     throw "Parser returned success=false: $($parserResult.message)"
   }

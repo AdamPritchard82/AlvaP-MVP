@@ -8,6 +8,10 @@ var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.ConfigureKestrel(options =>
 {
     options.Limits.MaxRequestBodySize = 10 * 1024 * 1024; // 10MB
+    // Fix timeout issues for file uploads
+    options.Limits.MinRequestBodyDataRate = null; // Disable minimum data rate requirement
+    options.Limits.RequestHeadersTimeout = TimeSpan.FromMinutes(2); // 2 minutes for headers
+    options.Limits.KeepAliveTimeout = TimeSpan.FromMinutes(2); // 2 minutes keep alive
 });
 
 // Force port binding for Railway

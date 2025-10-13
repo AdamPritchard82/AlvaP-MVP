@@ -31,6 +31,8 @@ const CandidateNew: React.FC = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [validationErrors, setValidationErrors] = useState<ValidationErrors>({});
+  const [editMode, setEditMode] = useState(false);
+  const [parsedData, setParsedData] = useState<Partial<FormData> | null>(null);
   
   const [formData, setFormData] = useState<FormData>({
     firstName: '',
@@ -95,6 +97,11 @@ const CandidateNew: React.FC = () => {
            formData.currentEmployer.trim() !== '' &&
            Object.values(formData.skills).some(value => value > 0) &&
            /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email);
+  };
+
+  // Helper function to check if a field was parsed from CV
+  const isFieldParsed = (fieldName: keyof FormData): boolean => {
+    return editMode && parsedData && parsedData[fieldName] !== undefined && parsedData[fieldName] !== '';
   };
 
   // Handle input changes
@@ -181,7 +188,11 @@ const CandidateNew: React.FC = () => {
           }
         }));
         
-        toast.success(`CV parsed successfully using ${result.parserUsed}`);
+        // Store parsed data and enable edit mode
+        setParsedData(parsedData);
+        setEditMode(true);
+        
+        toast.success(`CV parsed successfully! Please review and edit the information below.`);
       } else {
         toast.error('Failed to parse CV');
       }
@@ -260,10 +271,40 @@ const CandidateNew: React.FC = () => {
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Add New Candidate</h1>
-          <p className="mt-2 text-gray-600">
-            Upload a CV to auto-fill information, or enter details manually.
-          </p>
+          <div className="flex justify-between items-start">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Add New Candidate</h1>
+              <p className="mt-2 text-gray-600">
+                Upload a CV to auto-fill information, or enter details manually.
+              </p>
+            </div>
+            {editMode && (
+              <button
+                type="button"
+                onClick={() => setEditMode(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                Exit Edit Mode
+              </button>
+            )}
+          </div>
+          {editMode && (
+            <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm text-blue-700">
+                    <strong>Edit Mode:</strong> Review and correct the information parsed from the CV. 
+                    Fields with green indicators were automatically filled from the CV.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Form Status Indicator */}
@@ -354,6 +395,11 @@ const CandidateNew: React.FC = () => {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   First Name *
+                  {isFieldParsed('firstName') && (
+                    <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                      ✓ Parsed from CV
+                    </span>
+                  )}
                 </label>
                 <input
                   type="text"
@@ -362,7 +408,8 @@ const CandidateNew: React.FC = () => {
                   onChange={handleInputChange}
                   required
                   className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    validationErrors.firstName ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-gray-300'
+                    validationErrors.firstName ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 
+                    isFieldParsed('firstName') ? 'border-green-300 bg-green-50' : 'border-gray-300'
                   }`}
                   placeholder="Enter first name"
                 />
@@ -374,6 +421,11 @@ const CandidateNew: React.FC = () => {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Last Name *
+                  {isFieldParsed('lastName') && (
+                    <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                      ✓ Parsed from CV
+                    </span>
+                  )}
                 </label>
                 <input
                   type="text"
@@ -382,7 +434,8 @@ const CandidateNew: React.FC = () => {
                   onChange={handleInputChange}
                   required
                   className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    validationErrors.lastName ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-gray-300'
+                    validationErrors.lastName ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 
+                    isFieldParsed('lastName') ? 'border-green-300 bg-green-50' : 'border-gray-300'
                   }`}
                   placeholder="Enter last name"
                 />
@@ -394,6 +447,11 @@ const CandidateNew: React.FC = () => {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Email Address *
+                  {isFieldParsed('email') && (
+                    <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                      ✓ Parsed from CV
+                    </span>
+                  )}
                 </label>
                 <input
                   type="email"
@@ -402,7 +460,8 @@ const CandidateNew: React.FC = () => {
                   onChange={handleInputChange}
                   required
                   className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    validationErrors.email ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-gray-300'
+                    validationErrors.email ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 
+                    isFieldParsed('email') ? 'border-green-300 bg-green-50' : 'border-gray-300'
                   }`}
                   placeholder="Enter email address"
                 />
@@ -414,6 +473,11 @@ const CandidateNew: React.FC = () => {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Phone Number *
+                  {isFieldParsed('phone') && (
+                    <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                      ✓ Parsed from CV
+                    </span>
+                  )}
                 </label>
                 <input
                   type="tel"
@@ -422,7 +486,8 @@ const CandidateNew: React.FC = () => {
                   onChange={handleInputChange}
                   required
                   className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    validationErrors.phone ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-gray-300'
+                    validationErrors.phone ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 
+                    isFieldParsed('phone') ? 'border-green-300 bg-green-50' : 'border-gray-300'
                   }`}
                   placeholder="Enter phone number"
                 />
@@ -435,6 +500,11 @@ const CandidateNew: React.FC = () => {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Current Job Title *
+                  {isFieldParsed('currentTitle') && (
+                    <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                      ✓ Parsed from CV
+                    </span>
+                  )}
                 </label>
                 <input
                   type="text"
@@ -443,7 +513,8 @@ const CandidateNew: React.FC = () => {
                   onChange={handleInputChange}
                   required
                   className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    validationErrors.currentTitle ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-gray-300'
+                    validationErrors.currentTitle ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 
+                    isFieldParsed('currentTitle') ? 'border-green-300 bg-green-50' : 'border-gray-300'
                   }`}
                   placeholder="Enter current job title"
                 />
@@ -455,6 +526,11 @@ const CandidateNew: React.FC = () => {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Current Employer *
+                  {isFieldParsed('currentEmployer') && (
+                    <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                      ✓ Parsed from CV
+                    </span>
+                  )}
                 </label>
                 <input
                   type="text"
@@ -463,7 +539,8 @@ const CandidateNew: React.FC = () => {
                   onChange={handleInputChange}
                   required
                   className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    validationErrors.currentEmployer ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-gray-300'
+                    validationErrors.currentEmployer ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 
+                    isFieldParsed('currentEmployer') ? 'border-green-300 bg-green-50' : 'border-gray-300'
                   }`}
                   placeholder="Enter current employer"
                 />
