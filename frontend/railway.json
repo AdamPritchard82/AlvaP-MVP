@@ -4,7 +4,7 @@
     "buildCommand": "cd .. && npm install && cd frontend && npm run build"
   },
   "deploy": {
-    "startCommand": "node ../simple-working-server.js",
+    "startCommand": "npm run start:server",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
   }
