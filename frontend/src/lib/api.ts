@@ -283,7 +283,7 @@ class ApiClient {
     return response.json();
   }
 
-  async parseCV(file: File): Promise<{ success: boolean; data?: any; error?: string }> {
+  async parseCV(file: File): Promise<{ success: boolean; data?: any; error?: string; parserUsed?: string }> {
     const formData = new FormData();
     formData.append('file', file);
     
