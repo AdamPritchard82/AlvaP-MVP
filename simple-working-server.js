@@ -75,6 +75,7 @@ app.get('/version', (req, res) => {
 // Enhanced CV parsing function (local fallback)
 function parseCVContent(text) {
   console.log('Parsing CV content locally...');
+  console.log('First 500 characters of extracted text:', text.substring(0, 500));
   
   // Extract basic information using regex
   const emailMatch = text.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
