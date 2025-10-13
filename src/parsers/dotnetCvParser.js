@@ -4,7 +4,7 @@ const FormData = require('form-data');
 
 class DotNetCvParser {
   constructor() {
-    this.apiUrl = process.env.DOTNET_CV_API_URL || 'https://your-dotnet-api.up.railway.app';
+    this.apiUrl = process.env.DOTNET_CV_API_URL || 'https://positive-bravery-production.up.railway.app';
     this.timeout = 30000; // 30 second timeout
   }
 
