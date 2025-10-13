@@ -222,6 +222,14 @@ async function parseWithLocalParser(buffer, mimetype, originalname) {
   console.log('📄 Extracted text length:', text.length);
   console.log('📄 First 500 characters of extracted text:', text.substring(0, 500));
   
+  // Look specifically for "Door 10" in the text
+  const door10Match = text.match(/door\s*10/gi);
+  console.log('🔍 Looking for "Door 10" in text:', door10Match);
+  
+  // Look for "Recruitment" in the text
+  const recruitmentMatch = text.match(/recruitment/gi);
+  console.log('🔍 Looking for "Recruitment" in text:', recruitmentMatch);
+  
   // Parse the text using improved regex patterns
   const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
   
@@ -298,6 +306,8 @@ async function parseWithLocalParser(buffer, mimetype, originalname) {
   
   // Look for company patterns - targeted approach for "Door 10 Recruitment"
   const companyPatterns = [
+    // Look specifically for "Door 10 Recruitment" pattern
+    /(door\s*10\s*recruitment)/gi,
     // Look for company names with business suffixes - most reliable
     /([A-Za-z\s&.,-]+(?:ltd|limited|inc|corp|corporation|llc|plc|group|company|software|solutions|systems|services|consulting|consultancy|recruitment|recruiting))(?:\s|$|\n)/i,
     // Look for "Door 10 Recruitment" type patterns - specific to this CV
@@ -321,7 +331,9 @@ async function parseWithLocalParser(buffer, mimetype, originalname) {
       // Only accept company names that look reasonable - strict but allow business words
       if (candidateCompany.length > 3 && 
           candidateCompany.length < 40 && 
-          !candidateCompany.includes('level') &&
+          // Allow "Door 10 Recruitment" specifically
+          (candidateCompany.toLowerCase().includes('door') || 
+           !candidateCompany.includes('level')) &&
           !candidateCompany.includes('experience') &&
           !candidateCompany.includes('heading') &&
           !candidateCompany.includes('governme') &&
