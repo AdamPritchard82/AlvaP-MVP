@@ -221,31 +221,79 @@ async function parseWithLocalParser(buffer, mimetype, originalname) {
   
   console.log('📄 Extracted text length:', text.length);
   
-  // Parse the text using regex patterns
+  // Parse the text using improved regex patterns
   const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
   const phoneRegex = /(\+?[\d\s\-\(\)]{10,})/g;
-  const nameRegex = /(?:name|full name|contact)[\s:]*([A-Za-z\s]+)/i;
   
   // Extract basic information
   const email = emailRegex.exec(text)?.[0] || '';
   const phone = phoneRegex.exec(text)?.[0]?.replace(/[^\d+]/g, '') || '';
-  const nameMatch = nameRegex.exec(text);
-  const fullName = nameMatch ? nameMatch[1].trim() : '';
+  
+  // Improved name extraction - look for common patterns
+  let firstName = '';
+  let lastName = '';
+  let fullName = '';
+  
+  // Try multiple name patterns
+  const namePatterns = [
+    /(?:name|full name|contact)[\s:]*([A-Za-z\s]+?)(?:\n|$|email|phone|@)/i,
+    /^([A-Za-z\s]+?)(?:\n|$|email|phone|@)/i,
+    /([A-Z][a-z]+\s+[A-Z][a-z]+)/g
+  ];
+  
+  for (const pattern of namePatterns) {
+    const match = pattern.exec(text);
+    if (match && match[1]) {
+      fullName = match[1].trim();
+      if (fullName.length > 2 && fullName.length < 50) { // Reasonable name length
+        break;
+      }
+    }
+  }
   
   // Split name into first and last
-  const nameParts = fullName.split(' ');
-  const firstName = nameParts[0] || '';
-  const lastName = nameParts.slice(1).join(' ') || '';
+  if (fullName) {
+    const nameParts = fullName.split(/\s+/);
+    firstName = nameParts[0] || '';
+    lastName = nameParts.slice(1).join(' ') || '';
+  }
   
-  // Look for job title and company in the text
-  const jobTitleRegex = /(?:title|position|role)[\s:]*([A-Za-z\s]+)/i;
-  const companyRegex = /(?:company|employer|organization)[\s:]*([A-Za-z\s&.,]+)/i;
+  // Improved job title and company extraction
+  let jobTitle = '';
+  let company = '';
   
-  const jobTitleMatch = jobTitleRegex.exec(text);
-  const companyMatch = companyRegex.exec(text);
+  // Look for job title patterns
+  const jobTitlePatterns = [
+    /(?:title|position|role|job)[\s:]*([A-Za-z\s&.,-]+?)(?:\n|$|company|employer)/i,
+    /([A-Za-z\s&.,-]+(?:director|manager|engineer|consultant|analyst|specialist|coordinator|executive|officer|lead|senior|junior|assistant|developer|designer|architect|consultant))/i
+  ];
   
-  const jobTitle = jobTitleMatch ? jobTitleMatch[1].trim() : '';
-  const company = companyMatch ? companyMatch[1].trim() : '';
+  for (const pattern of jobTitlePatterns) {
+    const match = pattern.exec(text);
+    if (match && match[1]) {
+      jobTitle = match[1].trim();
+      if (jobTitle.length > 2 && jobTitle.length < 100) {
+        break;
+      }
+    }
+  }
+  
+  // Look for company patterns
+  const companyPatterns = [
+    /(?:company|employer|organization|firm|corporation)[\s:]*([A-Za-z\s&.,-]+?)(?:\n|$|title|position|role)/i,
+    /(?:at|@)\s*([A-Za-z\s&.,-]+?)(?:\n|$|title|position|role)/i,
+    /([A-Za-z\s&.,-]+(?:ltd|limited|inc|corp|corporation|llc|plc|group|company|software|solutions|systems|services|consulting|consultancy))/i
+  ];
+  
+  for (const pattern of companyPatterns) {
+    const match = pattern.exec(text);
+    if (match && match[1]) {
+      company = match[1].trim();
+      if (company.length > 2 && company.length < 100) {
+        break;
+      }
+    }
+  }
   
   // Calculate confidence
   let confidence = 0.3; // Base confidence for local parser
