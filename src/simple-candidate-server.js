@@ -66,7 +66,7 @@ if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgres'))
     ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
   });
   console.log('✅ Using PostgreSQL database');
-} else {
+    } else {
   // Use SQLite for local development
   const sqlite3 = require('sqlite3').verbose();
   const dbPath = path.join(__dirname, '../candidates.db');
@@ -93,7 +93,7 @@ if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgres'))
   )`, (err) => {
     if (err) {
       console.error('❌ Database initialization failed:', err);
-    } else {
+      } else {
       console.log('✅ PostgreSQL database initialized');
     }
   });
@@ -145,7 +145,7 @@ function parseCVContent(text) {
     policy: /policy|policies|briefing|consultation|legislative|regulatory|government|public policy|research|analysis|strategy|planning/i.test(allText),
     publicAffairs: /public affairs|government affairs|parliamentary|stakeholder relations|lobbying|government relations|political|advocacy|corporate affairs/i.test(allText)
   };
-  
+
   return {
     firstName,
     lastName,
@@ -163,7 +163,7 @@ function parseCVContent(text) {
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ 
+        res.json({
     status: 'ok', 
     timestamp: new Date().toISOString(),
     dotnetParser: dotNetParser ? 'enabled' : 'disabled'
@@ -183,7 +183,7 @@ app.get('/meta/version', (req, res) => {
 
 // Version endpoint
 app.get('/version', (req, res) => {
-  res.json({
+    res.json({
     gitSha: process.env.GIT_SHA || 'unknown',
     buildTime: process.env.BUILD_TIME || new Date().toISOString(),
     parserMode: 'real',
@@ -221,7 +221,7 @@ app.post('/api/candidates/parse-cv', upload.single('file'), async (req, res) => 
         console.log('🔧 MIME type:', mimetype);
         parsedData = await dotNetParser.parseFile(buffer, mimetype, originalname);
         console.log('✅ .NET parser success - parsed data:', JSON.stringify(parsedData, null, 2));
-      } catch (error) {
+    } catch (error) {
         console.error('❌ .NET parser failed:', error.message);
         console.error('❌ Error details:', error);
         return res.status(503).json({ 
@@ -278,7 +278,7 @@ app.get('/api/candidates', (req, res) => {
       
       res.json(result.rows);
     });
-  } else {
+    } else {
     // SQLite query
     db.all('SELECT * FROM candidates ORDER BY created_at DESC', (err, rows) => {
       if (err) {
@@ -313,8 +313,8 @@ app.post('/api/candidates', (req, res) => {
           console.error('Database error:', err);
           return res.status(500).json({ error: 'Database error' });
         }
-        
-        res.json({
+    
+    res.json({
           id: result.rows[0].id,
           firstName,
           lastName,
@@ -328,7 +328,7 @@ app.post('/api/candidates', (req, res) => {
         });
       }
     );
-  } else {
+    } else {
     // SQLite query
     db.run(
       'INSERT INTO candidates (first_name, last_name, email, phone, current_title, current_employer, skills, experience, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
@@ -338,8 +338,8 @@ app.post('/api/candidates', (req, res) => {
           console.error('Database error:', err);
           return res.status(500).json({ error: 'Database error' });
         }
-        
-        res.json({
+    
+    res.json({
           id: this.lastID,
           firstName,
           lastName,

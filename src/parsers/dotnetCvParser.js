@@ -34,7 +34,7 @@ class DotNetCvParser {
         throw new Error(data.message || 'CV parsing failed');
       }
 
-      console.log(`[DotNetCvParser] Successfully parsed ${filename}`);
+          console.log(`[DotNetCvParser] Successfully parsed ${filename}`);
       console.log(`[DotNetCvParser] Raw .NET response:`, JSON.stringify(data, null, 2));
       console.log(`[DotNetCvParser] Data:`, JSON.stringify(data.data, null, 2));
       
@@ -73,7 +73,7 @@ class DotNetCvParser {
     const { name, firstName, lastName, email, phone, jobTitle, employer } = normalizedData;
     
     const fullName = name || `${firstName} ${lastName}`.trim();
-    
+
     // Calculate confidence based on data completeness
     let confidence = 0.5; // Base confidence
     if (firstName && lastName) confidence += 0.2;

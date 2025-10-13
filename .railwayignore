@@ -12,3 +12,6 @@ uploads/
 tests/
 *.test.js
 test-*.js
+
+# Keep frontend directory for frontend service
+!frontend/
