@@ -311,10 +311,10 @@ async function parseWithLocalParser(buffer, mimetype, originalname) {
     }
   }
   
-  // Look for company patterns - targeted approach for "Door 10 Recruitment"
+  // Look for company patterns - targeted approach for "Door 10"
   const companyPatterns = [
-    // Look specifically for "Door 10 Recruitment" pattern
-    /(door\s*10\s*recruitment)/gi,
+    // Look specifically for "Door 10" pattern (standalone company name)
+    /(door\s*10)/gi,
     // Look for company names with business suffixes - most reliable
     /([A-Za-z\s&.,-]+(?:ltd|limited|inc|corp|corporation|llc|plc|group|company|software|solutions|systems|services|consulting|consultancy|recruitment|recruiting))(?:\s|$|\n)/i,
     // Look for "Door 10 Recruitment" type patterns - specific to this CV
