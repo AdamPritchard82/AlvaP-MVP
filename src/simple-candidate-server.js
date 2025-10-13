@@ -295,25 +295,27 @@ async function parseWithLocalParser(buffer, mimetype, originalname) {
     }
   }
   
-  // Look for company patterns - completely different approach
+  // Look for company patterns - targeted approach for "Door 10 Recruitment"
   const companyPatterns = [
     // Look for company names with business suffixes - most reliable
-    /([A-Za-z\s&.,-]+(?:ltd|limited|inc|corp|corporation|llc|plc|group|company|software|solutions|systems|services|consulting|consultancy))(?:\s|$|\n)/i,
+    /([A-Za-z\s&.,-]+(?:ltd|limited|inc|corp|corporation|llc|plc|group|company|software|solutions|systems|services|consulting|consultancy|recruitment|recruiting))(?:\s|$|\n)/i,
+    // Look for "Door 10 Recruitment" type patterns - specific to this CV
+    /([A-Za-z\s&.,-]+(?:recruitment|recruiting|consulting|consultancy|software|solutions|systems|services|group|company))(?:\s|$|\n)/i,
     // Look for standalone company names that appear on their own line or after common words
-    /(?:company|employer|organization|firm|corporation)[\s:]*([A-Za-z\s&.,-]{2,20}?)(?:\n|$|title|position|role|experience|with|preparation|brexit|professional|level|heading|governme|government|department|ministry|agency|authority)/i,
+    /(?:company|employer|organization|firm|corporation)[\s:]*([A-Za-z\s&.,-]{2,25}?)(?:\n|$|title|position|role|experience|with|preparation|brexit|professional|level|heading|governme|government|department|ministry|agency|authority)/i,
     // Look for "at Company" patterns - stop at first space after company name
-    /(?:at|@)\s*([A-Za-z\s&.,-]{2,20}?)(?:\s|$|\n|title|position|role|experience|with|preparation|brexit|professional|level|heading|governme|government|department|ministry|agency|authority)/i,
+    /(?:at|@)\s*([A-Za-z\s&.,-]{2,25}?)(?:\s|$|\n|title|position|role|experience|with|preparation|brexit|professional|level|heading|governme|government|department|ministry|agency|authority)/i,
     // Look for company names that appear after job titles - but be very specific
-    /(?:director|manager|engineer|consultant|analyst|specialist|coordinator|executive|officer|lead|senior|junior|assistant|developer|designer|architect)\s+(?:at|@|of|for)\s*([A-Za-z\s&.,-]{2,20}?)(?:\s|$|\n|title|position|role|experience|with|preparation|brexit|professional|level|heading|governme|government|department|ministry|agency|authority)/i
+    /(?:director|manager|engineer|consultant|analyst|specialist|coordinator|executive|officer|lead|senior|junior|assistant|developer|designer|architect)\s+(?:at|@|of|for)\s*([A-Za-z\s&.,-]{2,25}?)(?:\s|$|\n|title|position|role|experience|with|preparation|brexit|professional|level|heading|governme|government|department|ministry|agency|authority)/i
   ];
   
   for (const pattern of companyPatterns) {
     const match = pattern.exec(text);
     if (match && match[1]) {
       const candidateCompany = match[1].trim();
-      // Only accept company names that look reasonable - very strict validation
+      // Only accept company names that look reasonable - strict but allow business words
       if (candidateCompany.length > 3 && 
-          candidateCompany.length < 30 && 
+          candidateCompany.length < 40 && 
           !candidateCompany.includes('level') &&
           !candidateCompany.includes('experience') &&
           !candidateCompany.includes('heading') &&
