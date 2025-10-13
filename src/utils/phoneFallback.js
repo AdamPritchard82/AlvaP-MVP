@@ -1,7 +1,7 @@
 // Conservative phone number fallback for when .NET parser returns null
 // Only use if you have raw text from the vendor response
 
-export function fallbackPhone(rawText, region = 'GB') {
+function fallbackPhone(rawText, region = 'GB') {
   if (!rawText) return undefined;
   
   // Conservative regex for phone numbers
@@ -14,3 +14,5 @@ export function fallbackPhone(rawText, region = 'GB') {
   
   return m.trim();
 }
+
+module.exports = { fallbackPhone };

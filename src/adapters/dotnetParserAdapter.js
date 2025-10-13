@@ -6,7 +6,7 @@ const pick = (o, keys) => {
   return null;
 };
 
-export function normaliseDotnet(raw) {
+function normaliseDotnet(raw) {
   const data = pick(raw, ['data', 'Data']) || {};
   const pi = pick(data, ['personalInfo', 'PersonalInfo']) || {};
   const we = pick(data, ['workExperience', 'WorkExperience']) || [];
@@ -42,3 +42,5 @@ export function normaliseDotnet(raw) {
     _raw: raw,
   };
 }
+
+module.exports = { normaliseDotnet };
