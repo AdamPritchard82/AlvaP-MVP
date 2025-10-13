@@ -173,13 +173,21 @@ app.post('/api/candidates/parse-cv', upload.single('file'), async (req, res) => 
     // Try .NET parser first if available
     if (dotNetParser && ['.pdf', '.docx', '.doc'].includes(fileExtension)) {
       try {
-        console.log('Using .NET parser...');
+        console.log('🔧 Using .NET parser for:', originalname);
+        console.log('🔧 File extension:', fileExtension);
+        console.log('🔧 MIME type:', mimetype);
         parsedData = await dotNetParser.parseFile(buffer, mimetype, originalname);
-        console.log('✅ .NET parser success');
+        console.log('✅ .NET parser success - parsed data:', JSON.stringify(parsedData, null, 2));
       } catch (error) {
         console.warn('⚠️ .NET parser failed, falling back to local:', error.message);
+        console.warn('⚠️ Error details:', error);
         // Fall through to local parser
       }
+    } else {
+      console.log('ℹ️ .NET parser not available or file type not supported');
+      console.log('ℹ️ dotNetParser available:', !!dotNetParser);
+      console.log('ℹ️ File extension:', fileExtension);
+      console.log('ℹ️ Supported extensions: [.pdf, .docx, .doc]');
     }
     
     // Use local parser if .NET parser not available or failed
