@@ -4,6 +4,36 @@ using FluentValidation;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Configure port binding for Railway
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = 10 * 1024 * 1024; // 10MB
+});
+
+// Force port binding for Railway
+var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
+var aspnetcoreUrls = Environment.GetEnvironmentVariable("ASPNETCORE_URLS");
+
+Console.WriteLine($"PORT from env: {port}");
+Console.WriteLine($"ASPNETCORE_URLS: {aspnetcoreUrls}");
+
+// Try to extract port from ASPNETCORE_URLS if PORT is not set
+if (port == "8080" && !string.IsNullOrEmpty(aspnetcoreUrls))
+{
+    var match = System.Text.RegularExpressions.Regex.Match(aspnetcoreUrls, @":(\d+)");
+    if (match.Success)
+    {
+        port = match.Groups[1].Value;
+        Console.WriteLine($"Extracted port from ASPNETCORE_URLS: {port}");
+    }
+}
+
+// Set the URL explicitly
+var url = $"http://0.0.0.0:{port}";
+Console.WriteLine($"Final URL: {url}");
+builder.WebHost.UseUrls(url);
+Environment.SetEnvironmentVariable("ASPNETCORE_URLS", url);
+
 // Add services to the container.
 builder.Services.AddControllers();
 
@@ -32,15 +62,19 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-// Add CORS policy for frontend integration
+// Add CORS policy for AlvaP integration
+var origins = new [] {
+    "https://alvap-mvp-production.up.railway.app",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173"
+};
+
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll", policy =>
-    {
-        policy.AllowAnyOrigin()
-              .AllowAnyMethod()
-              .AllowAnyHeader();
-    });
+    options.AddPolicy("alvap", policy =>
+        policy.WithOrigins(origins)
+              .AllowAnyHeader()
+              .AllowAnyMethod());
 });
 
 // Configure file upload size limits
@@ -64,10 +98,15 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-app.UseCors("AllowAll");
+app.UseCors("alvap");
 
 app.UseAuthorization();
 
 app.MapControllers();
+
+// Add health endpoints for Railway
+app.MapGet("/healthz", () => Results.Json(new { status = "ok" }));
+app.MapGet("/health", () => Results.Json(new { status = "ok" }));
+app.MapGet("/", () => Results.Json(new { status = "ok", message = "CV Parser API is running" }));
 
 app.Run();
