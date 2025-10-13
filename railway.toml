@@ -1,5 +1,5 @@
 [deploy]
-startCommand = "node simple-working-server.js"
+startCommand = "npm run start:server"
 healthcheckPath = "/health"
 healthcheckTimeout = 150
 restartPolicyType = "ON_FAILURE"
@@ -8,4 +8,4 @@ restartPolicyMaxRetries = 10
 [env]
 NODE_ENV = "production"
 ENABLE_DOTNET_PARSER = "true"
-DOTNET_CV_API_URL = "https://balanced-beauty-production.up.railway.app"
+DOTNET_CV_API_URL = "https://positive-bravery-production.up.railway.app"
