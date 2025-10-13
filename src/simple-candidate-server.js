@@ -220,6 +220,7 @@ async function parseWithLocalParser(buffer, mimetype, originalname) {
   }
   
   console.log('📄 Extracted text length:', text.length);
+  console.log('📄 First 500 characters of extracted text:', text.substring(0, 500));
   
   // Parse the text using improved regex patterns
   const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
@@ -309,10 +310,14 @@ async function parseWithLocalParser(buffer, mimetype, originalname) {
     /(?:director|manager|engineer|consultant|analyst|specialist|coordinator|executive|officer|lead|senior|junior|assistant|developer|designer|architect)\s+(?:at|@|of|for)\s*([A-Za-z\s&.,-]{2,25}?)(?:\s|$|\n|title|position|role|experience|with|preparation|brexit|professional|level|heading|governme|government|department|ministry|agency|authority)/i
   ];
   
-  for (const pattern of companyPatterns) {
+  console.log('🔍 Looking for company names...');
+  for (let i = 0; i < companyPatterns.length; i++) {
+    const pattern = companyPatterns[i];
+    console.log(`🔍 Trying pattern ${i + 1}:`, pattern);
     const match = pattern.exec(text);
     if (match && match[1]) {
       const candidateCompany = match[1].trim();
+      console.log(`🔍 Found candidate company: "${candidateCompany}"`);
       // Only accept company names that look reasonable - strict but allow business words
       if (candidateCompany.length > 3 && 
           candidateCompany.length < 40 && 
@@ -353,15 +358,23 @@ async function parseWithLocalParser(buffer, mimetype, originalname) {
           !candidateCompany.includes('shall') &&
           // Must contain at least one capital letter (proper company name)
           /[A-Z]/.test(candidateCompany)) {
+        console.log(`✅ Accepted company: "${candidateCompany}"`);
         company = candidateCompany;
         break;
+      } else {
+        console.log(`❌ Rejected company: "${candidateCompany}" (failed validation)`);
       }
+    } else {
+      console.log(`❌ No match for pattern ${i + 1}`);
     }
   }
   
   // If no company found, leave it empty rather than showing nonsense
   if (!company) {
+    console.log('❌ No company name found after trying all patterns');
     company = '';
+  } else {
+    console.log(`✅ Final company name: "${company}"`);
   }
   
   // Calculate confidence
