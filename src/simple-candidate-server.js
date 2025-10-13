@@ -197,6 +197,91 @@ app.get('/version', (req, res) => {
 // Add the new parse route
 // parseRoute(app); // Temporarily disabled - TypeScript issue
 
+// Local parser function for fallback
+async function parseWithLocalParser(buffer, mimetype, originalname) {
+  console.log('🔧 Using local parser for:', originalname);
+  
+  let text = '';
+  
+  // Extract text based on file type
+  if (mimetype === 'application/pdf') {
+    const pdfData = await pdfParse(buffer);
+    text = pdfData.text;
+  } else if (mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+    const result = await mammoth.extractRawText({ buffer });
+    text = result.value;
+  } else if (mimetype === 'application/msword') {
+    const result = await mammoth.extractRawText({ buffer });
+    text = result.value;
+  } else if (mimetype === 'text/plain') {
+    text = buffer.toString('utf8');
+  } else {
+    throw new Error(`Unsupported file type: ${mimetype}`);
+  }
+  
+  console.log('📄 Extracted text length:', text.length);
+  
+  // Parse the text using regex patterns
+  const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
+  const phoneRegex = /(\+?[\d\s\-\(\)]{10,})/g;
+  const nameRegex = /(?:name|full name|contact)[\s:]*([A-Za-z\s]+)/i;
+  
+  // Extract basic information
+  const email = emailRegex.exec(text)?.[0] || '';
+  const phone = phoneRegex.exec(text)?.[0]?.replace(/[^\d+]/g, '') || '';
+  const nameMatch = nameRegex.exec(text);
+  const fullName = nameMatch ? nameMatch[1].trim() : '';
+  
+  // Split name into first and last
+  const nameParts = fullName.split(' ');
+  const firstName = nameParts[0] || '';
+  const lastName = nameParts.slice(1).join(' ') || '';
+  
+  // Look for job title and company in the text
+  const jobTitleRegex = /(?:title|position|role)[\s:]*([A-Za-z\s]+)/i;
+  const companyRegex = /(?:company|employer|organization)[\s:]*([A-Za-z\s&.,]+)/i;
+  
+  const jobTitleMatch = jobTitleRegex.exec(text);
+  const companyMatch = companyRegex.exec(text);
+  
+  const jobTitle = jobTitleMatch ? jobTitleMatch[1].trim() : '';
+  const company = companyMatch ? companyMatch[1].trim() : '';
+  
+  // Calculate confidence
+  let confidence = 0.3; // Base confidence for local parser
+  if (firstName && lastName) confidence += 0.2;
+  if (email) confidence += 0.2;
+  if (phone) confidence += 0.1;
+  if (jobTitle) confidence += 0.1;
+  if (company) confidence += 0.1;
+  confidence = Math.min(confidence, 0.8); // Cap at 0.8 for local parser
+  
+  return {
+    firstName: firstName,
+    lastName: lastName,
+    email: email,
+    phone: phone,
+    currentTitle: jobTitle,
+    currentEmployer: company,
+    skills: {},
+    experience: [],
+    notes: `Parsed locally from ${originalname}`,
+    confidence,
+    source: 'local-fallback',
+    parseConfidence: confidence,
+    textLength: text.length,
+    duration: 0,
+    metadata: {
+      originalFileName: originalname,
+      documentType: mimetype,
+      parsedAt: new Date().toISOString(),
+      parserUsed: 'local-fallback'
+    },
+    allResults: [],
+    errors: []
+  };
+}
+
 // CV parsing endpoint
 app.post('/api/candidates/parse-cv', upload.single('file'), async (req, res) => {
   const startTime = Date.now();
@@ -221,25 +306,37 @@ app.post('/api/candidates/parse-cv', upload.single('file'), async (req, res) => 
         console.log('🔧 MIME type:', mimetype);
         parsedData = await dotNetParser.parseFile(buffer, mimetype, originalname);
         console.log('✅ .NET parser success - parsed data:', JSON.stringify(parsedData, null, 2));
-    } catch (error) {
+      } catch (error) {
         console.error('❌ .NET parser failed:', error.message);
         console.error('❌ Error details:', error);
-        return res.status(503).json({ 
-          error: 'ParserUnavailable',
-          message: 'CV parsing service is temporarily unavailable',
+        console.log('🔄 Falling back to local parser...');
+        
+        // Fallback to local parser
+        try {
+          parsedData = await parseWithLocalParser(buffer, mimetype, originalname);
+          console.log('✅ Local parser fallback success');
+        } catch (fallbackError) {
+          console.error('❌ Local parser fallback also failed:', fallbackError.message);
+          return res.status(500).json({ 
+            error: 'ParsingFailed',
+            message: 'Both .NET and local parsers failed',
+            details: `NET: ${error.message}, Local: ${fallbackError.message}`
+          });
+        }
+      }
+    } else {
+      console.log('ℹ️ Using local parser for unsupported file type:', fileExtension);
+      try {
+        parsedData = await parseWithLocalParser(buffer, mimetype, originalname);
+        console.log('✅ Local parser success');
+      } catch (error) {
+        console.error('❌ Local parser failed:', error.message);
+        return res.status(500).json({ 
+          error: 'ParsingFailed',
+          message: 'Local parser failed',
           details: error.message
         });
       }
-    } else {
-      console.log('ℹ️ .NET parser not available or file type not supported');
-      console.log('ℹ️ dotNetParser available:', !!dotNetParser);
-      console.log('ℹ️ File extension:', fileExtension);
-      console.log('ℹ️ Supported extensions: [.pdf, .docx, .doc]');
-      return res.status(503).json({ 
-        error: 'ParserUnavailable',
-        message: 'CV parsing service is not available for this file type',
-        supportedTypes: ['.pdf', '.docx', '.doc']
-      });
     }
     
     const duration = Date.now() - startTime;
