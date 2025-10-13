@@ -5,6 +5,7 @@ console.log('=== SIMPLE CANDIDATE SERVER STARTING - CLEAN VERSION WITH .NET PARS
 require('dotenv').config();
 
 const express = require('express');
+const { parseRoute } = require('./routes/parse');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
@@ -192,6 +193,9 @@ app.get('/version', (req, res) => {
     dotnetParser: dotNetParser ? 'enabled' : 'disabled'
   });
 });
+
+// Add the new parse route
+parseRoute(app);
 
 // CV parsing endpoint
 app.post('/api/candidates/parse-cv', upload.single('file'), async (req, res) => {

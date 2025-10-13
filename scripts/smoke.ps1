@@ -1,7 +1,7 @@
 Param(
   [string]$Api    = "https://natural-kindness-production.up.railway.app",
   [string]$Parser = "https://positive-bravery-production.up.railway.app",
-  [string]$CvPath = ".\tests\sample.pdf"
+  [string]$CvPath = ".\05-versions-space.pdf"
 )
 
 Write-Host "=== AlvaP CV Parser Smoke Test ===" -ForegroundColor Green
@@ -39,7 +39,7 @@ if (-not (Test-Path $CvPath)) {
 }
 
 try {
-  $parserResult = curl -s -F "file=@$CvPath" "$Parser/parse" | ConvertFrom-Json
+  $parserResult = curl -s -F "file=@$CvPath" "$Parser/api/documentparser/parse" | ConvertFrom-Json
   if (-not $parserResult.success) {
     throw "Parser returned success=false: $($parserResult.message)"
   }
@@ -75,28 +75,27 @@ try {
 Write-Host ""
 Write-Host "-- Testing end-to-end via backend..." -ForegroundColor Yellow
 try {
-  $backendResult = curl -s -F "file=@$CvPath" "$Api/api/candidates/parse-cv" | ConvertFrom-Json
-  if (-not $backendResult.success) {
-    throw "Backend returned success=false: $($backendResult.error)"
+  $backendResult = curl -s -F "file=@$CvPath" "$Api/api/parse" | ConvertFrom-Json
+  if (-not $backendResult.firstName -and -not $backendResult.name) {
+    throw "Backend returned no name data"
   }
   
-  $data = $backendResult.data
   Write-Host "✅ End-to-end test passed" -ForegroundColor Green
-  Write-Host "   Name: $($data.firstName) $($data.lastName)" -ForegroundColor Cyan
-  Write-Host "   Email: $($data.email)" -ForegroundColor Cyan
-  Write-Host "   Phone: $($data.phone)" -ForegroundColor Cyan
-  Write-Host "   Current Title: $($data.currentTitle)" -ForegroundColor Cyan
-  Write-Host "   Current Employer: $($data.currentEmployer)" -ForegroundColor Cyan
+  Write-Host "   Name: $($backendResult.firstName) $($backendResult.lastName)" -ForegroundColor Cyan
+  Write-Host "   Email: $($backendResult.email)" -ForegroundColor Cyan
+  Write-Host "   Phone: $($backendResult.phone)" -ForegroundColor Cyan
+  Write-Host "   Job Title: $($backendResult.jobTitle)" -ForegroundColor Cyan
+  Write-Host "   Employer: $($backendResult.employer)" -ForegroundColor Cyan
   
   # Check for required fields
-  if ([string]::IsNullOrWhiteSpace($data.phone)) {
+  if ([string]::IsNullOrWhiteSpace($backendResult.phone)) {
     Write-Host "⚠️  Warning: Phone number is empty" -ForegroundColor Yellow
   }
-  if ([string]::IsNullOrWhiteSpace($data.currentTitle)) {
-    Write-Host "⚠️  Warning: Current job title is empty" -ForegroundColor Yellow
+  if ([string]::IsNullOrWhiteSpace($backendResult.jobTitle)) {
+    Write-Host "⚠️  Warning: Job title is empty" -ForegroundColor Yellow
   }
-  if ([string]::IsNullOrWhiteSpace($data.currentEmployer)) {
-    Write-Host "⚠️  Warning: Current employer is empty" -ForegroundColor Yellow
+  if ([string]::IsNullOrWhiteSpace($backendResult.employer)) {
+    Write-Host "⚠️  Warning: Employer is empty" -ForegroundColor Yellow
   }
 } catch {
   Write-Host "❌ End-to-end test failed: $($_.Exception.Message)" -ForegroundColor Red
