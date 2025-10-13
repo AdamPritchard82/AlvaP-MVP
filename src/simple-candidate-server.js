@@ -267,11 +267,16 @@ async function parseWithLocalParser(buffer, mimetype, originalname) {
   let lastName = '';
   let fullName = '';
   
-  // Try multiple name patterns
+  // Try multiple name patterns - improved for different CV formats
   const namePatterns = [
+    // Look for name at the very beginning of the document
+    /^([A-Z][a-z]+\s+[A-Z][a-z]+)/m,
+    // Look for name patterns with common prefixes
     /(?:name|full name|contact)[\s:]*([A-Za-z\s]+?)(?:\n|$|email|phone|@)/i,
-    /^([A-Za-z\s]+?)(?:\n|$|email|phone|@)/i,
-    /([A-Z][a-z]+\s+[A-Z][a-z]+)/g
+    // Look for standalone name patterns (first line that looks like a name)
+    /^([A-Z][a-z]+\s+[A-Z][a-z]+)(?:\s|$|\n)/m,
+    // Look for name patterns in the first few lines
+    /^([A-Z][a-z]+\s+[A-Z][a-z]+)(?:\s|$|\n|email|phone|@)/m
   ];
   
   for (const pattern of namePatterns) {
@@ -291,100 +296,157 @@ async function parseWithLocalParser(buffer, mimetype, originalname) {
     lastName = nameParts.slice(1).join(' ') || '';
   }
   
-  // Improved job title and company extraction
+  // Improved job title and company extraction - look in experience sections
   let jobTitle = '';
   let company = '';
   
-  // Look for job title patterns
-  const jobTitlePatterns = [
-    /(?:title|position|role|job)[\s:]*([A-Za-z\s&.,-]+?)(?:\n|$|company|employer)/i,
-    /([A-Za-z\s&.,-]+(?:director|manager|engineer|consultant|analyst|specialist|coordinator|executive|officer|lead|senior|junior|assistant|developer|designer|architect|consultant))/i
+  // First, try to find the experience/employment section
+  const experienceSectionPatterns = [
+    /(?:employment history|professional experience|work experience|career history|experience|employment|work history)[\s:]*([\s\S]*?)(?:\n\n|\n[A-Z][a-z]+\s+[A-Z]|$)/i,
+    /(?:current role|current position|present role|present position)[\s:]*([\s\S]*?)(?:\n\n|\n[A-Z][a-z]+\s+[A-Z]|$)/i
   ];
   
-  for (const pattern of jobTitlePatterns) {
+  let experienceSection = '';
+  for (const pattern of experienceSectionPatterns) {
     const match = pattern.exec(text);
     if (match && match[1]) {
-      jobTitle = match[1].trim();
-      if (jobTitle.length > 2 && jobTitle.length < 100) {
-        break;
+      experienceSection = match[1].trim();
+      console.log('🔍 Found experience section:', experienceSection.substring(0, 200));
+      break;
+    }
+  }
+  
+  // If we found an experience section, extract from it
+  if (experienceSection) {
+    // Look for job title in the experience section
+    const jobTitlePatterns = [
+      /^([A-Za-z\s&.,-]+(?:director|manager|engineer|consultant|analyst|specialist|coordinator|executive|officer|lead|senior|junior|assistant|developer|designer|architect|advisor|consultant|analyst|specialist|coordinator|executive|officer|lead|senior|junior|assistant|developer|designer|architect))/i,
+      /(?:title|position|role|job)[\s:]*([A-Za-z\s&.,-]+?)(?:\n|$|company|employer|at)/i
+    ];
+    
+    for (const pattern of jobTitlePatterns) {
+      const match = pattern.exec(experienceSection);
+      if (match && match[1]) {
+        jobTitle = match[1].trim();
+        if (jobTitle.length > 2 && jobTitle.length < 100) {
+          console.log('🔍 Found job title in experience section:', jobTitle);
+          break;
+        }
+      }
+    }
+    
+    // Look for company in the experience section
+    const companyPatterns = [
+      /(?:at|@|company|employer)[\s:]*([A-Za-z\s&.,-]{2,30}?)(?:\n|$|title|position|role|experience|with|preparation|brexit|professional|level|heading|governme|government|department|ministry|agency|authority)/i,
+      /([A-Za-z\s&.,-]+(?:ltd|limited|inc|corp|corporation|llc|plc|group|company|software|solutions|systems|services|consulting|consultancy|recruitment|recruiting))(?:\s|$|\n)/i
+    ];
+    
+    for (const pattern of companyPatterns) {
+      const match = pattern.exec(experienceSection);
+      if (match && match[1]) {
+        const candidateCompany = match[1].trim();
+        if (candidateCompany.length > 2 && candidateCompany.length < 40 && 
+            !candidateCompany.includes('level') && !candidateCompany.includes('experience') &&
+            !candidateCompany.includes('heading') && !candidateCompany.includes('governme') &&
+            /[A-Z]/.test(candidateCompany)) {
+          company = candidateCompany;
+          console.log('🔍 Found company in experience section:', company);
+          break;
+        }
       }
     }
   }
   
-  // Look for company patterns - targeted approach for "Door 10"
-  const companyPatterns = [
-    // Look specifically for "Door 10" pattern (standalone company name)
-    /(door\s*10)/gi,
-    // Look for company names with business suffixes - most reliable
-    /([A-Za-z\s&.,-]+(?:ltd|limited|inc|corp|corporation|llc|plc|group|company|software|solutions|systems|services|consulting|consultancy|recruitment|recruiting))(?:\s|$|\n)/i,
-    // Look for "Door 10 Recruitment" type patterns - specific to this CV
-    /([A-Za-z\s&.,-]+(?:recruitment|recruiting|consulting|consultancy|software|solutions|systems|services|group|company))(?:\s|$|\n)/i,
-    // Look for standalone company names that appear on their own line or after common words
-    /(?:company|employer|organization|firm|corporation)[\s:]*([A-Za-z\s&.,-]{2,25}?)(?:\n|$|title|position|role|experience|with|preparation|brexit|professional|level|heading|governme|government|department|ministry|agency|authority)/i,
-    // Look for "at Company" patterns - stop at first space after company name
-    /(?:at|@)\s*([A-Za-z\s&.,-]{2,25}?)(?:\s|$|\n|title|position|role|experience|with|preparation|brexit|professional|level|heading|governme|government|department|ministry|agency|authority)/i,
-    // Look for company names that appear after job titles - but be very specific
-    /(?:director|manager|engineer|consultant|analyst|specialist|coordinator|executive|officer|lead|senior|junior|assistant|developer|designer|architect)\s+(?:at|@|of|for)\s*([A-Za-z\s&.,-]{2,25}?)(?:\s|$|\n|title|position|role|experience|with|preparation|brexit|professional|level|heading|governme|government|department|ministry|agency|authority)/i
-  ];
-  
-  console.log('🔍 Looking for company names...');
-  for (let i = 0; i < companyPatterns.length; i++) {
-    const pattern = companyPatterns[i];
-    console.log(`🔍 Trying pattern ${i + 1}:`, pattern);
-    const match = pattern.exec(text);
-    if (match && match[1]) {
-      const candidateCompany = match[1].trim();
-      console.log(`🔍 Found candidate company: "${candidateCompany}"`);
-      // Only accept company names that look reasonable - strict but allow business words
-      if (candidateCompany.length > 3 && 
-          candidateCompany.length < 40 && 
-          // Allow "Door 10 Recruitment" specifically
-          (candidateCompany.toLowerCase().includes('door') || 
-           !candidateCompany.includes('level')) &&
-          !candidateCompany.includes('experience') &&
-          !candidateCompany.includes('heading') &&
-          !candidateCompany.includes('governme') &&
-          !candidateCompany.includes('professional') &&
-          !candidateCompany.includes('preparation') &&
-          !candidateCompany.includes('brexit') &&
-          !candidateCompany.includes('wide') &&
-          !candidateCompany.includes('and') &&
-          !candidateCompany.includes('the') &&
-          !candidateCompany.includes('with') &&
-          !candidateCompany.includes('for') &&
-          !candidateCompany.includes('in') &&
-          !candidateCompany.includes('of') &&
-          !candidateCompany.includes('at') &&
-          !candidateCompany.includes('by') &&
-          !candidateCompany.includes('from') &&
-          !candidateCompany.includes('to') &&
-          !candidateCompany.includes('on') &&
-          !candidateCompany.includes('is') &&
-          !candidateCompany.includes('are') &&
-          !candidateCompany.includes('was') &&
-          !candidateCompany.includes('were') &&
-          !candidateCompany.includes('has') &&
-          !candidateCompany.includes('have') &&
-          !candidateCompany.includes('had') &&
-          !candidateCompany.includes('will') &&
-          !candidateCompany.includes('would') &&
-          !candidateCompany.includes('could') &&
-          !candidateCompany.includes('should') &&
-          !candidateCompany.includes('may') &&
-          !candidateCompany.includes('might') &&
-          !candidateCompany.includes('can') &&
-          !candidateCompany.includes('must') &&
-          !candidateCompany.includes('shall') &&
-          // Must contain at least one capital letter (proper company name) OR be "door10"
-          (/[A-Z]/.test(candidateCompany) || candidateCompany.toLowerCase() === 'door10')) {
-        console.log(`✅ Accepted company: "${candidateCompany}"`);
-        company = candidateCompany;
-        break;
-      } else {
-        console.log(`❌ Rejected company: "${candidateCompany}" (failed validation)`);
+  // Fallback: if no experience section found, try the old patterns
+  if (!jobTitle || !company) {
+    console.log('🔍 No experience section found, trying fallback patterns...');
+    
+    // Look for job title patterns
+    const jobTitlePatterns = [
+      /(?:title|position|role|job)[\s:]*([A-Za-z\s&.,-]+?)(?:\n|$|company|employer)/i,
+      /([A-Za-z\s&.,-]+(?:director|manager|engineer|consultant|analyst|specialist|coordinator|executive|officer|lead|senior|junior|assistant|developer|designer|architect|consultant))/i
+    ];
+    
+    for (const pattern of jobTitlePatterns) {
+      const match = pattern.exec(text);
+      if (match && match[1]) {
+        jobTitle = match[1].trim();
+        if (jobTitle.length > 2 && jobTitle.length < 100) {
+          break;
+        }
       }
-    } else {
-      console.log(`❌ No match for pattern ${i + 1}`);
+    }
+  }
+  
+  // Fallback: if no company found in experience section, try old patterns
+  if (!company) {
+    console.log('🔍 No company found in experience section, trying fallback patterns...');
+    
+    const companyPatterns = [
+      // Look specifically for "Door 10" pattern (standalone company name)
+      /(door\s*10)/gi,
+      // Look for company names with business suffixes - most reliable
+      /([A-Za-z\s&.,-]+(?:ltd|limited|inc|corp|corporation|llc|plc|group|company|software|solutions|systems|services|consulting|consultancy|recruitment|recruiting))(?:\s|$|\n)/i
+    ];
+    
+    for (let i = 0; i < companyPatterns.length; i++) {
+      const pattern = companyPatterns[i];
+      console.log(`🔍 Trying fallback pattern ${i + 1}:`, pattern);
+      const match = pattern.exec(text);
+      if (match && match[1]) {
+        const candidateCompany = match[1].trim();
+        console.log(`🔍 Found candidate company: "${candidateCompany}"`);
+        // Only accept company names that look reasonable - strict but allow business words
+        if (candidateCompany.length > 3 && 
+            candidateCompany.length < 40 && 
+            // Allow "Door 10" specifically
+            (candidateCompany.toLowerCase().includes('door') || 
+             !candidateCompany.includes('level')) &&
+            !candidateCompany.includes('experience') &&
+            !candidateCompany.includes('heading') &&
+            !candidateCompany.includes('governme') &&
+            !candidateCompany.includes('professional') &&
+            !candidateCompany.includes('preparation') &&
+            !candidateCompany.includes('brexit') &&
+            !candidateCompany.includes('wide') &&
+            !candidateCompany.includes('and') &&
+            !candidateCompany.includes('the') &&
+            !candidateCompany.includes('with') &&
+            !candidateCompany.includes('for') &&
+            !candidateCompany.includes('in') &&
+            !candidateCompany.includes('of') &&
+            !candidateCompany.includes('at') &&
+            !candidateCompany.includes('by') &&
+            !candidateCompany.includes('from') &&
+            !candidateCompany.includes('to') &&
+            !candidateCompany.includes('on') &&
+            !candidateCompany.includes('is') &&
+            !candidateCompany.includes('are') &&
+            !candidateCompany.includes('was') &&
+            !candidateCompany.includes('were') &&
+            !candidateCompany.includes('has') &&
+            !candidateCompany.includes('have') &&
+            !candidateCompany.includes('had') &&
+            !candidateCompany.includes('will') &&
+            !candidateCompany.includes('would') &&
+            !candidateCompany.includes('could') &&
+            !candidateCompany.includes('should') &&
+            !candidateCompany.includes('may') &&
+            !candidateCompany.includes('might') &&
+            !candidateCompany.includes('can') &&
+            !candidateCompany.includes('must') &&
+            !candidateCompany.includes('shall') &&
+            // Must contain at least one capital letter (proper company name) OR be "door10"
+            (/[A-Z]/.test(candidateCompany) || candidateCompany.toLowerCase() === 'door10')) {
+          console.log(`✅ Accepted company: "${candidateCompany}"`);
+          company = candidateCompany;
+          break;
+        } else {
+          console.log(`❌ Rejected company: "${candidateCompany}" (failed validation)`);
+        }
+      } else {
+        console.log(`❌ No match for fallback pattern ${i + 1}`);
+      }
     }
   }
   
