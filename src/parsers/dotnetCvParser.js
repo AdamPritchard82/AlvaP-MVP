@@ -1,6 +1,8 @@
 // .NET CV Parser Integration
 const axios = require('axios');
 const FormData = require('form-data');
+const { normaliseDotnet } = require('../adapters/dotnetParserAdapter.js');
+const { fallbackPhone } = require('../utils/phoneFallback.js');
 
 class DotNetCvParser {
   constructor() {
@@ -13,30 +15,42 @@ class DotNetCvParser {
       console.log(`[DotNetCvParser] Starting parse for ${filename} (${mimetype})`);
       
       const formData = new FormData();
-      formData.append('file', buffer, {
-        filename: filename,
-        contentType: mimetype
-      });
+      formData.append('file', new Blob([buffer], { type: mimetype }), filename);
       
-      const response = await axios.post(`${this.apiUrl}/api/documentparser/parse`, formData, {
-        headers: {
-          ...formData.getHeaders(),
-        },
-        timeout: this.timeout,
-        maxContentLength: 10 * 1024 * 1024, // 10MB
-        maxBodyLength: 10 * 1024 * 1024, // 10MB
+      const response = await fetch(`${this.apiUrl}/api/documentparser/parse`, {
+        method: 'POST',
+        body: formData,
+        signal: AbortSignal.timeout(this.timeout)
       });
 
-      if (!response.data.success) {
-        throw new Error(response.data.message || 'CV parsing failed');
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.message || 'CV parsing failed');
       }
 
       console.log(`[DotNetCvParser] Successfully parsed ${filename}`);
-      console.log(`[DotNetCvParser] Raw .NET response:`, JSON.stringify(response.data, null, 2));
-      console.log(`[DotNetCvParser] Data:`, JSON.stringify(response.data.data, null, 2));
+      console.log(`[DotNetCvParser] Raw .NET response:`, JSON.stringify(data, null, 2));
+      console.log(`[DotNetCvParser] Data:`, JSON.stringify(data.data, null, 2));
       
-      // Transform .NET response to your existing format
-      return this.transformResponse(response.data.data, filename, mimetype);
+      // Use the adapter to normalize the response
+      const normalized = normaliseDotnet(data);
+      
+      // Apply phone fallback if needed
+      if (!normalized.phone && data.data?.summary) {
+        const fallback = fallbackPhone(data.data.summary);
+        if (fallback) {
+          console.log(`[DotNetCvParser] Using phone fallback: ${fallback}`);
+          normalized.phone = fallback;
+        }
+      }
+      
+      return this.transformResponse(normalized, filename, mimetype);
     } catch (error) {
       console.error(`[DotNetCvParser] Error parsing ${filename}:`, error.message);
       
@@ -54,95 +68,43 @@ class DotNetCvParser {
     }
   }
 
-  transformResponse(dotNetData, filename, mimetype) {
-    const { personalInfo, workExperience, education, skills, languages, certifications, summary } = dotNetData;
+  transformResponse(normalizedData, filename, mimetype) {
+    // The data is already normalized by the adapter
+    const { name, firstName, lastName, email, phone, jobTitle, employer } = normalizedData;
     
-    // Extract names
-    const firstName = personalInfo.firstName || '';
-    const lastName = personalInfo.lastName || '';
-    const fullName = personalInfo.name || `${firstName} ${lastName}`.trim();
+    const fullName = name || `${firstName} ${lastName}`.trim();
     
-    // Detect skills using keyword matching
-    const allText = [
-      fullName,
-      personalInfo.linkedIn || '',
-      ...workExperience.map(exp => `${exp.jobTitle} ${exp.company} ${exp.description || ''}`),
-      ...education.map(edu => `${edu.degree} ${edu.field} ${edu.institution}`),
-      ...skills,
-      summary || ''
-    ].join(' ').toLowerCase();
-
-    const detectedSkills = {
-      communications: this.detectSkill(allText, 'communications'),
-      campaigns: this.detectSkill(allText, 'campaigns'),
-      policy: this.detectSkill(allText, 'policy'),
-      publicAffairs: this.detectSkill(allText, 'publicAffairs')
-    };
-
-    // Transform work experience
-    const experience = workExperience.map(exp => {
-      console.log(`[DotNetCvParser] Processing work experience:`, JSON.stringify(exp, null, 2));
-      return {
-        employer: exp.company || '',
-        title: exp.jobTitle || '',
-        startDate: exp.startDate || '',
-        endDate: exp.endDate || '',
-        description: exp.description || ''
-      };
-    });
-    
-    console.log(`[DotNetCvParser] Transformed experience:`, JSON.stringify(experience, null, 2));
-
-    // Generate notes from summary or first few work experiences
-    let notes = summary || '';
-    if (!notes && workExperience.length > 0) {
-      const recentJobs = workExperience.slice(0, 2);
-      notes = recentJobs
-        .map(exp => `${exp.jobTitle} at ${exp.company}`)
-        .join(', ');
-    }
-    notes = notes.substring(0, 200) + (notes.length > 200 ? '...' : '');
-
     // Calculate confidence based on data completeness
     let confidence = 0.5; // Base confidence
     if (firstName && lastName) confidence += 0.2;
-    if (personalInfo.email) confidence += 0.2;
-    if (personalInfo.phone) confidence += 0.1;
-    if (workExperience.length > 0) confidence += 0.2;
-    if (skills.length > 0) confidence += 0.1;
+    if (email) confidence += 0.2;
+    if (phone) confidence += 0.1;
+    if (jobTitle) confidence += 0.2;
+    if (employer) confidence += 0.1;
     confidence = Math.min(confidence, 1.0);
 
     return {
-      firstName,
-      lastName,
-      email: personalInfo.email || '',
-      phone: personalInfo.phone || '',
-      currentTitle: workExperience.length > 0 ? workExperience[0].jobTitle || '' : '',
-      currentEmployer: workExperience.length > 0 ? workExperience[0].company || '' : '',
-      skills: detectedSkills,
-      experience,
-      notes,
+      firstName: firstName || '',
+      lastName: lastName || '',
+      email: email || '',
+      phone: phone || '',
+      currentTitle: jobTitle || '',
+      currentEmployer: employer || '',
+      skills: {}, // Will be populated by the main parser
+      experience: [], // Will be populated by the main parser
+      notes: `Parsed from ${filename}`,
       confidence,
       source: 'dotnet-api',
       parseConfidence: confidence,
-      textLength: allText.length,
+      textLength: fullName.length,
       duration: 0, // Will be set by the calling code
       metadata: {
         originalFileName: filename,
         documentType: mimetype,
-        parsedAt: dotNetData.parsedAt,
-        skills: skills,
-        languages: languages,
-        certifications: certifications,
-        education: education.map(edu => ({
-          degree: edu.degree,
-          field: edu.field,
-          institution: edu.institution,
-          startDate: edu.startDate,
-          endDate: edu.endDate
-        }))
+        parsedAt: new Date().toISOString(),
+        adapterUsed: true
       },
-      allResults: [], // Not applicable for single service
+      allResults: [],
       errors: []
     };
   }
