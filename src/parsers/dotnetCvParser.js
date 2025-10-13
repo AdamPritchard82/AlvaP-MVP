@@ -55,19 +55,19 @@ class DotNetCvParser {
   }
 
   transformResponse(dotNetData, filename, mimetype) {
-    const { PersonalInfo: personalInfo, WorkExperience: workExperience, Education: education, Skills: skills, Languages: languages, Certifications: certifications, Summary: summary } = dotNetData;
+    const { personalInfo, workExperience, education, skills, languages, certifications, summary } = dotNetData;
     
     // Extract names
-    const firstName = personalInfo.FirstName || '';
-    const lastName = personalInfo.LastName || '';
-    const fullName = personalInfo.Name || `${firstName} ${lastName}`.trim();
+    const firstName = personalInfo.firstName || '';
+    const lastName = personalInfo.lastName || '';
+    const fullName = personalInfo.name || `${firstName} ${lastName}`.trim();
     
     // Detect skills using keyword matching
     const allText = [
       fullName,
-      personalInfo.LinkedIn || '',
-      ...workExperience.map(exp => `${exp.JobTitle} ${exp.Company} ${exp.Description || ''}`),
-      ...education.map(edu => `${edu.Degree} ${edu.Field} ${edu.Institution}`),
+      personalInfo.linkedIn || '',
+      ...workExperience.map(exp => `${exp.jobTitle} ${exp.company} ${exp.description || ''}`),
+      ...education.map(edu => `${edu.degree} ${edu.field} ${edu.institution}`),
       ...skills,
       summary || ''
     ].join(' ').toLowerCase();
@@ -83,11 +83,11 @@ class DotNetCvParser {
     const experience = workExperience.map(exp => {
       console.log(`[DotNetCvParser] Processing work experience:`, JSON.stringify(exp, null, 2));
       return {
-        employer: exp.Company || '',
-        title: exp.JobTitle || '',
-        startDate: exp.StartDate || '',
-        endDate: exp.EndDate || '',
-        description: exp.Description || ''
+        employer: exp.company || '',
+        title: exp.jobTitle || '',
+        startDate: exp.startDate || '',
+        endDate: exp.endDate || '',
+        description: exp.description || ''
       };
     });
     
@@ -98,7 +98,7 @@ class DotNetCvParser {
     if (!notes && workExperience.length > 0) {
       const recentJobs = workExperience.slice(0, 2);
       notes = recentJobs
-        .map(exp => `${exp.JobTitle} at ${exp.Company}`)
+        .map(exp => `${exp.jobTitle} at ${exp.company}`)
         .join(', ');
     }
     notes = notes.substring(0, 200) + (notes.length > 200 ? '...' : '');
@@ -106,8 +106,8 @@ class DotNetCvParser {
     // Calculate confidence based on data completeness
     let confidence = 0.5; // Base confidence
     if (firstName && lastName) confidence += 0.2;
-    if (personalInfo.Email) confidence += 0.2;
-    if (personalInfo.Phone) confidence += 0.1;
+    if (personalInfo.email) confidence += 0.2;
+    if (personalInfo.phone) confidence += 0.1;
     if (workExperience.length > 0) confidence += 0.2;
     if (skills.length > 0) confidence += 0.1;
     confidence = Math.min(confidence, 1.0);
@@ -115,10 +115,10 @@ class DotNetCvParser {
     return {
       firstName,
       lastName,
-      email: personalInfo.Email || '',
-      phone: personalInfo.Phone || '',
-      currentTitle: workExperience.length > 0 ? workExperience[0].JobTitle || '' : '',
-      currentEmployer: workExperience.length > 0 ? workExperience[0].Company || '' : '',
+      email: personalInfo.email || '',
+      phone: personalInfo.phone || '',
+      currentTitle: workExperience.length > 0 ? workExperience[0].jobTitle || '' : '',
+      currentEmployer: workExperience.length > 0 ? workExperience[0].company || '' : '',
       skills: detectedSkills,
       experience,
       notes,
@@ -130,16 +130,16 @@ class DotNetCvParser {
       metadata: {
         originalFileName: filename,
         documentType: mimetype,
-        parsedAt: dotNetData.ParsedAt,
+        parsedAt: dotNetData.parsedAt,
         skills: skills,
         languages: languages,
         certifications: certifications,
         education: education.map(edu => ({
-          degree: edu.Degree,
-          field: edu.Field,
-          institution: edu.Institution,
-          startDate: edu.StartDate,
-          endDate: edu.EndDate
+          degree: edu.degree,
+          field: edu.field,
+          institution: edu.institution,
+          startDate: edu.startDate,
+          endDate: edu.endDate
         }))
       },
       allResults: [], // Not applicable for single service
