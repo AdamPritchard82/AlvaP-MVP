@@ -1,0 +1,8 @@
+[env]
+ASPNETCORE_ENVIRONMENT = "Production"
+
+[start]
+cmd = "dotnet CVDocumentParser.API.dll"
+
+[deploy]
+healthcheckPath = "/api/documentparser/health"
