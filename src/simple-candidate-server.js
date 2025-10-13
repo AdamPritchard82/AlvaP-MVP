@@ -267,16 +267,16 @@ async function parseWithLocalParser(buffer, mimetype, originalname) {
   let lastName = '';
   let fullName = '';
   
-  // Try multiple name patterns - improved for different CV formats
+  // Try multiple name patterns - improved for different CV formats including double-barreled names
   const namePatterns = [
-    // Look for name at the very beginning of the document
-    /^([A-Z][a-z]+\s+[A-Z][a-z]+)/m,
+    // Look for name at the very beginning of the document (including hyphenated names)
+    /^([A-Z][a-z]+(?:-[A-Z][a-z]+)?\s+[A-Z][a-z]+(?:-[A-Z][a-z]+)?)/m,
     // Look for name patterns with common prefixes
-    /(?:name|full name|contact)[\s:]*([A-Za-z\s]+?)(?:\n|$|email|phone|@)/i,
+    /(?:name|full name|contact)[\s:]*([A-Za-z\s-]+?)(?:\n|$|email|phone|@)/i,
     // Look for standalone name patterns (first line that looks like a name)
-    /^([A-Z][a-z]+\s+[A-Z][a-z]+)(?:\s|$|\n)/m,
+    /^([A-Z][a-z]+(?:-[A-Z][a-z]+)?\s+[A-Z][a-z]+(?:-[A-Z][a-z]+)?)(?:\s|$|\n)/m,
     // Look for name patterns in the first few lines
-    /^([A-Z][a-z]+\s+[A-Z][a-z]+)(?:\s|$|\n|email|phone|@)/m
+    /^([A-Z][a-z]+(?:-[A-Z][a-z]+)?\s+[A-Z][a-z]+(?:-[A-Z][a-z]+)?)(?:\s|$|\n|email|phone|@)/m
   ];
   
   for (const pattern of namePatterns) {
@@ -318,19 +318,48 @@ async function parseWithLocalParser(buffer, mimetype, originalname) {
   
   // If we found an experience section, extract from it
   if (experienceSection) {
-    // Look for job title in the experience section
+    console.log('🔍 Experience section found, looking for job title and company...');
+    
+    // Look for job title in the experience section - be more specific
     const jobTitlePatterns = [
-      /^([A-Za-z\s&.,-]+(?:director|manager|engineer|consultant|analyst|specialist|coordinator|executive|officer|lead|senior|junior|assistant|developer|designer|architect|advisor|consultant|analyst|specialist|coordinator|executive|officer|lead|senior|junior|assistant|developer|designer|architect))/i,
+      // Look for job titles that start a line (most common format)
+      /^([A-Za-z\s&.,-]+(?:director|manager|engineer|consultant|analyst|specialist|coordinator|executive|officer|lead|senior|junior|assistant|developer|designer|architect|advisor|consultant|analyst|specialist|coordinator|executive|officer|lead|senior|junior|assistant|developer|designer|architect|consultant|analyst|specialist|coordinator|executive|officer|lead|senior|junior|assistant|developer|designer|architect))/im,
+      // Look for "Title at Company" format
+      /([A-Za-z\s&.,-]+(?:director|manager|engineer|consultant|analyst|specialist|coordinator|executive|officer|lead|senior|junior|assistant|developer|designer|architect|advisor|consultant|analyst|specialist|coordinator|executive|officer|lead|senior|junior|assistant|developer|designer|architect))\s+(?:at|@|of|for)\s+[A-Za-z\s&.,-]+/i,
+      // Look for explicit title/position labels
       /(?:title|position|role|job)[\s:]*([A-Za-z\s&.,-]+?)(?:\n|$|company|employer|at)/i
     ];
     
     for (const pattern of jobTitlePatterns) {
       const match = pattern.exec(experienceSection);
       if (match && match[1]) {
-        jobTitle = match[1].trim();
-        if (jobTitle.length > 2 && jobTitle.length < 100) {
+        const candidateTitle = match[1].trim();
+        // More strict validation for job titles
+        if (candidateTitle.length > 2 && candidateTitle.length < 100 && 
+            !candidateTitle.includes('across') && !candidateTitle.includes('public') &&
+            !candidateTitle.includes('philanthropic') && !candidateTitle.includes('level') &&
+            !candidateTitle.includes('experience') && !candidateTitle.includes('heading') &&
+            !candidateTitle.includes('governme') && !candidateTitle.includes('professional') &&
+            !candidateTitle.includes('preparation') && !candidateTitle.includes('brexit') &&
+            !candidateTitle.includes('wide') && !candidateTitle.includes('and') &&
+            !candidateTitle.includes('the') && !candidateTitle.includes('with') &&
+            !candidateTitle.includes('for') && !candidateTitle.includes('in') &&
+            !candidateTitle.includes('of') && !candidateTitle.includes('at') &&
+            !candidateTitle.includes('by') && !candidateTitle.includes('from') &&
+            !candidateTitle.includes('to') && !candidateTitle.includes('on') &&
+            !candidateTitle.includes('is') && !candidateTitle.includes('are') &&
+            !candidateTitle.includes('was') && !candidateTitle.includes('were') &&
+            !candidateTitle.includes('has') && !candidateTitle.includes('have') &&
+            !candidateTitle.includes('had') && !candidateTitle.includes('will') &&
+            !candidateTitle.includes('would') && !candidateTitle.includes('could') &&
+            !candidateTitle.includes('should') && !candidateTitle.includes('may') &&
+            !candidateTitle.includes('might') && !candidateTitle.includes('can') &&
+            !candidateTitle.includes('must') && !candidateTitle.includes('shall')) {
+          jobTitle = candidateTitle;
           console.log('🔍 Found job title in experience section:', jobTitle);
           break;
+        } else {
+          console.log('🔍 Rejected job title candidate:', candidateTitle);
         }
       }
     }
@@ -370,10 +399,28 @@ async function parseWithLocalParser(buffer, mimetype, originalname) {
     for (const pattern of jobTitlePatterns) {
       const match = pattern.exec(text);
       if (match && match[1]) {
-        jobTitle = match[1].trim();
-        if (jobTitle.length > 2 && jobTitle.length < 100) {
+        const candidateTitle = match[1].trim();
+        if (candidateTitle.length > 2 && candidateTitle.length < 100 &&
+            !candidateTitle.includes('across') && !candidateTitle.includes('public') &&
+            !candidateTitle.includes('philanthropic')) {
+          jobTitle = candidateTitle;
           break;
         }
+      }
+    }
+  }
+  
+  // Handle unemployed candidates - if no job title found, check for unemployment indicators
+  if (!jobTitle) {
+    const unemploymentIndicators = [
+      /(?:unemployed|job seeking|seeking employment|available for work|open to opportunities|between jobs|career break|sabbatical)/i
+    ];
+    
+    for (const pattern of unemploymentIndicators) {
+      if (pattern.test(text)) {
+        jobTitle = 'Seeking Employment';
+        console.log('🔍 Detected unemployed candidate');
+        break;
       }
     }
   }
