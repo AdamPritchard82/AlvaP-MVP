@@ -78,7 +78,21 @@ function parseCVContent(text) {
   
   // Extract basic information using regex
   const emailMatch = text.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
-  const phoneMatch = text.match(/(\+?[0-9\s\-\(\)]{10,})/);
+  
+  // Enhanced phone number patterns to catch various formats
+  const phonePatterns = [
+    /(\+44\s?\d{2}\s?\d{4}\s?\d{4})/,  // UK format: +44 78 808 62437
+    /(\+44\s?\d{5}\s?\d{6})/,          // UK format: +44 78808 62437
+    /(\+?[0-9\s\-\(\)]{10,})/,         // General format
+    /(\(?\d{3}\)?[-.\s]*\d{3}[-.\s]*\d{4})/, // US format
+    /(\+\d{1,3}\s?\d{1,4}\s?\d{1,4}\s?\d{1,4})/ // International format
+  ];
+  
+  let phoneMatch = null;
+  for (const pattern of phonePatterns) {
+    phoneMatch = text.match(pattern);
+    if (phoneMatch) break;
+  }
   
   // Extract name (first line that looks like a name)
   const lines = text.split('\n').filter(line => line.trim().length > 0);
@@ -87,44 +101,50 @@ function parseCVContent(text) {
   const firstName = nameParts[0] || '';
   const lastName = nameParts.slice(1).join(' ') || '';
   
-  // Extract job title and employer
+  // Extract job title and employer - look in header section first
   let currentTitle = '';
   let currentEmployer = '';
   
-  // Look for job title patterns
+  // Look for job title patterns in the first few lines (header section)
   const titlePatterns = [
     /(?:current|present|current role|position|title)[\s:]*([^\n]+)/i,
     /(?:job title|role|position)[\s:]*([^\n]+)/i,
-    /^([^@\n]+(?:manager|director|coordinator|specialist|analyst|consultant|officer|executive|lead|head|chief)[^@\n]*)$/im
+    /^([^@\n]+(?:manager|director|coordinator|specialist|analyst|consultant|officer|executive|lead|head|chief)[^@\n]*)$/im,
+    // Look for common job titles in the first few lines
+    /^(Director|Manager|Consultant|Specialist|Coordinator|Analyst|Officer|Executive|Lead|Head|Chief)[^@\n]*$/im
   ];
   
+  // Check first 10 lines for job titles
+  const firstLines = lines.slice(0, 10).join('\n');
   for (const pattern of titlePatterns) {
-    const match = text.match(pattern);
+    const match = firstLines.match(pattern);
     if (match && match[1]) {
       currentTitle = match[1].trim();
       break;
     }
   }
   
-  // Look for employer patterns
+  // Look for employer patterns in header section
   const employerPatterns = [
     /(?:current|present|current employer|company|organization)[\s:]*([^\n]+)/i,
     /(?:at|@)\s*([A-Z][^@\n]+)/g,
-    /(?:working at|employed at|company)[\s:]*([^\n]+)/i
+    /(?:working at|employed at|company)[\s:]*([^\n]+)/i,
+    // Look for company names in the first few lines
+    /^([A-Z][a-zA-Z\s&]+(?:Ltd|Inc|Corp|LLC|Company|Group|Associates|Partners|Consulting|Solutions|Services|Limited|Door|Dore|AECOM|Crown Estate))/im
   ];
   
   for (const pattern of employerPatterns) {
-    const match = text.match(pattern);
+    const match = firstLines.match(pattern);
     if (match && match[1]) {
       currentEmployer = match[1].trim();
       break;
     }
   }
   
-  // If no specific patterns found, look in the first few lines for company names
+  // If no specific patterns found, look for company names in the first few lines
   if (!currentEmployer) {
-    const companyPattern = /(?:at|@)\s*([A-Z][a-zA-Z\s&]+(?:Ltd|Inc|Corp|LLC|Company|Group|Associates|Partners|Consulting|Solutions|Services|Limited))/i;
-    const match = text.match(companyPattern);
+    const companyPattern = /(?:at|@)\s*([A-Z][a-zA-Z\s&]+(?:Ltd|Inc|Corp|LLC|Company|Group|Associates|Partners|Consulting|Solutions|Services|Limited|Door|Dore|AECOM|Crown Estate))/i;
+    const match = firstLines.match(companyPattern);
     if (match && match[1]) {
       currentEmployer = match[1].trim();
     }
