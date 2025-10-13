@@ -295,16 +295,16 @@ async function parseWithLocalParser(buffer, mimetype, originalname) {
     }
   }
   
-  // Look for company patterns - surgical precision
+  // Look for company patterns - ultra conservative approach
   const companyPatterns = [
-    // Look for "Director at Company" or "Manager at Company" patterns - very specific
-    /(?:director|manager|engineer|consultant|analyst|specialist|coordinator|executive|officer|lead|senior|junior|assistant|developer|designer|architect)\s+(?:at|@|of|for)\s*([A-Za-z\s&.,-]{2,20}?)(?:\n|$|title|position|role|experience|with|preparation|brexit|professional|level|heading|governme|government|department|ministry|agency|authority)/i,
-    // Look for company names with business suffixes - stop at common CV words
-    /([A-Za-z\s&.,-]+(?:ltd|limited|inc|corp|corporation|llc|plc|group|company|software|solutions|systems|services|consulting|consultancy))(?:\s|$|\n|preparation|brexit|professional|level|heading|governme|government|department|ministry|agency|authority)/i,
-    // Look for standalone company names (short, clean) - stop at CV buzzwords
-    /(?:company|employer|organization|firm|corporation)[\s:]*([A-Za-z\s&.,-]{2,20}?)(?:\n|$|title|position|role|experience|with|preparation|brexit|professional|level|heading|governme|government|department|ministry|agency|authority)/i,
-    // Look for "at Company" patterns - stop at CV buzzwords
-    /(?:at|@)\s*([A-Za-z\s&.,-]{2,20}?)(?:\n|$|title|position|role|experience|with|preparation|brexit|professional|level|heading|governme|government|department|ministry|agency|authority)/i
+    // Look for company names with business suffixes - most reliable
+    /([A-Za-z\s&.,-]+(?:ltd|limited|inc|corp|corporation|llc|plc|group|company|software|solutions|systems|services|consulting|consultancy))(?:\s|$|\n)/i,
+    // Look for "Director at Company" - very specific, short company names only
+    /(?:director|manager|engineer|consultant|analyst|specialist|coordinator|executive|officer|lead|senior|junior|assistant|developer|designer|architect)\s+(?:at|@|of|for)\s*([A-Za-z\s&.,-]{2,15}?)(?:\s|$|\n|title|position|role|experience|with|preparation|brexit|professional|level|heading|governme|government|department|ministry|agency|authority|and|the|in|of|for|with|at|by|from|to|on|in|is|are|was|were|has|have|had|will|would|could|should|may|might|can|must|shall)/i,
+    // Look for standalone company names - very short and clean
+    /(?:company|employer|organization|firm|corporation)[\s:]*([A-Za-z\s&.,-]{2,15}?)(?:\s|$|\n|title|position|role|experience|with|preparation|brexit|professional|level|heading|governme|government|department|ministry|agency|authority|and|the|in|of|for|with|at|by|from|to|on|in|is|are|was|were|has|have|had|will|would|could|should|may|might|can|must|shall)/i,
+    // Look for "at Company" patterns - very short
+    /(?:at|@)\s*([A-Za-z\s&.,-]{2,15}?)(?:\s|$|\n|title|position|role|experience|with|preparation|brexit|professional|level|heading|governme|government|department|ministry|agency|authority|and|the|in|of|for|with|at|by|from|to|on|in|is|are|was|were|has|have|had|will|would|could|should|may|might|can|must|shall)/i
   ];
   
   for (const pattern of companyPatterns) {
