@@ -85,9 +85,12 @@ if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgres'))
     phone TEXT,
     current_title TEXT,
     current_employer TEXT,
+    salary_min TEXT,
+    salary_max TEXT,
     skills TEXT,
     experience TEXT,
     notes TEXT,
+    email_ok BOOLEAN DEFAULT true,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   )`, (err) => {
@@ -108,9 +111,12 @@ if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgres'))
       phone TEXT,
       current_title TEXT,
       current_employer TEXT,
+      salary_min TEXT,
+      salary_max TEXT,
       skills TEXT,
       experience TEXT,
       notes TEXT,
+      email_ok BOOLEAN DEFAULT 1,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
@@ -722,7 +728,7 @@ app.get('/api/candidates', (req, res) => {
       
       res.json(result.rows);
     });
-    } else {
+  } else {
     // SQLite query
     db.all('SELECT * FROM candidates ORDER BY created_at DESC', (err, rows) => {
       if (err) {
@@ -737,7 +743,7 @@ app.get('/api/candidates', (req, res) => {
 
 // Create candidate
 app.post('/api/candidates', (req, res) => {
-  const { firstName, lastName, email, phone, currentTitle, currentEmployer, skills, experience, notes } = req.body;
+  const { firstName, lastName, email, phone, currentTitle, currentEmployer, salaryMin, salaryMax, skills, experience, notes, emailOk } = req.body;
   
   if (!firstName || !lastName || !email) {
     return res.status(400).json({ error: 'Missing required fields' });
@@ -750,50 +756,36 @@ app.post('/api/candidates', (req, res) => {
   if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgres')) {
     // PostgreSQL query
     db.query(
-      'INSERT INTO candidates (first_name, last_name, email, phone, current_title, current_employer, skills, experience, notes) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id',
-      [firstName, lastName, email, phone, currentTitle, currentEmployer, skillsJson, experienceJson, notes],
+      'INSERT INTO candidates (first_name, last_name, email, phone, current_title, current_employer, salary_min, salary_max, skills, experience, notes, email_ok) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id',
+      [firstName, lastName, email, phone, currentTitle, currentEmployer, salaryMin, salaryMax, skillsJson, experienceJson, notes, emailOk],
       (err, result) => {
         if (err) {
           console.error('Database error:', err);
           return res.status(500).json({ error: 'Database error' });
         }
-    
-    res.json({
+        
+        res.json({
+          success: true,
           id: result.rows[0].id,
-          firstName,
-          lastName,
-          email,
-          phone,
-          currentTitle,
-          currentEmployer,
-          skills,
-          experience,
-          notes
+          message: 'Candidate created successfully'
         });
       }
     );
-    } else {
+  } else {
     // SQLite query
     db.run(
-      'INSERT INTO candidates (first_name, last_name, email, phone, current_title, current_employer, skills, experience, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [firstName, lastName, email, phone, currentTitle, currentEmployer, skillsJson, experienceJson, notes],
+      'INSERT INTO candidates (first_name, last_name, email, phone, current_title, current_employer, salary_min, salary_max, skills, experience, notes, email_ok) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [firstName, lastName, email, phone, currentTitle, currentEmployer, salaryMin, salaryMax, skillsJson, experienceJson, notes, emailOk],
       function(err) {
         if (err) {
           console.error('Database error:', err);
           return res.status(500).json({ error: 'Database error' });
         }
-    
-    res.json({
+        
+        res.json({
+          success: true,
           id: this.lastID,
-          firstName,
-          lastName,
-          email,
-          phone,
-          currentTitle,
-          currentEmployer,
-          skills,
-          experience,
-          notes
+          message: 'Candidate created successfully'
         });
       }
     );
