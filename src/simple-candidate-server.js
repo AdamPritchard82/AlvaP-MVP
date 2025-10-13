@@ -169,6 +169,17 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Version endpoint for traceability
+app.get('/meta/version', (req, res) => {
+  res.status(200).json({
+    gitSha: process.env.RAILWAY_GIT_COMMIT_SHA || 'unknown',
+    buildTime: process.env.RAILWAY_GIT_COMMIT_CREATED_AT || new Date().toISOString(),
+    dotnetUrl: process.env.DOTNET_CV_API_URL || 'not-set',
+    nodeVersion: process.version,
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Version endpoint
 app.get('/version', (req, res) => {
   res.json({
@@ -207,35 +218,24 @@ app.post('/api/candidates/parse-cv', upload.single('file'), async (req, res) => 
         parsedData = await dotNetParser.parseFile(buffer, mimetype, originalname);
         console.log('✅ .NET parser success - parsed data:', JSON.stringify(parsedData, null, 2));
       } catch (error) {
-        console.warn('⚠️ .NET parser failed, falling back to local:', error.message);
-        console.warn('⚠️ Error details:', error);
-        // Fall through to local parser
+        console.error('❌ .NET parser failed:', error.message);
+        console.error('❌ Error details:', error);
+        return res.status(503).json({ 
+          error: 'ParserUnavailable',
+          message: 'CV parsing service is temporarily unavailable',
+          details: error.message
+        });
       }
     } else {
       console.log('ℹ️ .NET parser not available or file type not supported');
       console.log('ℹ️ dotNetParser available:', !!dotNetParser);
       console.log('ℹ️ File extension:', fileExtension);
       console.log('ℹ️ Supported extensions: [.pdf, .docx, .doc]');
-    }
-    
-    // Use local parser if .NET parser not available or failed
-    if (!parsedData) {
-      console.log('Using local parser...');
-      let text = '';
-      
-      if (mimetype === 'application/pdf') {
-        const pdfData = await pdfParse(buffer);
-        text = pdfData.text;
-      } else if (mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-        const docxData = await mammoth.extractRawText({ buffer });
-        text = docxData.value;
-      } else if (mimetype === 'text/plain') {
-        text = buffer.toString('utf-8');
-      } else {
-        throw new Error('Unsupported file type');
-      }
-      
-      parsedData = parseCVContent(text);
+      return res.status(503).json({ 
+        error: 'ParserUnavailable',
+        message: 'CV parsing service is not available for this file type',
+        supportedTypes: ['.pdf', '.docx', '.doc']
+      });
     }
     
     const duration = Date.now() - startTime;
@@ -245,7 +245,7 @@ app.post('/api/candidates/parse-cv', upload.single('file'), async (req, res) => 
       success: true,
       data: parsedData,
       duration,
-      parser: dotNetParser ? 'dotnet' : 'local'
+      parser: 'dotnet'
     });
     
   } catch (error) {
