@@ -31,10 +31,9 @@ class DotNetCvParser {
         throw new Error(response.data.message || 'CV parsing failed');
       }
 
-          console.log(`[DotNetCvParser] Successfully parsed ${filename}`);
-          console.log(`[DotNetCvParser] Raw .NET response:`, JSON.stringify(response.data.data, null, 2));
-          console.log(`[DotNetCvParser] Personal Info:`, JSON.stringify(response.data.data.personalInfo, null, 2));
-          console.log(`[DotNetCvParser] Work Experience:`, JSON.stringify(response.data.data.workExperience, null, 2));
+      console.log(`[DotNetCvParser] Successfully parsed ${filename}`);
+      console.log(`[DotNetCvParser] Raw .NET response:`, JSON.stringify(response.data, null, 2));
+      console.log(`[DotNetCvParser] Data:`, JSON.stringify(response.data.data, null, 2));
       
       // Transform .NET response to your existing format
       return this.transformResponse(response.data.data, filename, mimetype);
@@ -56,19 +55,19 @@ class DotNetCvParser {
   }
 
   transformResponse(dotNetData, filename, mimetype) {
-    const { personalInfo, workExperience, education, skills, languages, certifications, summary } = dotNetData;
+    const { PersonalInfo: personalInfo, WorkExperience: workExperience, Education: education, Skills: skills, Languages: languages, Certifications: certifications, Summary: summary } = dotNetData;
     
     // Extract names
-    const firstName = personalInfo.firstName || '';
-    const lastName = personalInfo.lastName || '';
-    const fullName = personalInfo.name || `${firstName} ${lastName}`.trim();
+    const firstName = personalInfo.FirstName || '';
+    const lastName = personalInfo.LastName || '';
+    const fullName = personalInfo.Name || `${firstName} ${lastName}`.trim();
     
     // Detect skills using keyword matching
     const allText = [
       fullName,
-      personalInfo.linkedIn || '',
-      ...workExperience.map(exp => `${exp.jobTitle} ${exp.company} ${exp.description || ''}`),
-      ...education.map(edu => `${edu.degree} ${edu.field} ${edu.institution}`),
+      personalInfo.LinkedIn || '',
+      ...workExperience.map(exp => `${exp.JobTitle} ${exp.Company} ${exp.Description || ''}`),
+      ...education.map(edu => `${edu.Degree} ${edu.Field} ${edu.Institution}`),
       ...skills,
       summary || ''
     ].join(' ').toLowerCase();
@@ -84,11 +83,11 @@ class DotNetCvParser {
     const experience = workExperience.map(exp => {
       console.log(`[DotNetCvParser] Processing work experience:`, JSON.stringify(exp, null, 2));
       return {
-        employer: exp.company || '',
-        title: exp.jobTitle || '',
-        startDate: exp.startDate || '',
-        endDate: exp.endDate || '',
-        description: exp.description || ''
+        employer: exp.Company || '',
+        title: exp.JobTitle || '',
+        startDate: exp.StartDate || '',
+        endDate: exp.EndDate || '',
+        description: exp.Description || ''
       };
     });
     
@@ -99,7 +98,7 @@ class DotNetCvParser {
     if (!notes && workExperience.length > 0) {
       const recentJobs = workExperience.slice(0, 2);
       notes = recentJobs
-        .map(exp => `${exp.jobTitle} at ${exp.company}`)
+        .map(exp => `${exp.JobTitle} at ${exp.Company}`)
         .join(', ');
     }
     notes = notes.substring(0, 200) + (notes.length > 200 ? '...' : '');
@@ -107,8 +106,8 @@ class DotNetCvParser {
     // Calculate confidence based on data completeness
     let confidence = 0.5; // Base confidence
     if (firstName && lastName) confidence += 0.2;
-    if (personalInfo.email) confidence += 0.2;
-    if (personalInfo.phone) confidence += 0.1;
+    if (personalInfo.Email) confidence += 0.2;
+    if (personalInfo.Phone) confidence += 0.1;
     if (workExperience.length > 0) confidence += 0.2;
     if (skills.length > 0) confidence += 0.1;
     confidence = Math.min(confidence, 1.0);
@@ -116,8 +115,10 @@ class DotNetCvParser {
     return {
       firstName,
       lastName,
-      email: personalInfo.email || '',
-      phone: personalInfo.phone || '',
+      email: personalInfo.Email || '',
+      phone: personalInfo.Phone || '',
+      currentTitle: workExperience.length > 0 ? workExperience[0].JobTitle || '' : '',
+      currentEmployer: workExperience.length > 0 ? workExperience[0].Company || '' : '',
       skills: detectedSkills,
       experience,
       notes,
@@ -129,16 +130,16 @@ class DotNetCvParser {
       metadata: {
         originalFileName: filename,
         documentType: mimetype,
-        parsedAt: dotNetData.parsedAt,
+        parsedAt: dotNetData.ParsedAt,
         skills: skills,
         languages: languages,
         certifications: certifications,
         education: education.map(edu => ({
-          degree: edu.degree,
-          field: edu.field,
-          institution: edu.institution,
-          startDate: edu.startDate,
-          endDate: edu.endDate
+          degree: edu.Degree,
+          field: edu.Field,
+          institution: edu.Institution,
+          startDate: edu.StartDate,
+          endDate: edu.EndDate
         }))
       },
       allResults: [], // Not applicable for single service
