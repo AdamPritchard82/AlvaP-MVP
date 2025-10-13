@@ -223,11 +223,28 @@ async function parseWithLocalParser(buffer, mimetype, originalname) {
   
   // Parse the text using improved regex patterns
   const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
-  const phoneRegex = /(\+?[\d\s\-\(\)]{10,})/g;
+  
+  // Improved phone number patterns
+  const phonePatterns = [
+    /(\+44\s?\d{2,4}\s?\d{3,4}\s?\d{3,4})/g,  // UK format: +44 20 1234 5678
+    /(\+44\s?\d{10})/g,                        // UK format: +44 2012345678
+    /(0\d{2,4}\s?\d{3,4}\s?\d{3,4})/g,        // UK format: 020 1234 5678
+    /(\+?[\d\s\-\(\)]{10,15})/g               // General international format
+  ];
   
   // Extract basic information
   const email = emailRegex.exec(text)?.[0] || '';
-  const phone = phoneRegex.exec(text)?.[0]?.replace(/[^\d+]/g, '') || '';
+  
+  let phone = '';
+  for (const pattern of phonePatterns) {
+    const match = pattern.exec(text);
+    if (match && match[1]) {
+      phone = match[1].replace(/[^\d+]/g, '');
+      if (phone.length >= 10) { // Reasonable phone number length
+        break;
+      }
+    }
+  }
   
   // Improved name extraction - look for common patterns
   let firstName = '';
@@ -278,11 +295,13 @@ async function parseWithLocalParser(buffer, mimetype, originalname) {
     }
   }
   
-  // Look for company patterns
+  // Look for company patterns - more precise
   const companyPatterns = [
-    /(?:company|employer|organization|firm|corporation)[\s:]*([A-Za-z\s&.,-]+?)(?:\n|$|title|position|role)/i,
-    /(?:at|@)\s*([A-Za-z\s&.,-]+?)(?:\n|$|title|position|role)/i,
-    /([A-Za-z\s&.,-]+(?:ltd|limited|inc|corp|corporation|llc|plc|group|company|software|solutions|systems|services|consulting|consultancy))/i
+    /(?:company|employer|organization|firm|corporation)[\s:]*([A-Za-z\s&.,-]{2,30}?)(?:\n|$|title|position|role|experience|with)/i,
+    /(?:at|@)\s*([A-Za-z\s&.,-]{2,30}?)(?:\n|$|title|position|role|experience|with)/i,
+    /([A-Za-z\s&.,-]+(?:ltd|limited|inc|corp|corporation|llc|plc|group|company|software|solutions|systems|services|consulting|consultancy))(?:\s|$|\n)/i,
+    // Look for company names that appear after job titles
+    /(?:director|manager|engineer|consultant|analyst|specialist|coordinator|executive|officer|lead|senior|junior|assistant|developer|designer|architect)\s+(?:at|@|of|for)\s*([A-Za-z\s&.,-]{2,30}?)(?:\n|$|title|position|role|experience|with)/i
   ];
   
   for (const pattern of companyPatterns) {
