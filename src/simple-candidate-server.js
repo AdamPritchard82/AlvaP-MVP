@@ -230,6 +230,13 @@ async function parseWithLocalParser(buffer, mimetype, originalname) {
   const recruitmentMatch = text.match(/recruitment/gi);
   console.log('🔍 Looking for "Recruitment" in text:', recruitmentMatch);
   
+  // Look for the exact phrase "Door 10 Recruitment"
+  const door10RecruitmentMatch = text.match(/door\s*10\s*recruitment/gi);
+  console.log('🔍 Looking for "Door 10 Recruitment" in text:', door10RecruitmentMatch);
+  
+  // Show more of the text to find where company names might be
+  console.log('📄 Text around line 10-20:', text.split('\n').slice(10, 20).join('\n'));
+  
   // Parse the text using improved regex patterns
   const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
   
