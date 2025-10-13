@@ -5,7 +5,7 @@ console.log('=== SIMPLE CANDIDATE SERVER STARTING - CLEAN VERSION WITH .NET PARS
 require('dotenv').config();
 
 const express = require('express');
-const { parseRoute } = require('./routes/parse');
+// const { parseRoute } = require('./routes/parse'); // Temporarily disabled - TypeScript issue
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
@@ -195,7 +195,7 @@ app.get('/version', (req, res) => {
 });
 
 // Add the new parse route
-parseRoute(app);
+// parseRoute(app); // Temporarily disabled - TypeScript issue
 
 // CV parsing endpoint
 app.post('/api/candidates/parse-cv', upload.single('file'), async (req, res) => {
