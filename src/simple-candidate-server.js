@@ -219,6 +219,14 @@ async function parseWithLocalParser(buffer, mimetype, originalname) {
     throw new Error(`Unsupported file type: ${mimetype}`);
   }
   
+  // Clean and normalize text for better parsing
+  text = text
+    .replace(/\r\n/g, '\n')  // Normalize line endings
+    .replace(/\r/g, '\n')    // Convert remaining \r to \n
+    .replace(/\n\s*\n/g, '\n\n')  // Normalize multiple newlines
+    .replace(/\s+/g, ' ')    // Normalize whitespace
+    .trim();
+  
   console.log('📄 Extracted text length:', text.length);
   console.log('📄 First 500 characters of extracted text:', text.substring(0, 500));
   
@@ -248,16 +256,46 @@ async function parseWithLocalParser(buffer, mimetype, originalname) {
     /(\+?[\d\s\-\(\)]{10,15})/g               // General international format
   ];
   
-  // Extract basic information
+  // Extract basic information with validation
   const email = emailRegex.exec(text)?.[0] || '';
   
   let phone = '';
+  let phoneConfidence = 0;
+  
   for (const pattern of phonePatterns) {
     const match = pattern.exec(text);
     if (match && match[1]) {
-      phone = match[1].replace(/[^\d+]/g, '');
-      if (phone.length >= 10) { // Reasonable phone number length
+      const candidatePhone = match[1].replace(/[^\d+]/g, '');
+      if (candidatePhone.length >= 10 && candidatePhone.length <= 15) {
+        phone = candidatePhone;
+        phoneConfidence = 0.8;
+        console.log('🔍 Found phone with high confidence:', phone);
         break;
+      } else if (candidatePhone.length >= 7 && phoneConfidence < 0.5) {
+        phone = candidatePhone;
+        phoneConfidence = 0.5;
+        console.log('🔍 Found phone with medium confidence:', phone);
+      }
+    }
+  }
+  
+  // If no phone found, try more aggressive patterns
+  if (!phone) {
+    const aggressivePhonePatterns = [
+      /(\+?[\d\s\-\(\)]{7,15})/g,
+      /(\d{3,4}[\s\-]?\d{3,4}[\s\-]?\d{3,4})/g
+    ];
+    
+    for (const pattern of aggressivePhonePatterns) {
+      const match = pattern.exec(text);
+      if (match && match[1]) {
+        const candidatePhone = match[1].replace(/[^\d+]/g, '');
+        if (candidatePhone.length >= 7 && candidatePhone.length <= 15) {
+          phone = candidatePhone;
+          phoneConfidence = 0.3;
+          console.log('🔍 Found phone with aggressive pattern:', phone);
+          break;
+        }
       }
     }
   }
@@ -289,11 +327,29 @@ async function parseWithLocalParser(buffer, mimetype, originalname) {
     }
   }
   
-  // Split name into first and last
+  // Split name into first and last with validation
   if (fullName) {
     const nameParts = fullName.split(/\s+/);
     firstName = nameParts[0] || '';
     lastName = nameParts.slice(1).join(' ') || '';
+    
+    // Validate name quality
+    if (firstName.length < 2 || lastName.length < 2) {
+      console.log('⚠️ Name quality low, trying alternative extraction');
+      // Try extracting from email if name is poor quality
+      const emailMatch = text.match(/([a-zA-Z0-9._%+-]+)@/);
+      if (emailMatch) {
+        const emailName = emailMatch[1].replace(/[._-]/g, ' ');
+        if (/^[A-Za-z\s]+$/.test(emailName) && emailName.length > 2) {
+          const emailParts = emailName.split(/\s+/);
+          if (emailParts.length >= 2) {
+            firstName = emailParts[0];
+            lastName = emailParts.slice(1).join(' ');
+            console.log('🔍 Using email-based name extraction:', firstName, lastName);
+          }
+        }
+      }
+    }
   }
   
   // Improved job title and company extraction - look in experience sections
@@ -505,14 +561,47 @@ async function parseWithLocalParser(buffer, mimetype, originalname) {
     console.log(`✅ Final company name: "${company}"`);
   }
   
-  // Calculate confidence
-  let confidence = 0.3; // Base confidence for local parser
-  if (firstName && lastName) confidence += 0.2;
-  if (email) confidence += 0.2;
-  if (phone) confidence += 0.1;
-  if (jobTitle) confidence += 0.1;
-  if (company) confidence += 0.1;
-  confidence = Math.min(confidence, 0.8); // Cap at 0.8 for local parser
+  // Calculate confidence with detailed scoring
+  let confidence = 0.1; // Base confidence for local parser
+  
+  // Name confidence (0-0.3)
+  if (firstName && lastName) {
+    if (firstName.length >= 2 && lastName.length >= 2) {
+      confidence += 0.3;
+    } else if (firstName.length >= 2 || lastName.length >= 2) {
+      confidence += 0.2;
+    }
+  }
+  
+  // Email confidence (0-0.25)
+  if (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    confidence += 0.25;
+  }
+  
+  // Phone confidence (0-0.2)
+  if (phone) {
+    if (phoneConfidence >= 0.8) {
+      confidence += 0.2;
+    } else if (phoneConfidence >= 0.5) {
+      confidence += 0.15;
+    } else {
+      confidence += 0.1;
+    }
+  }
+  
+  // Job title confidence (0-0.15)
+  if (jobTitle && jobTitle.length > 2 && !jobTitle.includes('across') && !jobTitle.includes('public')) {
+    confidence += 0.15;
+  }
+  
+  // Company confidence (0-0.1)
+  if (company && company.length > 2) {
+    confidence += 0.1;
+  }
+  
+  confidence = Math.min(confidence, 0.9); // Cap at 0.9 for local parser
+  
+  console.log(`🔍 Overall confidence: ${confidence.toFixed(2)} (Name: ${firstName ? '✓' : '✗'}, Email: ${email ? '✓' : '✗'}, Phone: ${phone ? '✓' : '✗'}, Title: ${jobTitle ? '✓' : '✗'}, Company: ${company ? '✓' : '✗'})`);
   
   return {
     firstName: firstName,
