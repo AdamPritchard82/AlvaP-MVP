@@ -311,16 +311,46 @@ async function parseWithLocalParser(buffer, mimetype, originalname) {
     const match = pattern.exec(text);
     if (match && match[1]) {
       const candidateCompany = match[1].trim();
-      // Only accept company names that look reasonable
-      if (candidateCompany.length > 2 && 
-          candidateCompany.length < 50 && 
+      // Only accept company names that look reasonable - very strict validation
+      if (candidateCompany.length > 3 && 
+          candidateCompany.length < 30 && 
           !candidateCompany.includes('level') &&
           !candidateCompany.includes('experience') &&
           !candidateCompany.includes('heading') &&
           !candidateCompany.includes('governme') &&
           !candidateCompany.includes('professional') &&
           !candidateCompany.includes('preparation') &&
-          !candidateCompany.includes('brexit')) {
+          !candidateCompany.includes('brexit') &&
+          !candidateCompany.includes('wide') &&
+          !candidateCompany.includes('and') &&
+          !candidateCompany.includes('the') &&
+          !candidateCompany.includes('with') &&
+          !candidateCompany.includes('for') &&
+          !candidateCompany.includes('in') &&
+          !candidateCompany.includes('of') &&
+          !candidateCompany.includes('at') &&
+          !candidateCompany.includes('by') &&
+          !candidateCompany.includes('from') &&
+          !candidateCompany.includes('to') &&
+          !candidateCompany.includes('on') &&
+          !candidateCompany.includes('is') &&
+          !candidateCompany.includes('are') &&
+          !candidateCompany.includes('was') &&
+          !candidateCompany.includes('were') &&
+          !candidateCompany.includes('has') &&
+          !candidateCompany.includes('have') &&
+          !candidateCompany.includes('had') &&
+          !candidateCompany.includes('will') &&
+          !candidateCompany.includes('would') &&
+          !candidateCompany.includes('could') &&
+          !candidateCompany.includes('should') &&
+          !candidateCompany.includes('may') &&
+          !candidateCompany.includes('might') &&
+          !candidateCompany.includes('can') &&
+          !candidateCompany.includes('must') &&
+          !candidateCompany.includes('shall') &&
+          // Must contain at least one capital letter (proper company name)
+          /[A-Z]/.test(candidateCompany)) {
         company = candidateCompany;
         break;
       }
