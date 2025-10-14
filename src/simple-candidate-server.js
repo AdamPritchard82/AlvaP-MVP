@@ -5,7 +5,7 @@ console.log('=== SIMPLE CANDIDATE SERVER STARTING - CLEAN VERSION WITH .NET PARS
 require('dotenv').config();
 
 const express = require('express');
-const { nanoid } = require('nanoid');
+const { randomUUID } = require('crypto');
 // const { parseRoute } = require('./routes/parse'); // Temporarily disabled - TypeScript issue
 const cors = require('cors');
 const path = require('path');
@@ -802,7 +802,7 @@ app.post('/api/candidates', (req, res) => {
   if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgres')) {
     // PostgreSQL query
     const fullName = `${firstName} ${lastName}`.trim();
-    const createdBy = nanoid(); // Generate a unique ID for created_by
+    const createdBy = randomUUID(); // Generate a proper UUID for created_by
     db.query(
       'INSERT INTO candidates (first_name, last_name, full_name, email, phone, current_title, current_employer, salary_min, salary_max, skills, experience, notes, email_ok, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id',
       [firstName, lastName, fullName, email, phone, currentTitle, currentEmployer, salaryMin, salaryMax, skillsJson, experienceJson, notes, emailOk, createdBy],
@@ -822,7 +822,7 @@ app.post('/api/candidates', (req, res) => {
   } else {
     // SQLite query
     const fullName = `${firstName} ${lastName}`.trim();
-    const createdBy = nanoid(); // Generate a unique ID for created_by
+    const createdBy = randomUUID(); // Generate a proper UUID for created_by
     db.run(
       'INSERT INTO candidates (first_name, last_name, full_name, email, phone, current_title, current_employer, salary_min, salary_max, skills, experience, notes, email_ok, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [firstName, lastName, fullName, email, phone, currentTitle, currentEmployer, salaryMin, salaryMax, skillsJson, experienceJson, notes, emailOk, createdBy],
