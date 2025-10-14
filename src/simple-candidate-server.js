@@ -877,27 +877,19 @@ app.get('/api/skills/counts', (req, res) => {
   if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgres')) {
     // PostgreSQL query
     db.query(`
-      SELECT 
-        CASE WHEN skills->>'communications' = 'true' THEN 'Communications' END as skill,
-        COUNT(*) as count
+      SELECT 'Communications' as skill, COUNT(*) as count
       FROM candidates 
       WHERE skills->>'communications' = 'true'
       UNION ALL
-      SELECT 
-        CASE WHEN skills->>'campaigns' = 'true' THEN 'Campaigns' END as skill,
-        COUNT(*) as count
+      SELECT 'Campaigns' as skill, COUNT(*) as count
       FROM candidates 
       WHERE skills->>'campaigns' = 'true'
       UNION ALL
-      SELECT 
-        CASE WHEN skills->>'policy' = 'true' THEN 'Policy' END as skill,
-        COUNT(*) as count
+      SELECT 'Policy' as skill, COUNT(*) as count
       FROM candidates 
       WHERE skills->>'policy' = 'true'
       UNION ALL
-      SELECT 
-        CASE WHEN skills->>'publicAffairs' = 'true' THEN 'Public Affairs' END as skill,
-        COUNT(*) as count
+      SELECT 'Public Affairs' as skill, COUNT(*) as count
       FROM candidates 
       WHERE skills->>'publicAffairs' = 'true'
     `, (err, result) => {
