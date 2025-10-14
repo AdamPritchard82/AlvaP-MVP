@@ -58,26 +58,19 @@ if (enableDotNetParser) {
 
 // Database setup - use PostgreSQL in production, SQLite locally
 let db;
-if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgres')) {
-  // Use PostgreSQL for production (Railway)
-  const { Pool } = require('pg');
-  db = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
-  });
-  console.log('✅ Using PostgreSQL database');
-    } else {
-  // Use SQLite for local development
-  const sqlite3 = require('sqlite3').verbose();
-  const dbPath = path.join(__dirname, '../candidates.db');
-  db = new sqlite3.Database(dbPath);
-  console.log('✅ Using SQLite database');
-}
 
 // Initialize database function
 async function initializeDatabase() {
   return new Promise((resolve, reject) => {
     if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgres')) {
+      // Use PostgreSQL for production (Railway)
+      const { Pool } = require('pg');
+      db = new Pool({
+        connectionString: process.env.DATABASE_URL,
+        ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+      });
+      console.log('✅ Using PostgreSQL database');
+      
       // PostgreSQL initialization
       db.query(`CREATE TABLE IF NOT EXISTS candidates (
         id SERIAL PRIMARY KEY,
@@ -105,6 +98,12 @@ async function initializeDatabase() {
         }
       });
     } else {
+      // Use SQLite for local development
+      const sqlite3 = require('sqlite3').verbose();
+      const dbPath = path.join(__dirname, '../candidates.db');
+      db = new sqlite3.Database(dbPath);
+      console.log('✅ Using SQLite database');
+      
       // SQLite initialization
       db.serialize(() => {
         db.run(`CREATE TABLE IF NOT EXISTS candidates (
@@ -138,7 +137,12 @@ async function initializeDatabase() {
 }
 
 // Helper function to get database connection
-const getDb = () => db;
+const getDb = () => {
+  if (!db) {
+    throw new Error('Database not initialized');
+  }
+  return db;
+};
 
 // Simple CV parsing function (local fallback)
 function parseCVContent(text) {
