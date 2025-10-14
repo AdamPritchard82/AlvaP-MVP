@@ -800,9 +800,10 @@ app.post('/api/candidates', (req, res) => {
   
   if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgres')) {
     // PostgreSQL query
+    const fullName = `${firstName} ${lastName}`.trim();
     db.query(
-      'INSERT INTO candidates (first_name, last_name, email, phone, current_title, current_employer, salary_min, salary_max, skills, experience, notes, email_ok) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id',
-      [firstName, lastName, email, phone, currentTitle, currentEmployer, salaryMin, salaryMax, skillsJson, experienceJson, notes, emailOk],
+      'INSERT INTO candidates (first_name, last_name, full_name, email, phone, current_title, current_employer, salary_min, salary_max, skills, experience, notes, email_ok) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id',
+      [firstName, lastName, fullName, email, phone, currentTitle, currentEmployer, salaryMin, salaryMax, skillsJson, experienceJson, notes, emailOk],
       (err, result) => {
         if (err) {
           console.error('Database error:', err);
@@ -818,9 +819,10 @@ app.post('/api/candidates', (req, res) => {
     );
   } else {
     // SQLite query
+    const fullName = `${firstName} ${lastName}`.trim();
     db.run(
-      'INSERT INTO candidates (first_name, last_name, email, phone, current_title, current_employer, salary_min, salary_max, skills, experience, notes, email_ok) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [firstName, lastName, email, phone, currentTitle, currentEmployer, salaryMin, salaryMax, skillsJson, experienceJson, notes, emailOk],
+      'INSERT INTO candidates (first_name, last_name, full_name, email, phone, current_title, current_employer, salary_min, salary_max, skills, experience, notes, email_ok) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [firstName, lastName, fullName, email, phone, currentTitle, currentEmployer, salaryMin, salaryMax, skillsJson, experienceJson, notes, emailOk],
       function(err) {
         if (err) {
           console.error('Database error:', err);
