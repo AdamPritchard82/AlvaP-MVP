@@ -172,6 +172,40 @@ const CandidateNew: React.FC = () => {
         const parsedData = result.data;
         
         // Auto-fill form with parsed data
+        const title = (parsedData.currentTitle || '').toLowerCase();
+        const employer = (parsedData.currentEmployer || '').toLowerCase();
+        
+        // Set default skills based on job title and employer
+        const defaultSkills = {
+          communications: 0,
+          campaigns: 0,
+          policy: 0,
+          publicAffairs: 0
+        };
+        
+        // If it's a director-level role, give them some default skills
+        if (title.includes('director') || title.includes('head') || title.includes('manager')) {
+          defaultSkills.communications = 4;
+          defaultSkills.publicAffairs = 4;
+        }
+        
+        // If it's Door 10, they likely have public affairs skills
+        if (employer.includes('door') || employer.includes('10')) {
+          defaultSkills.publicAffairs = 4;
+          defaultSkills.communications = 4;
+        }
+        
+        // If title mentions specific areas, set those skills
+        if (title.includes('policy') || title.includes('government')) {
+          defaultSkills.policy = 4;
+        }
+        if (title.includes('campaign') || title.includes('marketing')) {
+          defaultSkills.campaigns = 4;
+        }
+        if (title.includes('communication') || title.includes('media')) {
+          defaultSkills.communications = 4;
+        }
+        
         setFormData(prev => ({
           ...prev,
           firstName: parsedData.firstName || prev.firstName,
@@ -180,12 +214,7 @@ const CandidateNew: React.FC = () => {
           phone: parsedData.phone || prev.phone,
           currentTitle: parsedData.currentTitle || prev.currentTitle,
           currentEmployer: parsedData.currentEmployer || prev.currentEmployer,
-          skills: {
-            communications: parsedData.skills?.communications ? 5 : prev.skills.communications,
-            campaigns: parsedData.skills?.campaigns ? 5 : prev.skills.campaigns,
-            policy: parsedData.skills?.policy ? 5 : prev.skills.policy,
-            publicAffairs: parsedData.skills?.publicAffairs ? 5 : prev.skills.publicAffairs
-          }
+          skills: defaultSkills
         }));
         
         // Store parsed data and enable edit mode
