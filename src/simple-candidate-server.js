@@ -1108,9 +1108,20 @@ app.post('/api/candidates', (req, res) => {
   }
 });
 
-// Serve frontend
+// Serve frontend (only if built assets exist). In Railway, frontend is a separate service.
+const frontendIndexPath = path.join(__dirname, '../frontend/dist/index.html');
+let loggedMissingFrontend = false;
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
+  try {
+    if (fs.existsSync(frontendIndexPath)) {
+      return res.sendFile(frontendIndexPath);
+    }
+  } catch {}
+  if (!loggedMissingFrontend) {
+    loggedMissingFrontend = true;
+    console.warn('Frontend dist not found. Skipping static serve for wildcard routes.');
+  }
+  return res.status(404).json({ ok: true, message: 'Frontend not served from backend. Use the frontend service.' });
 });
 
 // Start server after database initialization
