@@ -964,19 +964,19 @@ app.get('/api/skills/counts', (req, res) => {
     db.query(`
       SELECT 'Communications' as skill, COUNT(*) as count
       FROM candidates 
-      WHERE skills->>'communications' = 'true'
+      WHERE (skills->>'communications')::int >= 4
       UNION ALL
       SELECT 'Campaigns' as skill, COUNT(*) as count
       FROM candidates 
-      WHERE skills->>'campaigns' = 'true'
+      WHERE (skills->>'campaigns')::int >= 4
       UNION ALL
       SELECT 'Policy' as skill, COUNT(*) as count
       FROM candidates 
-      WHERE skills->>'policy' = 'true'
+      WHERE (skills->>'policy')::int >= 4
       UNION ALL
       SELECT 'Public Affairs' as skill, COUNT(*) as count
       FROM candidates 
-      WHERE skills->>'publicAffairs' = 'true'
+      WHERE (skills->>'publicAffairs')::int >= 4
     `, (err, result) => {
       if (err) {
         console.error('Database error:', err);
@@ -1077,7 +1077,7 @@ app.get('/api/skills/:skill/bands/:band/candidates', (req, res) => {
     // In a real app, you'd filter by salary band too
     db.query(`
       SELECT * FROM candidates 
-      WHERE skills->>'${skillField}' = 'true'
+      WHERE (skills->>'${skillField}')::int >= 4
       ORDER BY created_at DESC 
       LIMIT $1 OFFSET $2
     `, [pageSize, offset], (err, result) => {
