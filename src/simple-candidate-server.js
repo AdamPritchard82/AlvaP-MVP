@@ -870,6 +870,28 @@ app.get('/api/candidates', (req, res) => {
   }
 });
 
+// Debug endpoint to check skills data
+app.get('/api/debug/skills', (req, res) => {
+  const db = getDb();
+  
+  if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgres')) {
+    db.query('SELECT id, skills FROM candidates LIMIT 2', (err, result) => {
+      if (err) {
+        console.error('Database error:', err);
+        return res.status(500).json({ error: 'Database error' });
+      }
+      
+      res.json({ 
+        success: true, 
+        candidates: result.rows,
+        sample: result.rows[0]?.skills
+      });
+    });
+  } else {
+    res.json({ success: true, message: 'SQLite - no debug needed' });
+  }
+});
+
 // Get skill counts for Library
 app.get('/api/skills/counts', (req, res) => {
   const db = getDb();
@@ -879,19 +901,19 @@ app.get('/api/skills/counts', (req, res) => {
     db.query(`
       SELECT 'Communications' as skill, COUNT(*) as count
       FROM candidates 
-      WHERE (skills->>'communications')::boolean = true
+      WHERE skills->>'communications' = 'true'
       UNION ALL
       SELECT 'Campaigns' as skill, COUNT(*) as count
       FROM candidates 
-      WHERE (skills->>'campaigns')::boolean = true
+      WHERE skills->>'campaigns' = 'true'
       UNION ALL
       SELECT 'Policy' as skill, COUNT(*) as count
       FROM candidates 
-      WHERE (skills->>'policy')::boolean = true
+      WHERE skills->>'policy' = 'true'
       UNION ALL
       SELECT 'Public Affairs' as skill, COUNT(*) as count
       FROM candidates 
-      WHERE (skills->>'publicAffairs')::boolean = true
+      WHERE skills->>'publicAffairs' = 'true'
     `, (err, result) => {
       if (err) {
         console.error('Database error:', err);
@@ -992,7 +1014,7 @@ app.get('/api/skills/:skill/bands/:band/candidates', (req, res) => {
     // In a real app, you'd filter by salary band too
     db.query(`
       SELECT * FROM candidates 
-      WHERE (skills->>'${skillField}')::boolean = true
+      WHERE skills->>'${skillField}' = 'true'
       ORDER BY created_at DESC 
       LIMIT $1 OFFSET $2
     `, [pageSize, offset], (err, result) => {
