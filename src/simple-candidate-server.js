@@ -82,41 +82,41 @@ async function initializeDatabase() {
         const existingColumns = result.rows.map(row => row.column_name);
         console.log('📋 Existing columns:', existingColumns);
         
-        // If table doesn't exist or has wrong structure, recreate it
+        // If table doesn't exist or has wrong structure, add missing columns
         if (existingColumns.length === 0 || !existingColumns.includes('first_name')) {
-          console.log('🔧 Recreating candidates table with correct schema...');
+          console.log('🔧 Adding missing columns to existing candidates table...');
           
-          // Drop existing table if it exists
-          db.query(`DROP TABLE IF EXISTS candidates`, (dropErr) => {
-            if (dropErr) {
-              console.error('❌ Error dropping table:', dropErr);
-              reject(dropErr);
-              return;
-            }
-            
-            // Create new table with correct schema
-            db.query(`CREATE TABLE candidates (
-              id SERIAL PRIMARY KEY,
-              first_name TEXT NOT NULL,
-              last_name TEXT NOT NULL,
-              email TEXT UNIQUE NOT NULL,
-              phone TEXT,
-              current_title TEXT,
-              current_employer TEXT,
-              salary_min TEXT,
-              salary_max TEXT,
-              skills TEXT,
-              experience TEXT,
-              notes TEXT,
-              email_ok BOOLEAN DEFAULT true,
-              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-              updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )`, (createErr) => {
-              if (createErr) {
-                console.error('❌ Database initialization failed:', createErr);
-                reject(createErr);
-              } else {
-                console.log('✅ PostgreSQL database initialized with correct schema');
+          // Add missing columns one by one
+          const addColumns = [
+            `ALTER TABLE candidates ADD COLUMN IF NOT EXISTS first_name TEXT`,
+            `ALTER TABLE candidates ADD COLUMN IF NOT EXISTS last_name TEXT`,
+            `ALTER TABLE candidates ADD COLUMN IF NOT EXISTS phone TEXT`,
+            `ALTER TABLE candidates ADD COLUMN IF NOT EXISTS current_title TEXT`,
+            `ALTER TABLE candidates ADD COLUMN IF NOT EXISTS current_employer TEXT`,
+            `ALTER TABLE candidates ADD COLUMN IF NOT EXISTS salary_min TEXT`,
+            `ALTER TABLE candidates ADD COLUMN IF NOT EXISTS salary_max TEXT`,
+            `ALTER TABLE candidates ADD COLUMN IF NOT EXISTS skills TEXT`,
+            `ALTER TABLE candidates ADD COLUMN IF NOT EXISTS experience TEXT`,
+            `ALTER TABLE candidates ADD COLUMN IF NOT EXISTS notes TEXT`,
+            `ALTER TABLE candidates ADD COLUMN IF NOT EXISTS email_ok BOOLEAN DEFAULT true`
+          ];
+          
+          let completed = 0;
+          const total = addColumns.length;
+          
+          addColumns.forEach((sql, index) => {
+            db.query(sql, (err) => {
+              if (err) {
+                console.error(`❌ Error adding column ${index + 1}:`, err);
+                reject(err);
+                return;
+              }
+              
+              completed++;
+              console.log(`✅ Added column ${index + 1}/${total}`);
+              
+              if (completed === total) {
+                console.log('✅ PostgreSQL database schema updated successfully');
                 resolve();
               }
             });
