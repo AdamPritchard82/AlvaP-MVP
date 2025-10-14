@@ -898,7 +898,7 @@ app.get('/api/debug/skills', (req, res) => {
   const db = getDb();
   
   if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgres')) {
-    db.query('SELECT id, skills FROM candidates LIMIT 2', (err, result) => {
+    db.query('SELECT id, skills, first_name, last_name FROM candidates LIMIT 2', (err, result) => {
       if (err) {
         console.error('Database error:', err);
         return res.status(500).json({ error: 'Database error' });
@@ -907,7 +907,9 @@ app.get('/api/debug/skills', (req, res) => {
       res.json({ 
         success: true, 
         candidates: result.rows,
-        sample: result.rows[0]?.skills
+        sample: result.rows[0]?.skills,
+        skillsType: typeof result.rows[0]?.skills,
+        skillsString: JSON.stringify(result.rows[0]?.skills)
       });
     });
   } else {
