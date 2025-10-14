@@ -131,8 +131,17 @@ async function initializeDatabase() {
             });
           });
         } else {
-          console.log('✅ PostgreSQL database table structure is correct');
-          resolve();
+          // Even if columns exist, ensure UUID default is set
+          console.log('🔧 Ensuring UUID default is set for created_by column...');
+          db.query(`ALTER TABLE candidates ALTER COLUMN created_by SET DEFAULT gen_random_uuid()`, (uuidErr) => {
+            if (uuidErr) {
+              console.warn('⚠️ Could not set UUID default:', uuidErr.message);
+            } else {
+              console.log('✅ Set UUID default for created_by column');
+            }
+            console.log('✅ PostgreSQL database table structure is correct');
+            resolve();
+          });
         }
       });
     } else {
