@@ -124,8 +124,17 @@ async function initializeDatabase() {
                   } else {
                     console.log('✅ Set UUID default for created_by column');
                   }
-                  console.log('✅ PostgreSQL database schema updated successfully');
-                  resolve();
+                  
+                  // Try to drop the foreign key constraint if it exists
+                  db.query(`ALTER TABLE candidates DROP CONSTRAINT IF EXISTS candidates_created_by_fkey`, (fkErr) => {
+                    if (fkErr) {
+                      console.warn('⚠️ Could not drop foreign key constraint:', fkErr.message);
+                    } else {
+                      console.log('✅ Dropped foreign key constraint for created_by');
+                    }
+                    console.log('✅ PostgreSQL database schema updated successfully');
+                    resolve();
+                  });
                 });
               }
             });
@@ -139,8 +148,17 @@ async function initializeDatabase() {
             } else {
               console.log('✅ Set UUID default for created_by column');
             }
-            console.log('✅ PostgreSQL database table structure is correct');
-            resolve();
+            
+            // Try to drop the foreign key constraint if it exists
+            db.query(`ALTER TABLE candidates DROP CONSTRAINT IF EXISTS candidates_created_by_fkey`, (fkErr) => {
+              if (fkErr) {
+                console.warn('⚠️ Could not drop foreign key constraint:', fkErr.message);
+              } else {
+                console.log('✅ Dropped foreign key constraint for created_by');
+              }
+              console.log('✅ PostgreSQL database table structure is correct');
+              resolve();
+            });
           });
         }
       });
