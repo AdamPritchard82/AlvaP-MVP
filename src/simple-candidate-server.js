@@ -815,12 +815,15 @@ app.get('/api/candidates', (req, res) => {
       current_employer: row.current_employer || '',
       salary_min: row.salary_min || '',
       salary_max: row.salary_max || '',
-      skills: parseJson(row.skills, {
-        communications: false,
-        campaigns: false,
-        policy: false,
-        publicAffairs: false
-      }),
+      skills: (() => {
+        const skillsData = parseJson(row.skills, {});
+        return {
+          communications: (skillsData.communications || 0) >= 4,
+          campaigns: (skillsData.campaigns || 0) >= 4,
+          policy: (skillsData.policy || 0) >= 4,
+          publicAffairs: (skillsData.publicAffairs || 0) >= 4
+        };
+      })(),
       experience: parseJson(row.experience, []),
       tags: parseJson(row.tags, []),
       email_ok: row.email_ok || true,
@@ -863,6 +866,198 @@ app.get('/api/candidates', (req, res) => {
         pageSize: candidates.length,
         totalPages: 1
       });
+    });
+  }
+});
+
+// Get skill counts for Library
+app.get('/api/skills/counts', (req, res) => {
+  const db = getDb();
+  
+  if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgres')) {
+    // PostgreSQL query
+    db.query(`
+      SELECT 
+        CASE WHEN skills->>'communications' = 'true' THEN 'Communications' END as skill,
+        COUNT(*) as count
+      FROM candidates 
+      WHERE skills->>'communications' = 'true'
+      UNION ALL
+      SELECT 
+        CASE WHEN skills->>'campaigns' = 'true' THEN 'Campaigns' END as skill,
+        COUNT(*) as count
+      FROM candidates 
+      WHERE skills->>'campaigns' = 'true'
+      UNION ALL
+      SELECT 
+        CASE WHEN skills->>'policy' = 'true' THEN 'Policy' END as skill,
+        COUNT(*) as count
+      FROM candidates 
+      WHERE skills->>'policy' = 'true'
+      UNION ALL
+      SELECT 
+        CASE WHEN skills->>'publicAffairs' = 'true' THEN 'Public Affairs' END as skill,
+        COUNT(*) as count
+      FROM candidates 
+      WHERE skills->>'publicAffairs' = 'true'
+    `, (err, result) => {
+      if (err) {
+        console.error('Database error:', err);
+        return res.status(500).json({ error: 'Database error' });
+      }
+      
+      const counts = {};
+      result.rows.forEach(row => {
+        if (row.skill) {
+          counts[row.skill] = parseInt(row.count);
+        }
+      });
+      
+      res.json({ success: true, counts });
+    });
+  } else {
+    // SQLite query - simplified for now
+    res.json({ 
+      success: true, 
+      counts: {
+        'Communications': 0,
+        'Campaigns': 0,
+        'Policy': 0,
+        'Public Affairs': 0
+      }
+    });
+  }
+});
+
+// Get bands for a skill
+app.get('/api/skills/:skill/bands', (req, res) => {
+  const skill = decodeURIComponent(req.params.skill);
+  const db = getDb();
+  
+  // Map skill names to database field names
+  const skillMap = {
+    'Communications': 'communications',
+    'Campaigns': 'campaigns', 
+    'Policy': 'policy',
+    'Public Affairs': 'publicAffairs'
+  };
+  
+  const skillField = skillMap[skill];
+  if (!skillField) {
+    return res.status(400).json({ error: 'Invalid skill' });
+  }
+  
+  if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgres')) {
+    // For now, return a simple band structure
+    // In a real app, you'd calculate salary bands from salary_min/salary_max
+    res.json({ 
+      success: true, 
+      bands: [
+        { band: '£30k-£50k', count: 0 },
+        { band: '£50k-£70k', count: 0 },
+        { band: '£70k-£100k', count: 0 },
+        { band: '£100k+', count: 0 }
+      ]
+    });
+  } else {
+    res.json({ 
+      success: true, 
+      bands: [
+        { band: '£30k-£50k', count: 0 },
+        { band: '£50k-£70k', count: 0 },
+        { band: '£70k-£100k', count: 0 },
+        { band: '£100k+', count: 0 }
+      ]
+    });
+  }
+});
+
+// Get candidates by skill and band
+app.get('/api/skills/:skill/bands/:band/candidates', (req, res) => {
+  const skill = decodeURIComponent(req.params.skill);
+  const band = decodeURIComponent(req.params.band);
+  const page = parseInt(req.query.page) || 1;
+  const pageSize = parseInt(req.query.pageSize) || 20;
+  const offset = (page - 1) * pageSize;
+  
+  const db = getDb();
+  
+  // Map skill names to database field names
+  const skillMap = {
+    'Communications': 'communications',
+    'Campaigns': 'campaigns', 
+    'Policy': 'policy',
+    'Public Affairs': 'publicAffairs'
+  };
+  
+  const skillField = skillMap[skill];
+  if (!skillField) {
+    return res.status(400).json({ error: 'Invalid skill' });
+  }
+  
+  if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgres')) {
+    // For now, just return all candidates with the skill
+    // In a real app, you'd filter by salary band too
+    db.query(`
+      SELECT * FROM candidates 
+      WHERE skills->>'${skillField}' = 'true'
+      ORDER BY created_at DESC 
+      LIMIT $1 OFFSET $2
+    `, [pageSize, offset], (err, result) => {
+      if (err) {
+        console.error('Database error:', err);
+        return res.status(500).json({ error: 'Database error' });
+      }
+      
+      const mapRow = (row) => {
+        const parseJson = (v, fallback) => {
+          if (v == null) return fallback;
+          if (typeof v !== 'string') return v;
+          try { return JSON.parse(v); } catch { return fallback; }
+        };
+
+        return {
+          id: row.id,
+          full_name: row.full_name || `${row.first_name || ''} ${row.last_name || ''}`.trim(),
+          email: row.email || '',
+          phone: row.phone || '',
+          current_title: row.current_title || '',
+          current_employer: row.current_employer || '',
+          salary_min: row.salary_min || '',
+          salary_max: row.salary_max || '',
+          skills: (() => {
+            const skillsData = parseJson(row.skills, {});
+            return {
+              communications: (skillsData.communications || 0) >= 4,
+              campaigns: (skillsData.campaigns || 0) >= 4,
+              policy: (skillsData.policy || 0) >= 4,
+              publicAffairs: (skillsData.publicAffairs || 0) >= 4
+            };
+          })(),
+          experience: parseJson(row.experience, []),
+          tags: parseJson(row.tags, []),
+          email_ok: row.email_ok || true,
+          created_at: row.created_at || row.createdAt,
+          updated_at: row.updated_at || row.updatedAt,
+        };
+      };
+      
+      const candidates = result.rows.map(mapRow);
+      res.json({
+        success: true,
+        candidates,
+        total: candidates.length, // Simplified - in real app you'd count total
+        page,
+        pageSize
+      });
+    });
+  } else {
+    res.json({ 
+      success: true, 
+      candidates: [],
+      total: 0,
+      page,
+      pageSize
     });
   }
 });
