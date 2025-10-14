@@ -808,20 +808,24 @@ app.get('/api/candidates', (req, res) => {
 
     return {
       id: row.id,
-      firstName: row.first_name || row.firstName || row.full_name?.split?.(' ')?.[0] || '',
-      lastName: row.last_name || row.lastName || (row.full_name?.split?.(' ')?.slice(1).join(' ') || ''),
-      fullName: row.full_name || `${row.first_name || ''} ${row.last_name || ''}`.trim(),
+      full_name: row.full_name || `${row.first_name || ''} ${row.last_name || ''}`.trim(),
       email: row.email || '',
       phone: row.phone || '',
-      currentTitle: row.current_title || '',
-      currentEmployer: row.current_employer || '',
-      salaryMin: row.salary_min || '',
-      salaryMax: row.salary_max || '',
-      skills: parseJson(row.skills, {}),
+      current_title: row.current_title || '',
+      current_employer: row.current_employer || '',
+      salary_min: row.salary_min || '',
+      salary_max: row.salary_max || '',
+      skills: parseJson(row.skills, {
+        communications: false,
+        campaigns: false,
+        policy: false,
+        publicAffairs: false
+      }),
       experience: parseJson(row.experience, []),
       tags: parseJson(row.tags, []),
-      createdAt: row.created_at || row.createdAt,
-      updatedAt: row.updated_at || row.updatedAt,
+      email_ok: row.email_ok || true,
+      created_at: row.created_at || row.createdAt,
+      updated_at: row.updated_at || row.updatedAt,
     };
   };
 
@@ -834,7 +838,14 @@ app.get('/api/candidates', (req, res) => {
       }
 
       const rows = Array.isArray(result.rows) ? result.rows : [];
-      return res.json(rows.map(mapRow));
+      const candidates = rows.map(mapRow);
+      return res.json({
+        candidates,
+        total: candidates.length,
+        page: 1,
+        pageSize: candidates.length,
+        totalPages: 1
+      });
     });
   } else {
     // SQLite query
@@ -844,7 +855,14 @@ app.get('/api/candidates', (req, res) => {
         return res.status(500).json({ error: 'Database error' });
       }
 
-      return res.json((rows || []).map(mapRow));
+      const candidates = (rows || []).map(mapRow);
+      return res.json({
+        candidates,
+        total: candidates.length,
+        page: 1,
+        pageSize: candidates.length,
+        totalPages: 1
+      });
     });
   }
 });
