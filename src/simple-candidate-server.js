@@ -817,12 +817,35 @@ app.get('/api/candidates', (req, res) => {
       salary_max: row.salary_max || '',
       skills: (() => {
         const skillsData = parseJson(row.skills, {});
-        return {
-          communications: (skillsData.communications || 0) >= 4,
-          campaigns: (skillsData.campaigns || 0) >= 4,
-          policy: (skillsData.policy || 0) >= 4,
-          publicAffairs: (skillsData.publicAffairs || 0) >= 4
+        console.log('Raw skills data:', skillsData);
+        console.log('Skills type:', typeof skillsData);
+        
+        // Handle both numeric and boolean values
+        const result = {
+          communications: false,
+          campaigns: false,
+          policy: false,
+          publicAffairs: false
         };
+        
+        if (typeof skillsData === 'object' && skillsData !== null) {
+          // If it's already boolean values
+          if (typeof skillsData.communications === 'boolean') {
+            result.communications = skillsData.communications;
+            result.campaigns = skillsData.campaigns || false;
+            result.policy = skillsData.policy || false;
+            result.publicAffairs = skillsData.publicAffairs || false;
+          } else {
+            // If it's numeric values, convert 4+ to true
+            result.communications = (skillsData.communications || 0) >= 4;
+            result.campaigns = (skillsData.campaigns || 0) >= 4;
+            result.policy = (skillsData.policy || 0) >= 4;
+            result.publicAffairs = (skillsData.publicAffairs || 0) >= 4;
+          }
+        }
+        
+        console.log('Processed skills:', result);
+        return result;
       })(),
       experience: parseJson(row.experience, []),
       tags: parseJson(row.tags, []),
