@@ -74,54 +74,66 @@ if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgres'))
   console.log('✅ Using SQLite database');
 }
 
-// Initialize database
-if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgres')) {
-  // PostgreSQL initialization
-  db.query(`CREATE TABLE IF NOT EXISTS candidates (
-    id SERIAL PRIMARY KEY,
-    first_name TEXT NOT NULL,
-    last_name TEXT NOT NULL,
-    email TEXT UNIQUE NOT NULL,
-    phone TEXT,
-    current_title TEXT,
-    current_employer TEXT,
-    salary_min TEXT,
-    salary_max TEXT,
-    skills TEXT,
-    experience TEXT,
-    notes TEXT,
-    email_ok BOOLEAN DEFAULT true,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  )`, (err) => {
-    if (err) {
-      console.error('❌ Database initialization failed:', err);
-      } else {
-      console.log('✅ PostgreSQL database initialized');
+// Initialize database function
+async function initializeDatabase() {
+  return new Promise((resolve, reject) => {
+    if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgres')) {
+      // PostgreSQL initialization
+      db.query(`CREATE TABLE IF NOT EXISTS candidates (
+        id SERIAL PRIMARY KEY,
+        first_name TEXT NOT NULL,
+        last_name TEXT NOT NULL,
+        email TEXT UNIQUE NOT NULL,
+        phone TEXT,
+        current_title TEXT,
+        current_employer TEXT,
+        salary_min TEXT,
+        salary_max TEXT,
+        skills TEXT,
+        experience TEXT,
+        notes TEXT,
+        email_ok BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`, (err) => {
+        if (err) {
+          console.error('❌ Database initialization failed:', err);
+          reject(err);
+        } else {
+          console.log('✅ PostgreSQL database initialized');
+          resolve();
+        }
+      });
+    } else {
+      // SQLite initialization
+      db.serialize(() => {
+        db.run(`CREATE TABLE IF NOT EXISTS candidates (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          first_name TEXT NOT NULL,
+          last_name TEXT NOT NULL,
+          email TEXT UNIQUE NOT NULL,
+          phone TEXT,
+          current_title TEXT,
+          current_employer TEXT,
+          salary_min TEXT,
+          salary_max TEXT,
+          skills TEXT,
+          experience TEXT,
+          notes TEXT,
+          email_ok BOOLEAN DEFAULT 1,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`, (err) => {
+          if (err) {
+            console.error('❌ Database initialization failed:', err);
+            reject(err);
+          } else {
+            console.log('✅ SQLite database initialized');
+            resolve();
+          }
+        });
+      });
     }
-  });
-} else {
-  // SQLite initialization
-  db.serialize(() => {
-    db.run(`CREATE TABLE IF NOT EXISTS candidates (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      first_name TEXT NOT NULL,
-      last_name TEXT NOT NULL,
-      email TEXT UNIQUE NOT NULL,
-      phone TEXT,
-      current_title TEXT,
-      current_employer TEXT,
-      salary_min TEXT,
-      salary_max TEXT,
-      skills TEXT,
-      experience TEXT,
-      notes TEXT,
-      email_ok BOOLEAN DEFAULT 1,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`);
-    
-    console.log('✅ SQLite database initialized');
   });
 }
 
@@ -797,11 +809,23 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📁 Database: ${process.env.DATABASE_URL ? 'PostgreSQL (Railway)' : 'SQLite (local)'}`);
-  console.log(`🔧 .NET Parser: ${dotNetParser ? 'enabled' : 'disabled'}`);
-  console.log(`🌐 Frontend: http://localhost:${PORT}`);
-  console.log(`🔍 API: http://localhost:${PORT}/api`);
-});
+// Start server after database initialization
+async function startServer() {
+  try {
+    await initializeDatabase();
+    
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`🚀 Server running on port ${PORT}`);
+      console.log(`📁 Database: ${process.env.DATABASE_URL ? 'PostgreSQL (Railway)' : 'SQLite (local)'}`);
+      console.log(`🔧 .NET Parser: ${dotNetParser ? 'enabled' : 'disabled'}`);
+      console.log(`🌐 Frontend: http://localhost:${PORT}`);
+      console.log(`🔍 API: http://localhost:${PORT}/api`);
+    });
+  } catch (error) {
+    console.error('❌ Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
+// Start the server
+startServer();
