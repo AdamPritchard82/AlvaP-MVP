@@ -117,8 +117,16 @@ async function initializeDatabase() {
               console.log(`✅ Added column ${index + 1}/${total}`);
               
               if (completed === total) {
-                console.log('✅ PostgreSQL database schema updated successfully');
-                resolve();
+                // Set default UUID generation for created_by column
+                db.query(`ALTER TABLE candidates ALTER COLUMN created_by SET DEFAULT gen_random_uuid()`, (uuidErr) => {
+                  if (uuidErr) {
+                    console.warn('⚠️ Could not set UUID default (column may not exist):', uuidErr.message);
+                  } else {
+                    console.log('✅ Set UUID default for created_by column');
+                  }
+                  console.log('✅ PostgreSQL database schema updated successfully');
+                  resolve();
+                });
               }
             });
           });
@@ -800,12 +808,11 @@ app.post('/api/candidates', (req, res) => {
   const experienceJson = JSON.stringify(experience || []);
   
   if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgres')) {
-    // PostgreSQL query
+    // PostgreSQL query - let PostgreSQL generate the UUID
     const fullName = `${firstName} ${lastName}`.trim();
-    const createdBy = randomUUID(); // Generate a proper UUID for created_by
     db.query(
-      'INSERT INTO candidates (first_name, last_name, full_name, email, phone, current_title, current_employer, salary_min, salary_max, skills, experience, notes, email_ok, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id',
-      [firstName, lastName, fullName, email, phone, currentTitle, currentEmployer, salaryMin, salaryMax, skillsJson, experienceJson, notes, emailOk, createdBy],
+      'INSERT INTO candidates (first_name, last_name, full_name, email, phone, current_title, current_employer, salary_min, salary_max, skills, experience, notes, email_ok) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id, created_by',
+      [firstName, lastName, fullName, email, phone, currentTitle, currentEmployer, salaryMin, salaryMax, skillsJson, experienceJson, notes, emailOk],
       (err, result) => {
         if (err) {
           console.error('Database error:', err);
@@ -820,7 +827,7 @@ app.post('/api/candidates', (req, res) => {
       }
     );
   } else {
-    // SQLite query
+    // SQLite query - generate UUID for SQLite
     const fullName = `${firstName} ${lastName}`.trim();
     const createdBy = randomUUID(); // Generate a proper UUID for created_by
     db.run(
