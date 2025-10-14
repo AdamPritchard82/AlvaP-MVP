@@ -71,29 +71,58 @@ async function initializeDatabase() {
       });
       console.log('✅ Using PostgreSQL database');
       
-      // PostgreSQL initialization
-      db.query(`CREATE TABLE IF NOT EXISTS candidates (
-        id SERIAL PRIMARY KEY,
-        first_name TEXT NOT NULL,
-        last_name TEXT NOT NULL,
-        email TEXT UNIQUE NOT NULL,
-        phone TEXT,
-        current_title TEXT,
-        current_employer TEXT,
-        salary_min TEXT,
-        salary_max TEXT,
-        skills TEXT,
-        experience TEXT,
-        notes TEXT,
-        email_ok BOOLEAN DEFAULT true,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )`, (err) => {
+      // PostgreSQL initialization - First check if table exists and what columns it has
+      db.query(`SELECT column_name FROM information_schema.columns WHERE table_name = 'candidates'`, (err, result) => {
         if (err) {
-          console.error('❌ Database initialization failed:', err);
+          console.error('❌ Error checking table structure:', err);
           reject(err);
+          return;
+        }
+        
+        const existingColumns = result.rows.map(row => row.column_name);
+        console.log('📋 Existing columns:', existingColumns);
+        
+        // If table doesn't exist or has wrong structure, recreate it
+        if (existingColumns.length === 0 || !existingColumns.includes('first_name')) {
+          console.log('🔧 Recreating candidates table with correct schema...');
+          
+          // Drop existing table if it exists
+          db.query(`DROP TABLE IF EXISTS candidates`, (dropErr) => {
+            if (dropErr) {
+              console.error('❌ Error dropping table:', dropErr);
+              reject(dropErr);
+              return;
+            }
+            
+            // Create new table with correct schema
+            db.query(`CREATE TABLE candidates (
+              id SERIAL PRIMARY KEY,
+              first_name TEXT NOT NULL,
+              last_name TEXT NOT NULL,
+              email TEXT UNIQUE NOT NULL,
+              phone TEXT,
+              current_title TEXT,
+              current_employer TEXT,
+              salary_min TEXT,
+              salary_max TEXT,
+              skills TEXT,
+              experience TEXT,
+              notes TEXT,
+              email_ok BOOLEAN DEFAULT true,
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )`, (createErr) => {
+              if (createErr) {
+                console.error('❌ Database initialization failed:', createErr);
+                reject(createErr);
+              } else {
+                console.log('✅ PostgreSQL database initialized with correct schema');
+                resolve();
+              }
+            });
+          });
         } else {
-          console.log('✅ PostgreSQL database initialized');
+          console.log('✅ PostgreSQL database table structure is correct');
           resolve();
         }
       });
