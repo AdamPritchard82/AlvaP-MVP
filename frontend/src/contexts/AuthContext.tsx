@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { api, User } from '../lib/api';
 
 interface AuthContextType {
@@ -15,7 +14,6 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -69,7 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     api.setToken(null);
     setUser(null);
     // Redirect to login page
-    navigate('/login');
+    window.location.href = '/login';
   };
 
   return (
