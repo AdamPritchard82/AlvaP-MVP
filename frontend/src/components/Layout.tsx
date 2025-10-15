@@ -183,6 +183,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
+                      alert('Chevron button clicked!');
                       console.log('User menu toggle clicked, current state:', userMenuOpen);
                       console.log('user object:', user);
                       console.log('logout function available:', typeof logout);
