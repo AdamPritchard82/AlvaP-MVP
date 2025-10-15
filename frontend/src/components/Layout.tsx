@@ -165,7 +165,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 </div>
                 <div className="relative">
                   <button
-                    onClick={() => setUserMenuOpen(!userMenuOpen)}
+                    onClick={() => {
+                      console.log('User menu toggle clicked, current state:', userMenuOpen);
+                      setUserMenuOpen(!userMenuOpen);
+                    }}
                     className="flex items-center p-2 text-gray-400 hover:text-gray-500"
                   >
                     <ChevronDown className="h-4 w-4" />
@@ -182,9 +185,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                         Profile Settings
                       </Link>
                       <button
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.preventDefault();
+                          console.log('Logout button clicked');
                           setUserMenuOpen(false);
-                          logout();
+                          try {
+                            logout();
+                            console.log('Logout function called successfully');
+                          } catch (error) {
+                            console.error('Error calling logout:', error);
+                          }
                         }}
                         className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                       >
