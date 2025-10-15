@@ -15,7 +15,7 @@ const mammoth = require('mammoth');
 const pdfParse = require('pdf-parse');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const { nanoid } = require('nanoid');
+const { v4: uuidv4 } = require('uuid');
 
 // Import billing services - using relative paths from src/
 const pricing = require('../backend/src/services/pricing.cjs');
@@ -378,7 +378,7 @@ app.post('/api/auth/register', (req, res) => {
     const passwordHash = bcrypt.hashSync(password, 10);
     
     // Create user
-    const userId = nanoid();
+    const userId = uuidv4();
     const now = new Date().toISOString();
     
     db.query(`

@@ -38,6 +38,7 @@
     "sqlite3": "^5.1.6",
     "tesseract.js": "^4.1.1",
     "textract": "^2.5.0",
+    "uuid": "^13.0.0",
     "zod": "3.23.8"
   },
   "devDependencies": {
