@@ -17,10 +17,10 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { nanoid } = require('nanoid');
 
-// Import billing services
-const pricing = require('./backend/src/services/pricing');
-const billingProvider = require('./backend/src/services/billingProvider');
-const sessionManager = require('./backend/src/services/sessionManager');
+// Import billing services - using relative paths from src/
+const pricing = require('../backend/src/services/pricing');
+const billingProvider = require('../backend/src/services/billingProvider');
+const sessionManager = require('../backend/src/services/sessionManager');
 
 // Import .NET parser from reference
 const { DotNetCvParser } = require('./parsers/dotnetCvParser');
@@ -508,7 +508,7 @@ app.post('/api/billing/trial/begin', requireAuth, async (req, res) => {
 app.get('/api/billing/plans', async (req, res) => {
   try {
     const knex = require('knex');
-    const config = require('./backend/src/config/config');
+    const config = require('../backend/src/config/config');
     const db = knex(config.database);
 
     const plans = await db('billing_plans')
@@ -533,7 +533,7 @@ app.get('/api/billing/plans', async (req, res) => {
 app.get('/api/billing/promo-codes', async (req, res) => {
   try {
     const knex = require('knex');
-    const config = require('./backend/src/config/config');
+    const config = require('../backend/src/config/config');
     const db = knex(config.database);
 
     const promoCodes = await db('billing_promo_codes')
