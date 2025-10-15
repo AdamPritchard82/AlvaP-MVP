@@ -178,7 +178,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   </button>
                   
                   {userMenuOpen && (
-                    <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border border-gray-200">
+                    <div className="absolute right-0 top-full mt-2 w-48 bg-red-500 rounded-md shadow-xl py-1 z-[9999] border-2 border-gray-300">
                       {console.log('Menu is rendering, userMenuOpen:', userMenuOpen)}
                       <Link
                         to="/profile"
