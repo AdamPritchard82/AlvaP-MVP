@@ -248,6 +248,34 @@ function createSQLiteTables() {
       is_active INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS taxonomies (
+      id TEXT PRIMARY KEY,
+      org_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      is_active INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE(org_id, is_active) WHERE is_active = 1
+    )`,
+    `CREATE TABLE IF NOT EXISTS taxonomy_roles (
+      id TEXT PRIMARY KEY,
+      taxonomy_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (taxonomy_id) REFERENCES taxonomies(id) ON DELETE CASCADE
+    )`,
+    `CREATE TABLE IF NOT EXISTS taxonomy_skills (
+      id TEXT PRIMARY KEY,
+      role_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      weight INTEGER NOT NULL DEFAULT 1,
+      scale_max INTEGER NOT NULL DEFAULT 5,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (role_id) REFERENCES taxonomy_roles(id) ON DELETE CASCADE
     )`
   ];
 
@@ -469,6 +497,34 @@ function createPostgreSQLTables() {
       is_active BOOLEAN NOT NULL DEFAULT true,
       created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS taxonomies (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      org_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      is_active BOOLEAN NOT NULL DEFAULT false,
+      created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+      UNIQUE(org_id, is_active) WHERE is_active = true
+    )`,
+    `CREATE TABLE IF NOT EXISTS taxonomy_roles (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      taxonomy_id UUID NOT NULL,
+      name TEXT NOT NULL,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+      FOREIGN KEY (taxonomy_id) REFERENCES taxonomies(id) ON DELETE CASCADE
+    )`,
+    `CREATE TABLE IF NOT EXISTS taxonomy_skills (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      role_id UUID NOT NULL,
+      name TEXT NOT NULL,
+      weight INTEGER NOT NULL DEFAULT 1,
+      scale_max INTEGER NOT NULL DEFAULT 5,
+      created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+      FOREIGN KEY (role_id) REFERENCES taxonomy_roles(id) ON DELETE CASCADE
     )`
   ];
 

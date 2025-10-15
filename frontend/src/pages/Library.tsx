@@ -15,32 +15,77 @@ function SkillTile({ name, count, disabled }: { name: string; count: number; dis
 export function LibrarySkills() {
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
+  const [taxonomyRoles, setTaxonomyRoles] = useState<Array<{ id: string; name: string; sortOrder: number }>>([]);
+  const [hasActiveTaxonomy, setHasActiveTaxonomy] = useState(false);
 
   useEffect(() => {
-    (async () => {
-      try {
-        const res = await api.getSkillCounts();
-        setCounts(res.counts || {});
-      } finally {
-        setLoading(false);
-      }
-    })();
+    loadData();
   }, []);
 
-  const skills = ['Public Affairs', 'Communications', 'Policy', 'Campaigns'];
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      
+      // Load taxonomy data
+      const taxonomyResponse = await api.getActiveTaxonomy();
+      if (taxonomyResponse.success) {
+        setHasActiveTaxonomy(taxonomyResponse.hasActiveTaxonomy);
+        setTaxonomyRoles(taxonomyResponse.roles || []);
+      }
+      
+      // Load skill counts (fallback to legacy system if no taxonomy)
+      const res = await api.getSkillCounts();
+      setCounts(res.counts || {});
+    } catch (error) {
+      console.error('Error loading library data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   if (loading) return <div className="p-6">Loading…</div>;
 
+  // If no active taxonomy, show legacy skills
+  if (!hasActiveTaxonomy || taxonomyRoles.length === 0) {
+    const legacySkills = ['Public Affairs', 'Communications', 'Policy', 'Campaigns'];
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold">Library</h1>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {legacySkills.map((s) => (
+            <Link key={s} to={`/library/${encodeURIComponent(s)}`}>
+              <SkillTile name={s} count={counts[s] || 0} disabled={(counts[s] || 0) === 0} />
+            </Link>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // Show taxonomy-based roles
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Library</h1>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {skills.map((s) => (
-          <Link key={s} to={`/library/${encodeURIComponent(s)}`}>
-            <SkillTile name={s} count={counts[s] || 0} disabled={(counts[s] || 0) === 0} />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        {taxonomyRoles.map((role) => (
+          <Link key={role.id} to={`/library/${encodeURIComponent(role.name)}`}>
+            <SkillTile 
+              name={role.name} 
+              count={counts[role.name] || 0} 
+              disabled={(counts[role.name] || 0) === 0} 
+            />
           </Link>
         ))}
       </div>
+      
+      {/* Show message if more than 8 roles */}
+      {taxonomyRoles.length > 8 && (
+        <div className="text-center py-4">
+          <p className="text-gray-600">
+            Showing {taxonomyRoles.length} roles. Use the search and filters to find specific candidates.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

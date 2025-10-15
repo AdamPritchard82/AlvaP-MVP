@@ -4,6 +4,7 @@ import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import Layout from './components/Layout';
+import { TaxonomyGuard } from './components/TaxonomyGuard';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import LibraryEntry, { LibrarySkills, LibraryBands, LibraryCandidates } from './pages/Library';
@@ -21,6 +22,8 @@ import Analytics from './pages/Analytics';
 import Portal from './pages/Portal';
 import PublicJobs from './pages/PublicJobs';
 import PublicJobDetail from './pages/PublicJobDetail';
+import TaxonomySettings from './pages/TaxonomySettings';
+import Profile from './pages/Profile';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -37,6 +40,18 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/login" replace />;
   }
 
+  // Temporarily disable taxonomy guard to ensure login works
+  // TODO: Re-enable once backend is properly deployed
+  const useTaxonomyGuard = false;
+  
+  if (useTaxonomyGuard) {
+    return (
+      <TaxonomyGuard>
+        {children}
+      </TaxonomyGuard>
+    );
+  }
+  
   return <>{children}</>;
 }
 
@@ -82,6 +97,8 @@ function InternalRoutes() {
       <Route path="/clients" element={<Clients />} />
       <Route path="/clients/new" element={<ClientNew />} />
       <Route path="/pricing" element={<Pricing />} />
+      <Route path="/settings/taxonomy" element={<TaxonomySettings />} />
+      <Route path="/profile" element={<Profile />} />
     </Routes>
   );
 }

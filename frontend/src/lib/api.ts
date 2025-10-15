@@ -208,11 +208,22 @@ class ApiClient {
   }
 
   // Auth
-  async login(email: string): Promise<{ token: string; user: User }> {
+  async login(email: string, password: string): Promise<{ token: string; user: User }> {
     return this.request('/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ email, password }),
     });
+  }
+
+  async register(email: string, password: string, name: string, role: 'consultant' | 'admin' = 'consultant'): Promise<{ token: string; user: User; message: string }> {
+    return this.request('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ email, password, name, role }),
+    });
+  }
+
+  async getCurrentUser(): Promise<{ user: User }> {
+    return this.request('/auth/me');
   }
 
   // Candidates
@@ -807,6 +818,75 @@ class ApiClient {
 
   async searchCandidates(query: string): Promise<{ success: boolean; data: { candidates: any[] } }> {
     return this.request(`/candidates/search?q=${encodeURIComponent(query)}`);
+  }
+
+  // Taxonomy methods
+  async getActiveTaxonomy(): Promise<{ 
+    success: boolean; 
+    roles: Array<{ id: string; name: string; sortOrder: number }>; 
+    skillsByRole: Record<string, Array<{ name: string; weight: number; scale_max: number }>>;
+    hasActiveTaxonomy: boolean;
+    taxonomy?: { id: string; name: string; createdAt: string; updatedAt: string };
+  }> {
+    return this.request('/taxonomy/active');
+  }
+
+  async getTaxonomyPresets(): Promise<{ 
+    success: boolean; 
+    presets: Array<{ 
+      name: string; 
+      roles: string[]; 
+      skillsByRole: Record<string, Array<{ name: string; weight: number }>> 
+    }> 
+  }> {
+    return this.request('/taxonomy/presets');
+  }
+
+  async createTaxonomy(data: {
+    name: string;
+    industries: string[];
+    roles: string[];
+    skillsByRole: Record<string, Array<{ name: string; weight?: number; scale_max?: number }>>;
+  }): Promise<{ success: boolean; message: string; taxonomyId: string }> {
+    return this.request('/admin/taxonomy', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  }
+
+  async checkTaxonomyUsage(roleIds?: string[], skillIds?: string[]): Promise<{
+    success: boolean;
+    usage: {
+      roles: Record<string, { inUse: boolean; candidateCount: number; message: string }>;
+      skills: Record<string, { inUse: boolean; candidateCount: number; message: string }>;
+    };
+  }> {
+    const params = new URLSearchParams();
+    if (roleIds && roleIds.length > 0) params.set('roleIds', roleIds.join(','));
+    if (skillIds && skillIds.length > 0) params.set('skillIds', skillIds.join(','));
+    
+    const query = params.toString();
+    return this.request(`/admin/taxonomy/usage${query ? `?${query}` : ''}`);
+  }
+
+  async deleteTaxonomyRole(roleId: string, force = false): Promise<{ success: boolean; message: string }> {
+    const params = new URLSearchParams();
+    if (force) params.set('force', 'true');
+    
+    const query = params.toString();
+    return this.request(`/admin/taxonomy/roles/${roleId}${query ? `?${query}` : ''}`, {
+      method: 'DELETE'
+    });
+  }
+
+  async deleteTaxonomySkill(skillId: string, force = false): Promise<{ success: boolean; message: string }> {
+    const params = new URLSearchParams();
+    if (force) params.set('force', 'true');
+    
+    const query = params.toString();
+    return this.request(`/admin/taxonomy/skills/${skillId}${query ? `?${query}` : ''}`, {
+      method: 'DELETE'
+    });
   }
 }
 

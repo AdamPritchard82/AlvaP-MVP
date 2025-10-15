@@ -11,10 +11,15 @@ import {
   LogOut,
   User,
   CreditCard,
-  BarChart3
+  BarChart3,
+  Settings,
+  ChevronDown
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../lib/api';
+
+// Feature flag for taxonomy editor
+const TAXONOMY_EDITOR_ENABLED = process.env.REACT_APP_TAXONOMY_EDITOR_ENABLED !== 'false';
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -25,11 +30,13 @@ const navigation = [
   { name: 'Updates & Open Roles', href: '/updates', icon: Activity },
   { name: 'Clients', href: '/clients', icon: Building2 },
   { name: 'Pricing', href: '/pricing', icon: CreditCard },
+  ...(TAXONOMY_EDITOR_ENABLED ? [{ name: 'Settings', href: '/settings/taxonomy', icon: Settings }] : []),
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const location = useLocation();
   const { user, logout } = useAuth();
 
@@ -47,6 +54,20 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
     loadUnreadCount();
   }, []);
+
+  // Close user menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (userMenuOpen) {
+        setUserMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [userMenuOpen]);
 
   return (
     <div className="h-screen flex overflow-hidden bg-gray-100">
@@ -132,20 +153,45 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               </nav>
             </div>
             <div className="flex-shrink-0 flex border-t border-gray-200 p-4">
-              <div className="flex items-center">
+              <div className="flex items-center w-full">
                 <div className="flex-shrink-0">
                   <User className="h-8 w-8 text-gray-400" />
                 </div>
-                <div className="ml-3">
+                <div className="ml-3 flex-1">
                   <p className="text-sm font-medium text-gray-700">{user?.name}</p>
                   <p className="text-xs text-gray-500">{user?.email}</p>
                 </div>
-                <button
-                  onClick={logout}
-                  className="ml-auto flex-shrink-0 p-2 text-gray-400 hover:text-gray-500"
-                >
-                  <LogOut className="h-5 w-5" />
-                </button>
+                <div className="relative">
+                  <button
+                    onClick={() => setUserMenuOpen(!userMenuOpen)}
+                    className="flex items-center p-2 text-gray-400 hover:text-gray-500"
+                  >
+                    <ChevronDown className="h-4 w-4" />
+                  </button>
+                  
+                  {userMenuOpen && (
+                    <div className="absolute right-0 bottom-full mb-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border border-gray-200">
+                      <Link
+                        to="/profile"
+                        className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        onClick={() => setUserMenuOpen(false)}
+                      >
+                        <User className="h-4 w-4 mr-3" />
+                        Profile Settings
+                      </Link>
+                      <button
+                        onClick={() => {
+                          setUserMenuOpen(false);
+                          logout();
+                        }}
+                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      >
+                        <LogOut className="h-4 w-4 mr-3" />
+                        Sign Out
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>

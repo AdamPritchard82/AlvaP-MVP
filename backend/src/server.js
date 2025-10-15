@@ -73,17 +73,73 @@ app.use('/api/oauth', requireAuth, oauthRouter);
 app.use('/api/alerts', requireAuth, alertsRouter);
 app.use('/api/licensing', requireAuth, licensingRouter);
 app.use('/api/events', requireAuth, eventsRouter);
+app.use('/api/taxonomy', requireAuth, require('./routes/taxonomy'));
 // app.use('/api/updates', requireAuth, updatesRouter);
 
-// Simple auth routes
+// Auth routes
 app.post('/api/auth/login', (req, res) => {
-  const { email } = req.body || {};
-  if (!email) return res.status(400).json({ error: 'Email required' });
+  const { email, password } = req.body || {};
+  if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+  
   const db = getDb();
-  const user = db.prepare('SELECT id, email, name, role FROM users WHERE email = ?').get(email);
+  const user = db.prepare('SELECT id, email, name, role, password_hash FROM users WHERE email = ?').get(email);
   if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+  
+  // Verify password
+  const bcrypt = require('bcrypt');
+  if (!bcrypt.compareSync(password, user.password_hash)) {
+    return res.status(401).json({ error: 'Invalid credentials' });
+  }
+  
   const token = signToken({ userId: user.id, email: user.email, name: user.name, role: user.role });
-  return res.json({ token });
+  return res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role } });
+});
+
+app.post('/api/auth/register', (req, res) => {
+  const { email, password, name, role = 'consultant' } = req.body || {};
+  if (!email || !password || !name) {
+    return res.status(400).json({ error: 'Email, password, and name are required' });
+  }
+  
+  const db = getDb();
+  
+  // Check if user already exists
+  const existingUser = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+  if (existingUser) {
+    return res.status(409).json({ error: 'User already exists' });
+  }
+  
+  // Hash password
+  const bcrypt = require('bcrypt');
+  const passwordHash = bcrypt.hashSync(password, 10);
+  
+  // Create user
+  const userId = require('nanoid')();
+  const now = new Date().toISOString();
+  
+  try {
+    db.prepare(`
+      INSERT INTO users (id, email, name, role, password_hash, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(userId, email, name, role, passwordHash, now);
+    
+    const token = signToken({ userId, email, name, role });
+    return res.json({ 
+      token, 
+      user: { id: userId, email, name, role },
+      message: 'User created successfully' 
+    });
+  } catch (error) {
+    console.error('Error creating user:', error);
+    return res.status(500).json({ error: 'Failed to create user' });
+  }
+});
+
+app.get('/api/auth/me', requireAuth, (req, res) => {
+  const db = getDb();
+  const user = db.prepare('SELECT id, email, name, role FROM users WHERE id = ?').get(req.user.userId);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  return res.json({ user });
 });
 
 const PORT = process.env.PORT || 3001;

@@ -13,12 +13,39 @@ const fs = require('fs');
 const multer = require('multer');
 const mammoth = require('mammoth');
 const pdfParse = require('pdf-parse');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const { nanoid } = require('nanoid');
 
 // Import .NET parser from reference
 const { DotNetCvParser } = require('./parsers/dotnetCvParser');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// JWT secret
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+
+// Auth middleware
+const requireAuth = (req, res, next) => {
+  const token = req.header('Authorization')?.replace('Bearer ', '');
+  if (!token) {
+    return res.status(401).json({ error: 'Access denied. No token provided.' });
+  }
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (error) {
+    res.status(400).json({ error: 'Invalid token.' });
+  }
+};
+
+// Helper function to sign JWT
+const signToken = (payload) => {
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
+};
 
 // Middleware
 app.use(cors());
@@ -191,10 +218,26 @@ async function initializeDatabase() {
           if (err) {
             console.error('❌ Database initialization failed:', err);
             reject(err);
-          } else {
-            console.log('✅ SQLite database initialized');
-            resolve();
+            return;
           }
+          
+          // Create users table
+          db.run(`CREATE TABLE IF NOT EXISTS users (
+            id TEXT PRIMARY KEY,
+            email TEXT UNIQUE NOT NULL,
+            name TEXT NOT NULL,
+            role TEXT NOT NULL DEFAULT 'consultant',
+            password_hash TEXT NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          )`, (userErr) => {
+            if (userErr) {
+              console.error('❌ Users table creation failed:', userErr);
+              reject(userErr);
+            } else {
+              console.log('✅ SQLite database initialized with users table');
+              resolve();
+            }
+          });
         });
       });
     }
@@ -255,6 +298,70 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
     dotnetParser: dotNetParser ? 'enabled' : 'disabled'
   });
+});
+
+// Auth routes
+app.post('/api/auth/login', (req, res) => {
+  const { email, password } = req.body || {};
+  if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+  
+  const db = getDb();
+  const user = db.prepare('SELECT id, email, name, role, password_hash FROM users WHERE email = ?').get(email);
+  if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+  
+  // Verify password
+  if (!bcrypt.compareSync(password, user.password_hash)) {
+    return res.status(401).json({ error: 'Invalid credentials' });
+  }
+  
+  const token = signToken({ userId: user.id, email: user.email, name: user.name, role: user.role });
+  return res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role } });
+});
+
+app.post('/api/auth/register', (req, res) => {
+  const { email, password, name, role = 'consultant' } = req.body || {};
+  if (!email || !password || !name) {
+    return res.status(400).json({ error: 'Email, password, and name are required' });
+  }
+  
+  const db = getDb();
+  
+  // Check if user already exists
+  const existingUser = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+  if (existingUser) {
+    return res.status(409).json({ error: 'User already exists' });
+  }
+  
+  // Hash password
+  const passwordHash = bcrypt.hashSync(password, 10);
+  
+  // Create user
+  const userId = nanoid();
+  const now = new Date().toISOString();
+  
+  try {
+    db.prepare(`
+      INSERT INTO users (id, email, name, role, password_hash, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(userId, email, name, role, passwordHash, now);
+    
+    const token = signToken({ userId, email, name, role });
+    return res.json({ 
+      token, 
+      user: { id: userId, email, name, role },
+      message: 'User created successfully' 
+    });
+  } catch (error) {
+    console.error('Error creating user:', error);
+    return res.status(500).json({ error: 'Failed to create user' });
+  }
+});
+
+app.get('/api/auth/me', requireAuth, (req, res) => {
+  const db = getDb();
+  const user = db.prepare('SELECT id, email, name, role FROM users WHERE id = ?').get(req.user.userId);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  return res.json({ user });
 });
 
 // Version endpoint for traceability

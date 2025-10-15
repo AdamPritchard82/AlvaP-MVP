@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Save, Upload, FileText, X } from 'lucide-react';
 import { api } from '../lib/api';
+import { RoleBasedSkills } from '../components/RoleBasedSkills';
 import toast from 'react-hot-toast';
 
 export default function CandidateNewNew() {
@@ -17,12 +18,9 @@ export default function CandidateNewNew() {
     phone: '',
     salaryMin: '',
     salaryMax: '',
-    skills: {
-      communications: false,
-      campaigns: false,
-      policy: false,
-      publicAffairs: false
-    },
+    skills: {} as Record<string, number>,
+    customSkills: [] as string[],
+    selectedRole: '',
     tags: '',
     notes: '',
     emailOk: true
@@ -36,13 +34,17 @@ export default function CandidateNewNew() {
     }));
   };
 
-  const handleSkillChange = (skill: string, checked: boolean) => {
+  const handleSkillsChange = (skills: Record<string, number>) => {
     setFormData(prev => ({
       ...prev,
-      skills: {
-        ...prev.skills,
-        [skill]: checked
-      }
+      skills
+    }));
+  };
+
+  const handleCustomSkillsChange = (customSkills: string[]) => {
+    setFormData(prev => ({
+      ...prev,
+      customSkills
     }));
   };
 
@@ -121,6 +123,14 @@ export default function CandidateNewNew() {
     setLoading(true);
 
     try {
+      // Convert skills to the legacy format for now (maintain compatibility)
+      const legacySkills = {
+        communications: (formData.skills['Communications'] || 0) > 0,
+        campaigns: (formData.skills['Campaigns'] || 0) > 0,
+        policy: (formData.skills['Policy'] || 0) > 0,
+        publicAffairs: (formData.skills['Public Affairs'] || 0) > 0
+      };
+
       const candidateData = {
         firstName: formData.firstName,
         lastName: formData.lastName,
@@ -128,7 +138,7 @@ export default function CandidateNewNew() {
         phone: formData.phone || undefined,
         salaryMin: formData.salaryMin ? parseInt(formData.salaryMin) : undefined,
         salaryMax: formData.salaryMax ? parseInt(formData.salaryMax) : undefined,
-        skills: formData.skills,
+        skills: legacySkills,
         tags: formData.tags ? formData.tags.split(',').map(t => t.trim()).filter(t => t) : [],
         notes: formData.notes || undefined,
         emailOk: formData.emailOk
@@ -386,24 +396,41 @@ export default function CandidateNewNew() {
                 </div>
               </div>
 
+              {/* Role Selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Role</label>
+                <select
+                  name="selectedRole"
+                  value={formData.selectedRole}
+                  onChange={handleInputChange}
+                  className="input"
+                >
+                  <option value="">Select a role...</option>
+                  <option value="Public Affairs Officer">Public Affairs Officer</option>
+                  <option value="Policy Advisor">Policy Advisor</option>
+                  <option value="Communications Manager">Communications Manager</option>
+                  <option value="Campaigns Lead">Campaigns Lead</option>
+                  <option value="SEO Specialist">SEO Specialist</option>
+                  <option value="PPC Manager">PPC Manager</option>
+                  <option value="Content Strategist">Content Strategist</option>
+                  <option value="Marketing Manager">Marketing Manager</option>
+                  <option value="Software Engineer">Software Engineer</option>
+                  <option value="Product Manager">Product Manager</option>
+                  <option value="Data Analyst">Data Analyst</option>
+                  <option value="DevOps Engineer">DevOps Engineer</option>
+                </select>
+              </div>
+
               {/* Skills Assessment */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Skills</label>
-                <div className="space-y-2">
-                  {Object.entries(formData.skills).map(([skill, value]) => (
-                    <label key={skill} className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={value}
-                        onChange={(e) => handleSkillChange(skill, e.target.checked)}
-                        className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                      />
-                      <span className="ml-2 text-sm text-gray-700 capitalize">
-                        {skill.replace(/([A-Z])/g, ' $1').trim()}
-                      </span>
-                    </label>
-                  ))}
-                </div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Skills Assessment</label>
+                <RoleBasedSkills
+                  selectedRole={formData.selectedRole}
+                  skills={formData.skills}
+                  onSkillsChange={handleSkillsChange}
+                  onCustomSkillsChange={handleCustomSkillsChange}
+                  customSkills={formData.customSkills}
+                />
               </div>
 
               <div>

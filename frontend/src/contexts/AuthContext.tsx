@@ -3,7 +3,8 @@ import { api, User } from '../lib/api';
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string, name: string, role?: 'consultant' | 'admin') => Promise<void>;
   logout: () => void;
   loading: boolean;
 }
@@ -18,20 +19,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const token = localStorage.getItem('token');
     if (token) {
       api.setToken(token);
-      // In a real app, you'd validate the token with the backend
-      // For now, we'll assume it's valid if it exists
-      setUser({ id: '1', email: 'consultant@door10.com', name: 'Consultant', role: 'consultant' });
+      // Validate token with backend
+      validateToken();
+    } else {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
-  const login = async (email: string) => {
+  const validateToken = async () => {
     try {
-      const { token } = await api.login(email);
+      const response = await api.getCurrentUser();
+      setUser(response.user);
+    } catch (error) {
+      console.error('Token validation failed:', error);
+      // Token is invalid, clear it
+      localStorage.removeItem('token');
+      api.setToken(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const login = async (email: string, password: string) => {
+    try {
+      const { token, user } = await api.login(email, password);
       localStorage.setItem('token', token);
       api.setToken(token);
-      // In a real app, you'd get user data from the backend
-      setUser({ id: '1', email, name: 'Consultant', role: 'consultant' });
+      setUser(user);
+    } catch (error) {
+      throw error;
+    }
+  };
+
+  const register = async (email: string, password: string, name: string, role: 'consultant' | 'admin' = 'consultant') => {
+    try {
+      const { token, user } = await api.register(email, password, name, role);
+      localStorage.setItem('token', token);
+      api.setToken(token);
+      setUser(user);
     } catch (error) {
       throw error;
     }
@@ -44,7 +69,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, loading }}>
+    <AuthContext.Provider value={{ user, login, register, logout, loading }}>
       {children}
     </AuthContext.Provider>
   );
