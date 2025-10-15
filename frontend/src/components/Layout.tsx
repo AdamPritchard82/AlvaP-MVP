@@ -168,7 +168,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   <button
                     onClick={() => {
                       console.log('Chevron button clicked, current state:', userMenuOpen);
-                      setUserMenuOpen(!userMenuOpen);
+                      const newState = !userMenuOpen;
+                      console.log('Setting menu state to:', newState);
+                      setUserMenuOpen(newState);
                     }}
                     className="flex items-center p-2 text-gray-400 hover:text-gray-500"
                   >
@@ -176,7 +178,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   </button>
                   
                   {userMenuOpen && (
-                    <div className="absolute right-0 bottom-full mb-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border border-gray-200">
+                    <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border border-gray-200">
+                      {console.log('Menu is rendering, userMenuOpen:', userMenuOpen)}
                       <Link
                         to="/profile"
                         className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
