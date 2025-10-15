@@ -46,6 +46,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   console.log('Layout component rendered');
   console.log('User:', user);
   console.log('Logout function:', typeof logout);
+  
+  // Try different logging methods
+  window.alert('Layout component loaded!');
+  console.error('This is an error message');
+  console.warn('This is a warning message');
+  console.info('This is an info message');
 
   // Load unread count
   useEffect(() => {
