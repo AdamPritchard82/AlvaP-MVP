@@ -1257,8 +1257,8 @@ app.post('/api/candidates/parse-cv', upload.single('file'), async (req, res) => 
 });
 
 // Get all candidates
-app.get('/api/candidates', (req, res) => {
-  const db = getDb();
+app.get('/api/candidates', async (req, res) => {
+  try {
 
   const mapRow = (row) => {
     const parseJson = (v, fallback) => {
@@ -1316,40 +1316,25 @@ app.get('/api/candidates', (req, res) => {
     };
   };
 
-  if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgres')) {
-    // PostgreSQL query
-    db.query('SELECT * FROM candidates WHERE deleted_at IS NULL ORDER BY created_at DESC', (err, result) => {
-      if (err) {
-        console.error('Database error:', err);
-        return res.status(500).json({ error: 'Database error' });
-      }
-
-      const rows = Array.isArray(result.rows) ? result.rows : [];
-      const candidates = rows.map(mapRow);
-      return res.json({
-        candidates,
-        total: candidates.length,
-        page: 1,
-        pageSize: candidates.length,
-        totalPages: 1
-      });
+    // Use PostgreSQL connection directly
+    const result = await db.query('SELECT * FROM candidates WHERE deleted_at IS NULL ORDER BY created_at DESC');
+    const rows = Array.isArray(result.rows) ? result.rows : [];
+    const candidates = rows.map(mapRow);
+    
+    res.json({
+      success: true,
+      candidates,
+      total: candidates.length,
+      page: 1,
+      pageSize: candidates.length,
+      totalPages: 1
     });
-  } else {
-    // SQLite query
-    db.all('SELECT * FROM candidates WHERE deleted_at IS NULL ORDER BY created_at DESC', (err, rows) => {
-      if (err) {
-        console.error('Database error:', err);
-        return res.status(500).json({ error: 'Database error' });
-      }
-
-      const candidates = (rows || []).map(mapRow);
-      return res.json({
-        candidates,
-        total: candidates.length,
-        page: 1,
-        pageSize: candidates.length,
-        totalPages: 1
-      });
+  } catch (error) {
+    console.error('Error fetching candidates:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Database error',
+      message: error.message 
     });
   }
 });
