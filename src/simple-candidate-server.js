@@ -1316,8 +1316,8 @@ app.get('/api/candidates', async (req, res) => {
     };
   };
 
-    // Use PostgreSQL connection directly
-    const result = await db.query('SELECT * FROM candidates WHERE deleted_at IS NULL ORDER BY created_at DESC');
+    // Use PostgreSQL connection directly (temporarily without deleted_at filter)
+    const result = await db.query('SELECT * FROM candidates ORDER BY created_at DESC');
     const rows = Array.isArray(result.rows) ? result.rows : [];
     const candidates = rows.map(mapRow);
     
