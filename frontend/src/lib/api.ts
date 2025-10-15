@@ -888,6 +888,43 @@ class ApiClient {
       method: 'DELETE'
     });
   }
+
+  // Billing API methods
+  async getBillingSummary() {
+    return this.get('/billing/summary');
+  }
+
+  async getBillingPlans() {
+    return this.get('/billing/plans');
+  }
+
+  async getPromoCodes() {
+    return this.get('/billing/promo-codes');
+  }
+
+  async applyPromoCode(code: string) {
+    return this.post('/billing/promo/apply', { code });
+  }
+
+  async switchPlan(planCode: string) {
+    return this.post('/billing/plan/switch', { planCode });
+  }
+
+  async beginTrial() {
+    return this.post('/billing/trial/begin');
+  }
+
+  async getTrialStatus() {
+    return this.get('/billing/trial/status');
+  }
+
+  async getBillingProviderStatus() {
+    return this.get('/billing/provider/status');
+  }
+
+  async getSessionStats() {
+    return this.get('/billing/sessions/stats');
+  }
 }
 
 export const api = new ApiClient();

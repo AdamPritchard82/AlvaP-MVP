@@ -17,6 +17,11 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { nanoid } = require('nanoid');
 
+// Import billing services
+const pricing = require('./backend/src/services/pricing');
+const billingProvider = require('./backend/src/services/billingProvider');
+const sessionManager = require('./backend/src/services/sessionManager');
+
 // Import .NET parser from reference
 const { DotNetCvParser } = require('./parsers/dotnetCvParser');
 
@@ -408,6 +413,179 @@ app.get('/api/auth/me', requireAuth, (req, res) => {
     }
     
     return res.json({ user: result.rows[0] });
+  });
+});
+
+// Billing routes
+app.post('/api/billing/promo/apply', requireAuth, async (req, res) => {
+  try {
+    const { code } = req.body;
+    const orgId = req.user.orgId || 'default';
+    const actorUserId = req.user.userId;
+
+    if (!code) {
+      return res.status(400).json({ error: 'Promo code is required' });
+    }
+
+    const result = await pricing.applyPromo(orgId, code, actorUserId);
+    
+    res.json({
+      success: true,
+      message: 'Promo code applied successfully',
+      promo: result
+    });
+  } catch (error) {
+    console.error('Error applying promo code:', error);
+    res.status(400).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+app.get('/api/billing/summary', requireAuth, async (req, res) => {
+  try {
+    const orgId = req.user.orgId || 'default';
+    const summary = await pricing.getBillingSummary(orgId);
+    
+    res.json({
+      success: true,
+      data: summary
+    });
+  } catch (error) {
+    console.error('Error getting billing summary:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+app.post('/api/billing/plan/switch', requireAuth, async (req, res) => {
+  try {
+    const { planCode } = req.body;
+    const orgId = req.user.orgId || 'default';
+
+    if (!planCode) {
+      return res.status(400).json({ error: 'Plan code is required' });
+    }
+
+    const plan = await pricing.switchPlan(orgId, planCode);
+    
+    res.json({
+      success: true,
+      message: 'Plan switched successfully',
+      plan
+    });
+  } catch (error) {
+    console.error('Error switching plan:', error);
+    res.status(400).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+app.post('/api/billing/trial/begin', requireAuth, async (req, res) => {
+  try {
+    const orgId = req.user.orgId || 'default';
+    const result = await pricing.beginTrialForOrg(orgId);
+    
+    res.json({
+      success: true,
+      message: 'Trial started successfully',
+      trial: result
+    });
+  } catch (error) {
+    console.error('Error beginning trial:', error);
+    res.status(400).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+app.get('/api/billing/plans', async (req, res) => {
+  try {
+    const knex = require('knex');
+    const config = require('./backend/src/config/config');
+    const db = knex(config.database);
+
+    const plans = await db('billing_plans')
+      .where('is_active', true)
+      .select('*')
+      .orderBy('interval', 'asc')
+      .orderBy('amount_pence', 'asc');
+
+    res.json({
+      success: true,
+      data: plans
+    });
+  } catch (error) {
+    console.error('Error getting plans:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+app.get('/api/billing/promo-codes', async (req, res) => {
+  try {
+    const knex = require('knex');
+    const config = require('./backend/src/config/config');
+    const db = knex(config.database);
+
+    const promoCodes = await db('billing_promo_codes')
+      .where('is_active', true)
+      .select('code', 'description', 'percent_off', 'duration', 'expires_at', 'max_redemptions', 'redeemed_count')
+      .orderBy('created_at', 'desc');
+
+    res.json({
+      success: true,
+      data: promoCodes
+    });
+  } catch (error) {
+    console.error('Error getting promo codes:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+app.get('/api/billing/trial/status', requireAuth, async (req, res) => {
+  try {
+    const orgId = req.user.orgId || 'default';
+    const trialStatus = await pricing.getTrialStatus(orgId);
+    const checkResult = await pricing.checkTrialStatus(orgId);
+    
+    res.json({
+      success: true,
+      data: {
+        ...trialStatus,
+        ...checkResult
+      }
+    });
+  } catch (error) {
+    console.error('Error checking trial status:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
+app.get('/api/billing/provider/status', (req, res) => {
+  res.json({
+    success: true,
+    data: {
+      enabled: billingProvider.isEnabled(),
+      provider: billingProvider.getProvider(),
+      message: billingProvider.getProvider() === 'none' 
+        ? 'Payment provider not connected yet — charging will start when connected.'
+        : `Connected to ${billingProvider.getProvider()}`
+    }
   });
 });
 

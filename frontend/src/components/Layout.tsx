@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../lib/api';
+import TrialBanner from './TrialBanner';
 
 // Feature flag for taxonomy editor
 const TAXONOMY_EDITOR_ENABLED = process.env.REACT_APP_TAXONOMY_EDITOR_ENABLED !== 'false';
@@ -31,6 +32,7 @@ const navigation = [
   { name: 'Clients', href: '/clients', icon: Building2 },
   { name: 'Pricing', href: '/pricing', icon: CreditCard },
   ...(TAXONOMY_EDITOR_ENABLED ? [{ name: 'Settings', href: '/settings/taxonomy', icon: Settings }] : []),
+  { name: 'Billing', href: '/settings/billing', icon: CreditCard },
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -200,6 +202,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Main content */}
       <div className="flex flex-col w-0 flex-1 overflow-hidden">
+        {/* Trial Banner */}
+        <TrialBanner />
+        
         <div className="md:hidden pl-1 pt-1 sm:pl-3 sm:pt-3">
           <button
             type="button"
