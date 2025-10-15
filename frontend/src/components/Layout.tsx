@@ -160,7 +160,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 })}
               </nav>
             </div>
-            <div className="flex-shrink-0 flex border-t border-gray-200 p-4">
+            <div className="flex-shrink-0 flex border-t border-gray-200 p-4 overflow-visible">
               <div className="flex items-center w-full">
                 <div className="flex-shrink-0">
                   <User className="h-8 w-8 text-gray-400" />
@@ -183,7 +183,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   {userMenuOpen && (
                     <div 
                       ref={menuRef}
-                      className="fixed right-4 bottom-20 w-48 bg-white rounded-md shadow-lg py-1 z-50 border border-gray-200"
+                      className="absolute right-0 bottom-full mb-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border border-gray-200"
                     >
                       <Link
                         to="/profile"
