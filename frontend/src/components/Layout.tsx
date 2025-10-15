@@ -167,6 +167,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 <div className="relative">
                   <button
                     onClick={() => {
+                      console.log('Chevron button clicked, current state:', userMenuOpen);
                       setUserMenuOpen(!userMenuOpen);
                     }}
                     className="flex items-center p-2 text-gray-400 hover:text-gray-500"
@@ -186,6 +187,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                       </Link>
                       <button
                         onClick={() => {
+                          console.log('Sign Out button clicked');
                           setUserMenuOpen(false);
                           logout();
                         }}
