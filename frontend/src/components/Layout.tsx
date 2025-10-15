@@ -189,9 +189,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                         Profile Settings
                       </Link>
                       <button
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
+                        onClick={() => {
+                          alert('Logout button clicked!');
                           console.log('Logout button clicked');
                           console.log('logout function:', typeof logout);
                           setUserMenuOpen(false);
