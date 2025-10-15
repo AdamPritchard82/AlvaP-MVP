@@ -167,15 +167,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 <div className="relative">
                   <button
                     onClick={() => {
-                      console.log('Chevron button clicked, current state:', userMenuOpen);
-                      const newState = !userMenuOpen;
-                      console.log('Setting menu state to:', newState);
-                      setUserMenuOpen(newState);
-                    }}
-                    onDoubleClick={() => {
-                      console.log('Double click detected - triggering logout');
-                      alert('Double click logout triggered!');
-                      logout();
+                      setUserMenuOpen(!userMenuOpen);
                     }}
                     className="flex items-center p-2 text-gray-400 hover:text-gray-500"
                   >
@@ -183,11 +175,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   </button>
                   
                   {userMenuOpen && (
-                    <div 
-                      className="fixed right-4 bottom-20 w-48 bg-red-500 rounded-md shadow-xl py-1 z-[9999] border-2 border-gray-300"
-                      onClick={() => console.log('Menu container clicked')}
-                    >
-                      {console.log('Menu is rendering, userMenuOpen:', userMenuOpen)}
+                    <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border border-gray-200">
                       <Link
                         to="/profile"
                         className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
@@ -196,21 +184,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                         <User className="h-4 w-4 mr-3" />
                         Profile Settings
                       </Link>
-                      <div
+                      <button
                         onClick={() => {
-                          console.log('Sign Out button clicked');
-                          console.log('logout function:', typeof logout);
-                          alert('Sign Out button was clicked!');
                           setUserMenuOpen(false);
-                          console.log('About to call logout()');
                           logout();
-                          console.log('logout() called');
                         }}
-                        className="flex items-center w-full px-4 py-2 text-sm text-white bg-blue-500 hover:bg-blue-600 cursor-pointer"
+                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                       >
                         <LogOut className="h-4 w-4 mr-3" />
                         Sign Out
-                      </div>
+                      </button>
                     </div>
                   )}
                 </div>
