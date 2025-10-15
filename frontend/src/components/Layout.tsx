@@ -165,8 +165,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 </div>
                 <div className="relative">
                   <button
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
                       console.log('User menu toggle clicked, current state:', userMenuOpen);
+                      console.log('user object:', user);
+                      console.log('logout function available:', typeof logout);
                       setUserMenuOpen(!userMenuOpen);
                     }}
                     className="flex items-center p-2 text-gray-400 hover:text-gray-500"
@@ -187,11 +191,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                       <button
                         onClick={(e) => {
                           e.preventDefault();
+                          e.stopPropagation();
                           console.log('Logout button clicked');
+                          console.log('logout function:', typeof logout);
                           setUserMenuOpen(false);
                           try {
-                            logout();
-                            console.log('Logout function called successfully');
+                            if (typeof logout === 'function') {
+                              logout();
+                              console.log('Logout function called successfully');
+                            } else {
+                              console.error('logout is not a function:', logout);
+                            }
                           } catch (error) {
                             console.error('Error calling logout:', error);
                           }
