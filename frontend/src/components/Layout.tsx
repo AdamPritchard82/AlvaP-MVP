@@ -42,16 +42,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const { user, logout } = useAuth();
 
-  // Debug: Test if React is working
-  console.log('Layout component rendered');
-  console.log('User:', user);
-  console.log('Logout function:', typeof logout);
-  
-  // Try different logging methods
-  window.alert('Layout component loaded!');
-  console.error('This is an error message');
-  console.warn('This is a warning message');
-  console.info('This is an info message');
 
   // Load unread count
   useEffect(() => {
@@ -84,18 +74,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="h-screen flex overflow-hidden bg-gray-100">
-      {/* Debug: Test button */}
-      <div style={{ position: 'fixed', top: '10px', right: '10px', zIndex: 9999, background: 'red', color: 'white', padding: '10px' }}>
-        <button onClick={() => alert('Test button works!')}>TEST</button>
-      </div>
-      
-      {/* Debug: Simple logout button */}
-      <div style={{ position: 'fixed', top: '50px', right: '10px', zIndex: 9999, background: 'blue', color: 'white', padding: '10px' }}>
-        <button onClick={() => {
-          alert('Direct logout test!');
-          logout();
-        }}>LOGOUT TEST</button>
-      </div>
       {/* Mobile sidebar */}
       <div className={`fixed inset-0 flex z-40 md:hidden ${sidebarOpen ? '' : 'hidden'}`}>
         <div className="fixed inset-0 bg-gray-600 bg-opacity-75" onClick={() => setSidebarOpen(false)} />
@@ -188,13 +166,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 </div>
                 <div className="relative">
                   <button
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      alert('Chevron button clicked!');
-                      console.log('User menu toggle clicked, current state:', userMenuOpen);
-                      console.log('user object:', user);
-                      console.log('logout function available:', typeof logout);
+                    onClick={() => {
                       setUserMenuOpen(!userMenuOpen);
                     }}
                     className="flex items-center p-2 text-gray-400 hover:text-gray-500"
@@ -214,20 +186,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                       </Link>
                       <button
                         onClick={() => {
-                          alert('Logout button clicked!');
-                          console.log('Logout button clicked');
-                          console.log('logout function:', typeof logout);
                           setUserMenuOpen(false);
-                          try {
-                            if (typeof logout === 'function') {
-                              logout();
-                              console.log('Logout function called successfully');
-                            } else {
-                              console.error('logout is not a function:', logout);
-                            }
-                          } catch (error) {
-                            console.error('Error calling logout:', error);
-                          }
+                          logout();
                         }}
                         className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                       >
