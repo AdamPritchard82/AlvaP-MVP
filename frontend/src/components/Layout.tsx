@@ -178,7 +178,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   </button>
                   
                   {userMenuOpen && (
-                    <div className="fixed right-4 bottom-20 w-48 bg-red-500 rounded-md shadow-xl py-1 z-[9999] border-2 border-gray-300">
+                    <div 
+                      className="fixed right-4 bottom-20 w-48 bg-red-500 rounded-md shadow-xl py-1 z-[9999] border-2 border-gray-300"
+                      onClick={() => console.log('Menu container clicked')}
+                    >
                       {console.log('Menu is rendering, userMenuOpen:', userMenuOpen)}
                       <Link
                         to="/profile"
@@ -188,7 +191,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                         <User className="h-4 w-4 mr-3" />
                         Profile Settings
                       </Link>
-                      <button
+                      <div
                         onClick={() => {
                           console.log('Sign Out button clicked');
                           console.log('logout function:', typeof logout);
@@ -198,11 +201,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                           logout();
                           console.log('logout() called');
                         }}
-                        className="flex items-center w-full px-4 py-2 text-sm text-white bg-blue-500 hover:bg-blue-600"
+                        className="flex items-center w-full px-4 py-2 text-sm text-white bg-blue-500 hover:bg-blue-600 cursor-pointer"
                       >
                         <LogOut className="h-4 w-4 mr-3" />
                         Sign Out
-                      </button>
+                      </div>
                     </div>
                   )}
                 </div>
