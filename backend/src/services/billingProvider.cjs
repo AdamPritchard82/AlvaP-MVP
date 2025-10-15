@@ -5,7 +5,7 @@
  * Currently logs operations without actual billing.
  */
 
-const config = require('../config/config');
+const config = require('../config/config.cjs');
 
 class BillingProvider {
   constructor() {

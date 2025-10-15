@@ -6,7 +6,7 @@
  */
 
 const knex = require('knex');
-const config = require('../config/config');
+const config = require('../config/config.cjs');
 
 const db = knex(config.database);
 
