@@ -17,27 +17,10 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { nanoid } = require('nanoid');
 
-// Import billing services - using dynamic imports for ES modules
-let pricing, billingProvider, sessionManager;
-
-// Dynamic imports for ES modules
-(async () => {
-  try {
-    const pricingModule = await import('../backend/src/services/pricing.js');
-    const billingProviderModule = await import('../backend/src/services/billingProvider.js');
-    const sessionManagerModule = await import('../backend/src/services/sessionManager.js');
-    
-    pricing = pricingModule.default;
-    billingProvider = billingProviderModule.default;
-    sessionManager = sessionManagerModule.default;
-  } catch (error) {
-    console.error('Error loading billing services:', error);
-    // Set to null to prevent errors
-    pricing = null;
-    billingProvider = null;
-    sessionManager = null;
-  }
-})();
+// Import billing services - using relative paths from src/
+const pricing = require('../backend/src/services/pricing');
+const billingProvider = require('../backend/src/services/billingProvider');
+const sessionManager = require('../backend/src/services/sessionManager');
 
 // Import .NET parser from reference
 const { DotNetCvParser } = require('./parsers/dotnetCvParser');
@@ -604,6 +587,85 @@ app.get('/api/billing/provider/status', (req, res) => {
         : `Connected to ${billingProvider.getProvider()}`
     }
   });
+});
+
+// Candidate soft delete endpoints
+app.delete('/api/candidates/:id', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { hard } = req.query;
+    const userId = req.user.userId;
+    
+    if (hard === 'true') {
+      // Hard delete (admin only)
+      if (req.user.role !== 'admin') {
+        return res.status(403).json({ error: 'Admin access required for hard delete' });
+      }
+      
+      const db = getDb();
+      await db.query('DELETE FROM candidates WHERE id = $1', [id]);
+      
+      // Log audit
+      await db.query(`
+        INSERT INTO audit_logs (id, table_name, record_id, action, user_id, created_at)
+        VALUES ($1, 'candidates', $2, 'hard_delete', $3, $4)
+      `, [nanoid(), id, userId, new Date()]);
+      
+      res.json({ message: 'Candidate permanently deleted' });
+    } else {
+      // Soft delete
+      const db = getDb();
+      const now = new Date();
+      
+      // Get current data for audit
+      const candidate = await db.query('SELECT * FROM candidates WHERE id = $1 AND deleted_at IS NULL', [id]);
+      if (candidate.rows.length === 0) {
+        return res.status(404).json({ error: 'Candidate not found' });
+      }
+      
+      // Soft delete
+      await db.query('UPDATE candidates SET deleted_at = $1 WHERE id = $2', [now, id]);
+      
+      // Log audit
+      await db.query(`
+        INSERT INTO audit_logs (id, table_name, record_id, action, user_id, old_data, created_at)
+        VALUES ($1, 'candidates', $2, 'delete', $3, $4, $5)
+      `, [nanoid(), id, userId, JSON.stringify(candidate.rows[0]), now]);
+      
+      res.json({ message: 'Candidate deleted', deletedAt: now });
+    }
+  } catch (error) {
+    console.error('Error deleting candidate:', error);
+    res.status(500).json({ error: 'Failed to delete candidate' });
+  }
+});
+
+app.post('/api/candidates/:id/restore', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.userId;
+    const db = getDb();
+    
+    // Check if candidate exists and is deleted
+    const candidate = await db.query('SELECT * FROM candidates WHERE id = $1 AND deleted_at IS NOT NULL', [id]);
+    if (candidate.rows.length === 0) {
+      return res.status(404).json({ error: 'Deleted candidate not found' });
+    }
+    
+    // Restore
+    await db.query('UPDATE candidates SET deleted_at = NULL WHERE id = $1', [id]);
+    
+    // Log audit
+    await db.query(`
+      INSERT INTO audit_logs (id, table_name, record_id, action, user_id, new_data, created_at)
+      VALUES ($1, 'candidates', $2, 'restore', $3, $4, $5)
+    `, [nanoid(), id, userId, JSON.stringify(candidate.rows[0]), new Date()]);
+    
+    res.json({ message: 'Candidate restored' });
+  } catch (error) {
+    console.error('Error restoring candidate:', error);
+    res.status(500).json({ error: 'Failed to restore candidate' });
+  }
 });
 
 // Version endpoint for traceability
@@ -1206,7 +1268,7 @@ app.get('/api/candidates', (req, res) => {
 
   if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgres')) {
     // PostgreSQL query
-    db.query('SELECT * FROM candidates ORDER BY created_at DESC', (err, result) => {
+    db.query('SELECT * FROM candidates WHERE deleted_at IS NULL ORDER BY created_at DESC', (err, result) => {
       if (err) {
         console.error('Database error:', err);
         return res.status(500).json({ error: 'Database error' });
@@ -1224,7 +1286,7 @@ app.get('/api/candidates', (req, res) => {
     });
   } else {
     // SQLite query
-    db.all('SELECT * FROM candidates ORDER BY created_at DESC', (err, rows) => {
+    db.all('SELECT * FROM candidates WHERE deleted_at IS NULL ORDER BY created_at DESC', (err, rows) => {
       if (err) {
         console.error('Database error:', err);
         return res.status(500).json({ error: 'Database error' });
@@ -1426,7 +1488,7 @@ app.get('/api/skills/:skill/bands/:band/candidates', (req, res) => {
     // In a real app, you'd filter by salary band too
     db.query(`
       SELECT * FROM candidates 
-      WHERE (skills->>'${skillField}')::int >= 4
+      WHERE deleted_at IS NULL AND (skills->>'${skillField}')::int >= 4
       ORDER BY created_at DESC 
       LIMIT $1 OFFSET $2
     `, [pageSize, offset], (err, result) => {

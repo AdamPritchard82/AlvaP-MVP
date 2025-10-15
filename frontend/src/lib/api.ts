@@ -925,6 +925,17 @@ class ApiClient {
   async getSessionStats() {
     return this.get('/billing/sessions/stats');
   }
+
+  // Candidate soft delete methods
+  async deleteCandidate(id: string, hard: boolean = false) {
+    return this.request(`/candidates/${id}${hard ? '?hard=true' : ''}`, {
+      method: 'DELETE'
+    });
+  }
+
+  async restoreCandidate(id: string) {
+    return this.post(`/candidates/${id}/restore`);
+  }
 }
 
 export const api = new ApiClient();

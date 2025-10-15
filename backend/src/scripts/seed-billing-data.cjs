@@ -6,9 +6,17 @@
  */
 
 const knex = require('knex');
-const config = require('../config/config');
 
-const db = knex(config.database);
+// Simple database configuration for seeding
+const dbConfig = {
+  client: 'sqlite3',
+  connection: {
+    filename: './candidates.db'
+  },
+  useNullAsDefault: true
+};
+
+const db = knex(dbConfig);
 
 async function seedBillingData() {
   console.log('🌱 Seeding billing data...');

@@ -13,9 +13,7 @@ exports.up = function(knex) {
       table.timestamp('updated_at').defaultTo(knex.fn.now());
       
       // Ensure only one active taxonomy per org
-      table.unique(['org_id', 'is_active'], { 
-        predicate: knex.where('is_active', true) 
-      });
+      table.unique(['org_id', 'is_active']);
     })
     .createTable('taxonomy_roles', function(table) {
       table.string('id').primary();

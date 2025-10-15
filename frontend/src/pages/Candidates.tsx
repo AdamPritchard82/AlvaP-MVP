@@ -13,7 +13,9 @@ import {
   Tag,
   AlertCircle,
   CheckCircle,
-  Upload
+  Upload,
+  Trash2,
+  Undo2
 } from 'lucide-react';
 import { api, Candidate } from '../lib/api';
 import { LibrarySkills } from './Library';
@@ -36,6 +38,8 @@ export default function Candidates() {
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [tagMode, setTagMode] = useState<'AND' | 'OR'>('OR');
   const [showCSVImport, setShowCSVImport] = useState(false);
+  const [deletingCandidate, setDeletingCandidate] = useState<string | null>(null);
+  const [deletedCandidates, setDeletedCandidates] = useState<Set<string>>(new Set());
   const { usage, isLimitReached, getUsagePercentage } = useUsage();
 
   useEffect(() => {
@@ -99,6 +103,57 @@ export default function Candidates() {
     setSalaryMax('');
     setSelectedSkills([]);
     setTagMode('OR');
+  };
+
+  const handleDeleteCandidate = async (candidateId: string, candidateName: string) => {
+    if (!confirm(`Are you sure you want to delete ${candidateName}? This action can be undone.`)) {
+      return;
+    }
+
+    try {
+      setDeletingCandidate(candidateId);
+      await api.deleteCandidate(candidateId);
+      
+      // Add to deleted set for undo functionality
+      setDeletedCandidates(prev => new Set([...prev, candidateId]));
+      
+      // Remove from candidates list
+      setCandidates(prev => prev.filter(c => c.id !== candidateId));
+      
+      toast.success('Candidate deleted successfully', {
+        duration: 10000,
+        action: {
+          label: 'Undo',
+          onClick: () => handleRestoreCandidate(candidateId, candidateName)
+        }
+      });
+    } catch (error) {
+      console.error('Error deleting candidate:', error);
+      toast.error('Failed to delete candidate');
+    } finally {
+      setDeletingCandidate(null);
+    }
+  };
+
+  const handleRestoreCandidate = async (candidateId: string, candidateName: string) => {
+    try {
+      await api.restoreCandidate(candidateId);
+      
+      // Remove from deleted set
+      setDeletedCandidates(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(candidateId);
+        return newSet;
+      });
+      
+      // Reload candidates to show restored candidate
+      await loadCandidates();
+      
+      toast.success(`${candidateName} restored successfully`);
+    } catch (error) {
+      console.error('Error restoring candidate:', error);
+      toast.error('Failed to restore candidate');
+    }
   };
 
   const hasActiveFilters = searchTerm || selectedTags.length > 0 || salaryMin || salaryMax || selectedSkills.length > 0;
@@ -357,8 +412,37 @@ export default function Candidates() {
         </form>
       </div>
 
-      {/* Library Skills Grid (below search bar and buttons) */}
-      <div className="card p-6">
+      {/* Add Candidate Card - moved above Library tiles */}
+      <div className="card p-6 order-1">
+        <div className="text-center">
+          <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100 mb-4">
+            <Plus className="h-6 w-6 text-blue-600" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Add New Candidate</h3>
+          <p className="text-sm text-gray-500 mb-4">
+            Upload a CV or manually enter candidate details
+          </p>
+          <div className="space-x-3">
+            <Link
+              to="/candidates/new"
+              className="btn btn-primary btn-md"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Candidate
+            </Link>
+            <button
+              onClick={() => setShowCSVImport(true)}
+              className="btn btn-outline btn-md"
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              Import CSV
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Library Skills Grid */}
+      <div className="card p-6 order-2">
         <div className="mb-4">
           <h3 className="text-lg font-semibold">Library</h3>
           <p className="text-sm text-gray-500">Browse by skill and salary band.</p>
@@ -367,7 +451,7 @@ export default function Candidates() {
       </div>
 
       {/* Candidates List */}
-      <div className="card">
+      <div className="card order-3">
         {loading ? (
           <div className="flex items-center justify-center h-64">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
@@ -481,17 +565,30 @@ export default function Candidates() {
                         <Link
                           to={`/candidates/${candidate.id}`}
                           className="text-primary-600 hover:text-primary-900"
+                          onClick={(e) => e.stopPropagation()}
                         >
                           <Eye className="h-4 w-4" />
                         </Link>
                         <Link
                           to={`/candidates/${candidate.id}/edit`}
                           className="text-gray-600 hover:text-gray-900"
+                          onClick={(e) => e.stopPropagation()}
                         >
                           <Edit className="h-4 w-4" />
                         </Link>
-                        <button className="text-gray-600 hover:text-gray-900">
-                          <MoreVertical className="h-4 w-4" />
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteCandidate(candidate.id, candidate.full_name);
+                          }}
+                          disabled={deletingCandidate === candidate.id}
+                          className="text-red-600 hover:text-red-900 disabled:opacity-50"
+                        >
+                          {deletingCandidate === candidate.id ? (
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-600"></div>
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
                         </button>
                       </div>
                     </td>
