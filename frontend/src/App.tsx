@@ -27,9 +27,10 @@ import Profile from './pages/Profile';
 import BillingSettings from './pages/BillingSettings';
 import SeatsManagement from './pages/SeatsManagement';
 import TrialBanner from './components/TrialBanner';
+import PricingGate from './components/PricingGate';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
+  const { user, loading, showPricingGate, setShowPricingGate } = useAuth();
 
   if (loading) {
     return (
@@ -41,6 +42,10 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (showPricingGate) {
+    return <PricingGate onContinue={() => setShowPricingGate(false)} />;
   }
 
   // Enable taxonomy guard for onboarding wizard

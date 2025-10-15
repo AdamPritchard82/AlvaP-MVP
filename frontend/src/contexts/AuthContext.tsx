@@ -7,6 +7,8 @@ interface AuthContextType {
   register: (email: string, password: string, name: string, role?: 'consultant' | 'admin') => Promise<void>;
   logout: () => void;
   loading: boolean;
+  showPricingGate: boolean;
+  setShowPricingGate: (show: boolean) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -14,6 +16,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showPricingGate, setShowPricingGate] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -57,6 +60,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem('token', token);
       api.setToken(token);
       setUser(user);
+      // Show pricing gate for new users
+      setShowPricingGate(true);
     } catch (error) {
       throw error;
     }
@@ -71,7 +76,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, loading }}>
+    <AuthContext.Provider value={{ user, login, register, logout, loading, showPricingGate, setShowPricingGate }}>
       {children}
     </AuthContext.Provider>
   );
