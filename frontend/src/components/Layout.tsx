@@ -191,10 +191,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                       <button
                         onClick={() => {
                           console.log('Sign Out button clicked');
+                          console.log('logout function:', typeof logout);
+                          alert('Sign Out button was clicked!');
                           setUserMenuOpen(false);
+                          console.log('About to call logout()');
                           logout();
+                          console.log('logout() called');
                         }}
-                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        className="flex items-center w-full px-4 py-2 text-sm text-white bg-blue-500 hover:bg-blue-600"
                       >
                         <LogOut className="h-4 w-4 mr-3" />
                         Sign Out
