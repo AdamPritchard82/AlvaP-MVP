@@ -42,6 +42,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const { user, logout } = useAuth();
 
+  // Debug: Test if React is working
+  console.log('Layout component rendered');
+  console.log('User:', user);
+  console.log('Logout function:', typeof logout);
+
   // Load unread count
   useEffect(() => {
     const loadUnreadCount = async () => {
@@ -73,6 +78,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="h-screen flex overflow-hidden bg-gray-100">
+      {/* Debug: Test button */}
+      <div style={{ position: 'fixed', top: '10px', right: '10px', zIndex: 9999, background: 'red', color: 'white', padding: '10px' }}>
+        <button onClick={() => alert('Test button works!')}>TEST</button>
+      </div>
       {/* Mobile sidebar */}
       <div className={`fixed inset-0 flex z-40 md:hidden ${sidebarOpen ? '' : 'hidden'}`}>
         <div className="fixed inset-0 bg-gray-600 bg-opacity-75" onClick={() => setSidebarOpen(false)} />
