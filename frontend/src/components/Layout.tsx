@@ -88,6 +88,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <div style={{ position: 'fixed', top: '10px', right: '10px', zIndex: 9999, background: 'red', color: 'white', padding: '10px' }}>
         <button onClick={() => alert('Test button works!')}>TEST</button>
       </div>
+      
+      {/* Debug: Simple logout button */}
+      <div style={{ position: 'fixed', top: '50px', right: '10px', zIndex: 9999, background: 'blue', color: 'white', padding: '10px' }}>
+        <button onClick={() => {
+          alert('Direct logout test!');
+          logout();
+        }}>LOGOUT TEST</button>
+      </div>
       {/* Mobile sidebar */}
       <div className={`fixed inset-0 flex z-40 md:hidden ${sidebarOpen ? '' : 'hidden'}`}>
         <div className="fixed inset-0 bg-gray-600 bg-opacity-75" onClick={() => setSidebarOpen(false)} />
