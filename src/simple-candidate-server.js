@@ -589,6 +589,56 @@ app.get('/api/billing/provider/status', (req, res) => {
   });
 });
 
+// Account reset endpoint (for development/testing)
+app.post('/api/reset-account', async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ success: false, error: 'Email required' });
+    }
+    
+    console.log(`🔄 Resetting account for: ${email}`);
+    
+    // Find user by email
+    const userResult = await db.query('SELECT id FROM users WHERE email = $1', [email]);
+    
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+    
+    const userId = userResult.rows[0].id;
+    
+    // Delete in order to respect foreign key constraints
+    await db.query('DELETE FROM auth_sessions WHERE user_id = $1', [userId]);
+    await db.query('DELETE FROM audit_logs WHERE user_id = $1', [userId]);
+    await db.query('DELETE FROM candidates WHERE created_by = $1', [userId]);
+    
+    // Delete taxonomy data
+    await db.query('DELETE FROM taxonomy_skills WHERE taxonomy_id IN (SELECT id FROM taxonomies WHERE created_by = $1)', [userId]);
+    await db.query('DELETE FROM taxonomy_roles WHERE taxonomy_id IN (SELECT id FROM taxonomies WHERE created_by = $1)', [userId]);
+    await db.query('DELETE FROM taxonomies WHERE created_by = $1', [userId]);
+    
+    // Delete billing data
+    await db.query('DELETE FROM billing_invoices WHERE org_id IN (SELECT id FROM billing_orgs WHERE created_by = $1)', [userId]);
+    await db.query('DELETE FROM billing_orgs WHERE created_by = $1', [userId]);
+    
+    // Delete the user
+    await db.query('DELETE FROM users WHERE id = $1', [userId]);
+    
+    console.log(`✅ Account reset complete for: ${email}`);
+    
+    res.json({ 
+      success: true, 
+      message: 'Account reset successfully. You can now create a fresh account.' 
+    });
+    
+  } catch (error) {
+    console.error('Error resetting account:', error);
+    res.status(500).json({ success: false, error: 'Failed to reset account' });
+  }
+});
+
 // Candidate soft delete endpoints
 app.delete('/api/candidates/:id', requireAuth, async (req, res) => {
   try {
