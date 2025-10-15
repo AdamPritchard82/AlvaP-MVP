@@ -345,8 +345,40 @@ app.post('/api/auth/login', (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
     
-    const token = signToken({ userId: user.id, email: user.email, name: user.name, role: user.role });
-    return res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role } });
+    // Check session limit (max 2 concurrent sessions)
+    db.query('SELECT COUNT(*) as count FROM auth_sessions WHERE user_id = $1 AND expires_at > NOW()', [user.id], (err, sessionResult) => {
+      if (err) {
+        console.error('Error checking sessions:', err);
+        return res.status(500).json({ error: 'Database error' });
+      }
+      
+      const activeSessions = parseInt(sessionResult.rows[0].count);
+      
+      if (activeSessions >= 2) {
+        // Kill oldest session
+        db.query('DELETE FROM auth_sessions WHERE user_id = $1 AND expires_at > NOW() ORDER BY created_at ASC LIMIT 1', [user.id], (err) => {
+          if (err) {
+            console.error('Error removing oldest session:', err);
+          }
+        });
+      }
+      
+      // Create new session
+      const sessionId = require('crypto').randomUUID();
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+      
+      db.query('INSERT INTO auth_sessions (id, user_id, created_at, expires_at) VALUES ($1, $2, NOW(), $3)', 
+        [sessionId, user.id, expiresAt], (err) => {
+          if (err) {
+            console.error('Error creating session:', err);
+            return res.status(500).json({ error: 'Database error' });
+          }
+          
+          const token = signToken({ userId: user.id, email: user.email, name: user.name, role: user.role, sessionId });
+          return res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role } });
+        }
+      );
+    });
   });
 });
 

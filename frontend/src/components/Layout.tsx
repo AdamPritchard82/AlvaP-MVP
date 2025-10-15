@@ -18,6 +18,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../lib/api';
 import TrialBanner from './TrialBanner';
+import WelcomeModal from './WelcomeModal';
 
 // Feature flag for taxonomy editor
 const TAXONOMY_EDITOR_ENABLED = process.env.REACT_APP_TAXONOMY_EDITOR_ENABLED !== 'false';
@@ -39,6 +40,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
+  const [billingInfo, setBillingInfo] = useState<{
+    plan: string;
+    trialDays: number | null;
+    isAdmin: boolean;
+  } | null>(null);
   const location = useLocation();
   const { user, logout } = useAuth();
   const toggleRef = useRef<HTMLButtonElement | null>(null);
@@ -59,6 +66,38 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
     loadUnreadCount();
   }, []);
+
+  // Show welcome modal on first login
+  useEffect(() => {
+    if (user) {
+      const hasSeenWelcome = localStorage.getItem('alvap-welcome-seen');
+      if (!hasSeenWelcome) {
+        setShowWelcomeModal(true);
+        localStorage.setItem('alvap-welcome-seen', 'true');
+      }
+    }
+  }, [user]);
+
+  // Load billing info for admin footer badge
+  useEffect(() => {
+    const loadBillingInfo = async () => {
+      if (!user) return;
+      
+      try {
+        // For now, assume all users are admins and set default values
+        // In a real app, you'd check user role and fetch actual billing data
+        setBillingInfo({
+          plan: 'Monthly (£39)',
+          trialDays: 7, // Example: 7 days left in trial
+          isAdmin: true
+        });
+      } catch (error) {
+        console.error('Error loading billing info:', error);
+      }
+    };
+
+    loadBillingInfo();
+  }, [user]);
 
   // Close user menu when clicking outside
   useEffect(() => {
@@ -234,6 +273,32 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </main>
       </div>
+      
+      {/* Admin Footer Badge */}
+      {billingInfo?.isAdmin && (
+        <div className="fixed bottom-4 left-4 bg-white rounded-lg shadow-lg border border-gray-200 px-4 py-2 text-sm">
+          <div className="flex items-center space-x-4">
+            {billingInfo.trialDays && (
+              <span className="text-orange-600 font-medium">
+                Trial: {billingInfo.trialDays} days
+              </span>
+            )}
+            <span className="text-gray-500">•</span>
+            <Link 
+              to="/settings/billing" 
+              className="text-blue-600 hover:text-blue-800 font-medium"
+            >
+              Plan: {billingInfo.plan}
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {/* Welcome Modal */}
+      <WelcomeModal 
+        isOpen={showWelcomeModal} 
+        onClose={() => setShowWelcomeModal(false)} 
+      />
     </div>
   );
 }

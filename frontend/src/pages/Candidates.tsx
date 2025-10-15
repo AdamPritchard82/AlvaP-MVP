@@ -458,26 +458,34 @@ export default function Candidates() {
           </div>
         ) : candidates.length === 0 ? (
           <div className="text-center py-12">
-            <Briefcase className="mx-auto h-12 w-12 text-gray-400" />
-            <h3 className="mt-2 text-sm font-medium text-gray-900">No candidates yet</h3>
+            <Search className="mx-auto h-12 w-12 text-gray-400" />
+            <h3 className="mt-2 text-sm font-medium text-gray-900">Start with keyword search</h3>
             <p className="mt-1 text-sm text-gray-500">
-              Try CSV import or upload a CV to get started.
+              Use the search bar above to find candidates by skills, experience, or keywords.
             </p>
-            <div className="mt-6 space-x-3">
+            <div className="mt-6">
               <button
-                onClick={() => setShowCSVImport(true)}
-                className="btn btn-outline btn-md"
-              >
-                <Upload className="h-4 w-4 mr-2" />
-                Import CSV
-              </button>
-              <Link
-                to="/candidates/new"
+                onClick={() => {
+                  // Focus the search input
+                  const searchInput = document.querySelector('input[type="text"]') as HTMLInputElement;
+                  if (searchInput) {
+                    searchInput.focus();
+                    searchInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  }
+                }}
                 className="btn btn-primary btn-md"
               >
-                <Plus className="h-4 w-4 mr-2" />
-                Add Candidate
-              </Link>
+                <Search className="h-4 w-4 mr-2" />
+                Start Searching
+              </button>
+            </div>
+            <div className="mt-4 text-xs text-gray-400">
+              Or <button 
+                onClick={() => setShowCSVImport(true)}
+                className="text-blue-600 hover:text-blue-800 underline"
+              >
+                import CSV
+              </button> to add candidates
             </div>
           </div>
         ) : (
