@@ -50,10 +50,10 @@ const TrialBanner: React.FC<TrialBannerProps> = ({ onDismiss }) => {
   const isUrgent = daysRemaining <= 3;
   const isExpired = daysRemaining <= 0;
 
-  // Don't show banner if trial has more than 7 days left
-  if (daysRemaining > 7) {
-    return null;
-  }
+  // Show banner for all trial days (not just last 7)
+  // if (daysRemaining > 7) {
+  //   return null;
+  // }
 
   const getBannerContent = () => {
     if (isExpired) {
@@ -76,6 +76,17 @@ const TrialBanner: React.FC<TrialBannerProps> = ({ onDismiss }) => {
         textColor: 'text-yellow-800',
         iconColor: 'text-yellow-400',
         ctaText: 'Add Payment Method',
+        ctaHref: '/settings/billing'
+      };
+    } else if (daysRemaining >= 7) {
+      return {
+        title: 'Welcome to AlvaP!',
+        message: `You're on a ${daysRemaining}-day free trial. Explore the platform and configure your industry focus.`,
+        bgColor: 'bg-green-50',
+        borderColor: 'border-green-200',
+        textColor: 'text-green-800',
+        iconColor: 'text-green-400',
+        ctaText: 'View Billing',
         ctaHref: '/settings/billing'
       };
     } else {

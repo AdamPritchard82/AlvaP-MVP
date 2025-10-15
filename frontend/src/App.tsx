@@ -43,9 +43,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/login" replace />;
   }
 
-  // Temporarily disable taxonomy guard to ensure login works
-  // TODO: Re-enable once backend is properly deployed
-  const useTaxonomyGuard = false;
+  // Enable taxonomy guard for onboarding wizard
+  const useTaxonomyGuard = true;
   
   if (useTaxonomyGuard) {
     return (
