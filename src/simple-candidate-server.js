@@ -18,9 +18,9 @@ const jwt = require('jsonwebtoken');
 const { nanoid } = require('nanoid');
 
 // Import billing services - using relative paths from src/
-const pricing = require('../backend/src/services/pricing');
-const billingProvider = require('../backend/src/services/billingProvider');
-const sessionManager = require('../backend/src/services/sessionManager');
+const pricing = require('../backend/src/services/pricing.cjs');
+const billingProvider = require('../backend/src/services/billingProvider.cjs');
+const sessionManager = require('../backend/src/services/sessionManager.cjs');
 
 // Import .NET parser from reference
 const { DotNetCvParser } = require('./parsers/dotnetCvParser');
