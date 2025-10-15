@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, 
@@ -41,6 +41,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const location = useLocation();
   const { user, logout } = useAuth();
+  const toggleRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
 
 
   // Load unread count
@@ -60,16 +62,19 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   // Close user menu when clicking outside
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (userMenuOpen) {
-        setUserMenuOpen(false);
+    function handleDocClick(ev: MouseEvent) {
+      if (!userMenuOpen) return;
+      const t = ev.target as Node | null;
+      if (menuRef.current?.contains(t!) || toggleRef.current?.contains(t!)) {
+        // click was inside the menu or on the toggle — do nothing
+        return;
       }
-    };
+      setUserMenuOpen(false);
+    }
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
+    // Use 'click' (not 'mousedown') so inner onClick can fire first
+    document.addEventListener("click", handleDocClick);
+    return () => document.removeEventListener("click", handleDocClick);
   }, [userMenuOpen]);
 
   return (
@@ -166,6 +171,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 </div>
                 <div className="relative">
                   <button
+                    ref={toggleRef}
                     onClick={() => {
                       setUserMenuOpen(!userMenuOpen);
                     }}
@@ -175,7 +181,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   </button>
                   
                   {userMenuOpen && (
-                    <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border border-gray-200">
+                    <div 
+                      ref={menuRef}
+                      className="absolute right-0 top-full mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border border-gray-200"
+                    >
                       <Link
                         to="/profile"
                         className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
