@@ -172,6 +172,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                       console.log('Setting menu state to:', newState);
                       setUserMenuOpen(newState);
                     }}
+                    onDoubleClick={() => {
+                      console.log('Double click detected - triggering logout');
+                      alert('Double click logout triggered!');
+                      logout();
+                    }}
                     className="flex items-center p-2 text-gray-400 hover:text-gray-500"
                   >
                     <ChevronDown className="h-4 w-4" />
