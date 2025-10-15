@@ -183,7 +183,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   {userMenuOpen && (
                     <div 
                       ref={menuRef}
-                      className="absolute right-0 top-full mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border border-gray-200"
+                      className="fixed right-4 bottom-20 w-48 bg-white rounded-md shadow-lg py-1 z-50 border border-gray-200"
                     >
                       <Link
                         to="/profile"
