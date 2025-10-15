@@ -6,10 +6,23 @@
  */
 
 const knex = require('knex');
-const config = require('../config/config.cjs');
+const { config } = require('../config/config.cjs');
 const { nanoid } = require('nanoid');
 
-const db = knex(config.database);
+// Create Knex configuration for PostgreSQL
+const knexConfig = {
+  client: 'pg',
+  connection: process.env.DATABASE_URL || 'postgresql://localhost:5432/alvap',
+  pool: {
+    min: 2,
+    max: 10
+  },
+  migrations: {
+    tableName: 'knex_migrations'
+  }
+};
+
+const db = knex(knexConfig);
 
 class SessionManager {
   constructor() {
