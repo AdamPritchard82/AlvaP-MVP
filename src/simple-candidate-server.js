@@ -17,10 +17,27 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { nanoid } = require('nanoid');
 
-// Import billing services - using relative paths from src/
-const pricing = require('../backend/src/services/pricing');
-const billingProvider = require('../backend/src/services/billingProvider');
-const sessionManager = require('../backend/src/services/sessionManager');
+// Import billing services - using dynamic imports for ES modules
+let pricing, billingProvider, sessionManager;
+
+// Dynamic imports for ES modules
+(async () => {
+  try {
+    const pricingModule = await import('../backend/src/services/pricing.js');
+    const billingProviderModule = await import('../backend/src/services/billingProvider.js');
+    const sessionManagerModule = await import('../backend/src/services/sessionManager.js');
+    
+    pricing = pricingModule.default;
+    billingProvider = billingProviderModule.default;
+    sessionManager = sessionManagerModule.default;
+  } catch (error) {
+    console.error('Error loading billing services:', error);
+    // Set to null to prevent errors
+    pricing = null;
+    billingProvider = null;
+    sessionManager = null;
+  }
+})();
 
 // Import .NET parser from reference
 const { DotNetCvParser } = require('./parsers/dotnetCvParser');
