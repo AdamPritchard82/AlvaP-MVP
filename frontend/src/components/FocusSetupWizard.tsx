@@ -1,7 +1,164 @@
 import React, { useState, useEffect } from 'react';
 import { X, Check, Plus, Trash2 } from 'lucide-react';
-import { getAllIndustries, getRecommendedRoles, INDUSTRY_ROLE_PRESETS } from '../data/industryRolePresets';
 import { api } from '../lib/api';
+
+// Industry to Role recommendations preset map
+interface IndustryRolePreset {
+  industry: string;
+  roles: string[];
+}
+
+const INDUSTRY_ROLE_PRESETS: IndustryRolePreset[] = [
+  {
+    industry: "Public Affairs",
+    roles: [
+      "Policy Advisor",
+      "Government Relations Manager", 
+      "Public Affairs Director",
+      "Regulatory Affairs Specialist",
+      "Stakeholder Engagement Manager",
+      "Political Campaign Manager",
+      "Lobbyist",
+      "Public Policy Analyst"
+    ]
+  },
+  {
+    industry: "Communications",
+    roles: [
+      "Communications Manager",
+      "PR Director",
+      "Media Relations Specialist",
+      "Content Marketing Manager",
+      "Brand Manager",
+      "Social Media Manager",
+      "Internal Communications Lead",
+      "Crisis Communications Specialist"
+    ]
+  },
+  {
+    industry: "Campaigns",
+    roles: [
+      "Campaign Manager",
+      "Field Organizer",
+      "Digital Campaign Specialist",
+      "Volunteer Coordinator",
+      "Fundraising Manager",
+      "Political Strategist",
+      "Election Campaign Director",
+      "Grassroots Coordinator"
+    ]
+  },
+  {
+    industry: "Policy",
+    roles: [
+      "Policy Analyst",
+      "Research Director",
+      "Legislative Assistant",
+      "Policy Research Manager",
+      "Think Tank Researcher",
+      "Policy Advisor",
+      "Regulatory Affairs Manager",
+      "Government Affairs Specialist"
+    ]
+  },
+  {
+    industry: "Healthcare",
+    roles: [
+      "Healthcare Policy Advisor",
+      "Medical Affairs Manager",
+      "Regulatory Affairs Specialist",
+      "Health Communications Manager",
+      "Patient Advocacy Manager",
+      "Healthcare Lobbyist",
+      "Clinical Research Manager",
+      "Healthcare Consultant"
+    ]
+  },
+  {
+    industry: "Technology",
+    roles: [
+      "Tech Policy Advisor",
+      "Government Relations Manager",
+      "Regulatory Affairs Specialist",
+      "Public Affairs Manager",
+      "Tech Communications Lead",
+      "Policy Research Manager",
+      "Digital Strategy Manager",
+      "Tech Lobbyist"
+    ]
+  },
+  {
+    industry: "Finance",
+    roles: [
+      "Financial Policy Advisor",
+      "Regulatory Affairs Manager",
+      "Government Relations Specialist",
+      "Financial Communications Manager",
+      "Compliance Manager",
+      "Financial Lobbyist",
+      "Policy Research Analyst",
+      "Regulatory Compliance Specialist"
+    ]
+  },
+  {
+    industry: "Energy",
+    roles: [
+      "Energy Policy Advisor",
+      "Regulatory Affairs Manager",
+      "Government Relations Specialist",
+      "Environmental Policy Manager",
+      "Energy Communications Lead",
+      "Sustainability Manager",
+      "Energy Lobbyist",
+      "Climate Policy Analyst"
+    ]
+  },
+  {
+    industry: "Education",
+    roles: [
+      "Education Policy Advisor",
+      "Government Relations Manager",
+      "Education Communications Lead",
+      "Policy Research Manager",
+      "Academic Affairs Manager",
+      "Education Lobbyist",
+      "Student Affairs Manager",
+      "Curriculum Policy Specialist"
+    ]
+  },
+  {
+    industry: "Non-Profit",
+    roles: [
+      "Advocacy Manager",
+      "Policy Director",
+      "Government Relations Specialist",
+      "Communications Manager",
+      "Program Manager",
+      "Community Outreach Manager",
+      "Policy Research Analyst",
+      "Advocacy Campaign Manager"
+    ]
+  }
+];
+
+// Get recommended roles for selected industries
+function getRecommendedRoles(selectedIndustries: string[]): string[] {
+  const allRoles = new Set<string>();
+  
+  selectedIndustries.forEach(industry => {
+    const preset = INDUSTRY_ROLE_PRESETS.find(p => p.industry === industry);
+    if (preset) {
+      preset.roles.forEach(role => allRoles.add(role));
+    }
+  });
+  
+  return Array.from(allRoles).sort();
+}
+
+// Get all available industries
+function getAllIndustries(): string[] {
+  return INDUSTRY_ROLE_PRESETS.map(preset => preset.industry).sort();
+}
 
 interface FocusSetupWizardProps {
   isOpen: boolean;
