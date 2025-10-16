@@ -647,48 +647,19 @@ app.post('/api/reset-account', (req, res) => {
     const userId = userResult.rows[0].id;
     console.log(`Found user ID: ${userId}`);
     
-    // Simple approach: just delete the user and let cascade handle the rest
-    // If cascade doesn't work, we'll handle it manually
-    db.query('DELETE FROM users WHERE id = $1', [userId], (err) => {
+    // Instead of deleting, just change the email to free up the original email
+    const newEmail = `${email}.old.${Date.now()}`;
+    db.query('UPDATE users SET email = $1 WHERE id = $2', [newEmail, userId], (err) => {
       if (err) {
-        console.error('Error deleting user:', err);
-        
-        // If cascade delete failed, try manual cleanup
-        console.log('Cascade delete failed, trying manual cleanup...');
-        
-        // Delete related data manually
-        db.query('DELETE FROM auth_sessions WHERE user_id = $1', [userId], (err) => {
-          if (err) console.error('Error deleting sessions:', err);
-        });
-        
-        db.query('DELETE FROM audit_logs WHERE user_id = $1', [userId], (err) => {
-          if (err) console.error('Error deleting audit logs:', err);
-        });
-        
-        db.query('DELETE FROM candidates WHERE created_by = $1', [userId], (err) => {
-          if (err) console.error('Error deleting candidates:', err);
-        });
-        
-        // Try to delete user again
-        db.query('DELETE FROM users WHERE id = $1', [userId], (err) => {
-          if (err) {
-            console.error('Error deleting user after cleanup:', err);
-            return res.status(500).json({ success: false, error: 'Failed to delete user' });
-          }
-          
-          console.log(`✅ Account reset complete for: ${email}`);
-          res.json({ 
-            success: true, 
-            message: 'Account reset successfully. You can now create a fresh account.' 
-          });
-        });
-      } else {
-        console.log(`✅ Account reset complete for: ${email}`);
-        res.json({ 
-          success: true, 
-          message: 'Account reset successfully. You can now create a fresh account.' 
-        });
+        console.error('Error updating user email:', err);
+        return res.status(500).json({ success: false, error: 'Failed to reset account' });
       }
+      
+      console.log(`✅ Account email changed from ${email} to ${newEmail}`);
+      res.json({ 
+        success: true, 
+        message: 'Account reset successfully. You can now create a fresh account with the original email.' 
+      });
     });
   });
 });
