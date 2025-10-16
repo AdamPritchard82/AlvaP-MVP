@@ -207,6 +207,17 @@ class ApiClient {
     return response.json();
   }
 
+  private async get<T>(endpoint: string): Promise<T> {
+    return this.request<T>(endpoint, { method: 'GET' });
+  }
+
+  private async post<T>(endpoint: string, data?: any): Promise<T> {
+    return this.request<T>(endpoint, {
+      method: 'POST',
+      body: data ? JSON.stringify(data) : undefined,
+    });
+  }
+
   // Auth
   async login(email: string, password: string): Promise<{ token: string; user: User }> {
     return this.request('/auth/login', {
@@ -269,11 +280,6 @@ class ApiClient {
     });
   }
 
-  async deleteCandidate(id: string): Promise<{ success: boolean; message: string }> {
-    return this.request(`/candidates/${id}`, {
-      method: 'DELETE',
-    });
-  }
 
   async uploadCV(id: string, file: File): Promise<{ success: boolean; message: string }> {
     const formData = new FormData();
