@@ -13,11 +13,14 @@ import {
   CreditCard,
   BarChart3,
   Settings,
-  ChevronDown
+  ChevronDown,
+  Bell
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useNotifications } from '../contexts/NotificationContext';
 import { api } from '../lib/api';
 import TrialBanner from './TrialBanner';
+import NotificationCenter from './NotificationCenter';
 import WelcomeModal from './WelcomeModal';
 
 // Feature flag for taxonomy editor
@@ -41,6 +44,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [unreadCount, setUnreadCount] = useState(0);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
   const [billingInfo, setBillingInfo] = useState<{
     plan: string;
     trialDays: number | null;
@@ -48,6 +52,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   } | null>(null);
   const location = useLocation();
   const { user, logout } = useAuth();
+  const { unreadCount: notificationCount } = useNotifications();
   const toggleRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
@@ -342,6 +347,20 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </>
           )}
           <span className="text-gray-600">{user?.name || 'Loading...'}</span>
+          
+          {/* Notification Bell */}
+          <button
+            onClick={() => setShowNotifications(true)}
+            className="relative p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-full transition-colors"
+          >
+            <Bell className="h-5 w-5" />
+            {notificationCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
+                {notificationCount > 9 ? '9+' : notificationCount}
+              </span>
+            )}
+          </button>
+          
           <button
             onClick={() => {
               console.log('Top-right logout button clicked');
@@ -358,6 +377,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <WelcomeModal 
         isOpen={showWelcomeModal} 
         onClose={() => setShowWelcomeModal(false)} 
+      />
+
+      {/* Notification Center */}
+      <NotificationCenter
+        isOpen={showNotifications}
+        onClose={() => setShowNotifications(false)}
       />
     </div>
   );

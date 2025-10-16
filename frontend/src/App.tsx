@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { NotificationProvider } from './contexts/NotificationContext';
 import ErrorBoundary from './components/ErrorBoundary';
 import Layout from './components/Layout';
 import { TaxonomyGuard } from './components/TaxonomyGuard';
@@ -139,12 +140,14 @@ function App() {
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <Router>
-          <div className="min-h-screen bg-gray-50">
-            <AppRoutes />
-            <Toaster position="top-right" />
-          </div>
-        </Router>
+        <NotificationProvider>
+          <Router>
+            <div className="min-h-screen bg-gray-50">
+              <AppRoutes />
+              <Toaster position="top-right" />
+            </div>
+          </Router>
+        </NotificationProvider>
       </AuthProvider>
     </ErrorBoundary>
   );
