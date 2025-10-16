@@ -664,6 +664,58 @@ app.post('/api/reset-account', (req, res) => {
   });
 });
 
+// Taxonomy/Industries endpoints
+app.get('/api/taxonomy/active', requireAuth, (req, res) => {
+  const db = getDb();
+  
+  db.query('SELECT * FROM taxonomies WHERE created_by = $1 ORDER BY created_at DESC LIMIT 1', [req.user.userId], (err, result) => {
+    if (err) {
+      console.error('Error fetching active taxonomy:', err);
+      return res.status(500).json({ success: false, error: 'Database error' });
+    }
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'No active taxonomy found' });
+    }
+    
+    const taxonomy = result.rows[0];
+    
+    // Get skills and roles for this taxonomy
+    db.query('SELECT * FROM taxonomy_skills WHERE taxonomy_id = $1', [taxonomy.id], (err, skillsResult) => {
+      if (err) {
+        console.error('Error fetching taxonomy skills:', err);
+        return res.status(500).json({ success: false, error: 'Database error' });
+      }
+      
+      db.query('SELECT * FROM taxonomy_roles WHERE taxonomy_id = $1', [taxonomy.id], (err, rolesResult) => {
+        if (err) {
+          console.error('Error fetching taxonomy roles:', err);
+          return res.status(500).json({ success: false, error: 'Database error' });
+        }
+        
+        res.json({
+          success: true,
+          data: {
+            ...taxonomy,
+            skills: skillsResult.rows,
+            roles: rolesResult.rows
+          }
+        });
+      });
+    });
+  });
+});
+
+app.get('/api/events/unread-count', requireAuth, (req, res) => {
+  // For now, return 0 unread events since we don't have events implemented yet
+  res.json({
+    success: true,
+    data: {
+      unreadCount: 0
+    }
+  });
+});
+
 // Candidate soft delete endpoints
 app.delete('/api/candidates/:id', requireAuth, async (req, res) => {
   try {

@@ -32,7 +32,7 @@ const navigation = [
   { name: 'Updates & Open Roles', href: '/updates', icon: Activity },
   { name: 'Clients', href: '/clients', icon: Building2 },
   { name: 'Pricing', href: '/pricing', icon: CreditCard },
-  ...(TAXONOMY_EDITOR_ENABLED ? [{ name: 'Settings', href: '/settings/taxonomy', icon: Settings }] : []),
+  ...(TAXONOMY_EDITOR_ENABLED ? [{ name: 'Industries & Roles', href: '/settings/industries', icon: Settings }] : []),
   { name: 'Billing', href: '/settings/billing', icon: CreditCard },
 ];
 

@@ -22,7 +22,7 @@ import Analytics from './pages/Analytics';
 import Portal from './pages/Portal';
 import PublicJobs from './pages/PublicJobs';
 import PublicJobDetail from './pages/PublicJobDetail';
-import TaxonomySettings from './pages/TaxonomySettings';
+import IndustriesSettings from './pages/TaxonomySettings';
 import Profile from './pages/Profile';
 import BillingSettings from './pages/BillingSettings';
 import SeatsManagement from './pages/SeatsManagement';
@@ -104,7 +104,7 @@ function InternalRoutes() {
       <Route path="/clients" element={<Clients />} />
       <Route path="/clients/new" element={<ClientNew />} />
       <Route path="/pricing" element={<Pricing />} />
-      <Route path="/settings/taxonomy" element={<TaxonomySettings />} />
+              <Route path="/settings/industries" element={<IndustriesSettings />} />
       <Route path="/settings/billing" element={<BillingSettings />} />
       <Route path="/settings/seats" element={<SeatsManagement />} />
       <Route path="/profile" element={<Profile />} />
