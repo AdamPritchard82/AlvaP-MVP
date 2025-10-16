@@ -23,6 +23,8 @@ import { formatDate, formatCurrency } from '../lib/utils';
 import { useUsage } from '../hooks/useUsage';
 import UpgradePrompt, { UsageLimitPrompt } from '../components/UpgradePrompt';
 import CSVImport from '../components/CSVImport';
+import ResponsiveCandidateList from '../components/ResponsiveCandidateList';
+import StickyActionBar from '../components/StickyActionBar';
 import toast from 'react-hot-toast';
 
 export default function Candidates() {
@@ -252,7 +254,24 @@ export default function Candidates() {
       {/* Search and Filters */}
       <div className="card p-6">
         <form onSubmit={handleSearch} className="space-y-4">
-          <div className="flex space-x-4">
+          {/* Mobile: Prominent search bar */}
+          <div className="block md:hidden">
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <Search className="h-6 w-6 text-gray-400" />
+              </div>
+              <input
+                type="text"
+                placeholder="Search candidates..."
+                className="w-full pl-12 pr-4 py-4 text-lg border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* Desktop: Original search layout */}
+          <div className="hidden md:flex space-x-4">
             <div className="flex-1">
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -489,124 +508,33 @@ export default function Candidates() {
             </div>
           </div>
         ) : (
-          <div className="overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Candidate
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Current Role
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Salary Range
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Added
-                  </th>
-                  <th className="relative px-6 py-3">
-                    <span className="sr-only">Actions</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {candidates.map((candidate) => (
-                  <tr 
-                    key={candidate.id} 
-                    className="hover:bg-gray-50 cursor-pointer"
-                    onClick={() => navigate(`/candidates/${candidate.id}`)}
-                  >
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="flex-shrink-0 h-10 w-10">
-                          <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
-                            <span className="text-sm font-medium text-gray-600">
-                              {candidate.full_name.charAt(0).toUpperCase()}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">
-                            {candidate.full_name}
-                          </div>
-                          <div className="text-sm text-gray-500">
-                            {candidate.email || 'No email'}
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">
-                        {candidate.current_title || 'No title'}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        {candidate.current_employer || 'No employer'}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {candidate.salary_min && candidate.salary_max ? (
-                        <div className="flex items-center">
-                          <DollarSign className="h-4 w-4 text-gray-400 mr-1" />
-                          {formatCurrency(candidate.salary_min)} - {formatCurrency(candidate.salary_max)}
-                        </div>
-                      ) : (
-                        <span className="text-gray-400">Not specified</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        {getStatusIcon(candidate)}
-                        <span className="ml-2 text-sm text-gray-900">
-                          {getStatusText(candidate)}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {formatDate(candidate.created_at)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="flex items-center space-x-2">
-                        <Link
-                          to={`/candidates/${candidate.id}`}
-                          className="text-primary-600 hover:text-primary-900"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Link>
-                        <Link
-                          to={`/candidates/${candidate.id}/edit`}
-                          className="text-gray-600 hover:text-gray-900"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Link>
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteCandidate(candidate.id, candidate.full_name);
-                          }}
-                          disabled={deletingCandidate === candidate.id}
-                          className="text-red-600 hover:text-red-900 disabled:opacity-50"
-                        >
-                          {deletingCandidate === candidate.id ? (
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-600"></div>
-                          ) : (
-                            <Trash2 className="h-4 w-4" />
-                          )}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <ResponsiveCandidateList
+            candidates={candidates}
+            loading={loading}
+            onDelete={(id) => {
+              const candidate = candidates.find(c => c.id === id);
+              if (candidate) {
+                handleDeleteCandidate(id, candidate.full_name);
+              }
+            }}
+            onRestore={handleRestoreCandidate}
+            deletingCandidate={deletingCandidate}
+            deletedCandidates={deletedCandidates}
+          />
         )}
       </div>
+
+      {/* Sticky Action Bar for Mobile */}
+      <StickyActionBar
+        onSearchClick={() => {
+          const searchInput = document.querySelector('input[type="text"]') as HTMLInputElement;
+          if (searchInput) {
+            searchInput.focus();
+            searchInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }}
+        onImportClick={() => setShowCSVImport(true)}
+      />
 
       {/* CSV Import Modal */}
       {showCSVImport && (
