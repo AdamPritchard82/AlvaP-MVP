@@ -675,7 +675,18 @@ app.get('/api/taxonomy/active', requireAuth, (req, res) => {
     }
     
     if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, error: 'No active taxonomy found' });
+      // Return empty taxonomy structure for new users
+      return res.json({
+        success: true,
+        data: {
+          id: null,
+          name: 'Default',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          skills: [],
+          roles: []
+        }
+      });
     }
     
     const taxonomy = result.rows[0];
@@ -713,6 +724,47 @@ app.get('/api/events/unread-count', requireAuth, (req, res) => {
     data: {
       unreadCount: 0
     }
+  });
+});
+
+// Jobs endpoints
+app.get('/api/jobs', requireAuth, (req, res) => {
+  const { limit = 10 } = req.query;
+  const db = getDb();
+  
+  // For now, return empty jobs array since we don't have jobs implemented yet
+  res.json({
+    success: true,
+    data: []
+  });
+});
+
+// Licensing/subscription endpoint
+app.get('/api/licensing/subscription', requireAuth, (req, res) => {
+  // For now, return basic subscription info
+  res.json({
+    success: true,
+    data: {
+      plan: 'trial',
+      status: 'active',
+      seats: 1,
+      usage: {
+        candidates: 0,
+        jobs: 0
+      }
+    }
+  });
+});
+
+// Matches endpoint
+app.get('/api/matches', requireAuth, (req, res) => {
+  const { limit = 100 } = req.query;
+  const db = getDb();
+  
+  // For now, return empty matches array
+  res.json({
+    success: true,
+    data: []
   });
 });
 
