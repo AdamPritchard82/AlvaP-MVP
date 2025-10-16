@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import { OnboardingWizard } from './OnboardingWizard';
 
-// Feature flag for taxonomy editor - temporarily disabled to fix 500 errors
-const TAXONOMY_EDITOR_ENABLED = false;
+// Feature flag for taxonomy editor
+const TAXONOMY_EDITOR_ENABLED = process.env.REACT_APP_TAXONOMY_EDITOR_ENABLED !== 'false';
 
 interface TaxonomyGuardProps {
   children: React.ReactNode;
