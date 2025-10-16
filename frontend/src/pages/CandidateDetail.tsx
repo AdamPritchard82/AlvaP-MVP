@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { api, Candidate } from '../lib/api';
 import { formatDate } from '../lib/utils';
 import { ArrowLeft, Edit, Mail, MailCheck, MailX, Send, Calendar, User, Building, Phone, DollarSign, Tag, FileText, AlertCircle, CheckCircle } from 'lucide-react';
+import AIOneLinerGenerator from '../components/AIOneLinerGenerator';
 import toast from 'react-hot-toast';
 
 export default function CandidateDetail() {
@@ -261,6 +262,27 @@ export default function CandidateDetail() {
               <p className="text-sm text-gray-700 whitespace-pre-wrap">{candidate.notes}</p>
             </div>
           )}
+
+          {/* AI One-liner Generator */}
+          <div className="card p-6">
+            <AIOneLinerGenerator
+              candidate={{
+                full_name: candidate.full_name,
+                current_title: candidate.current_title,
+                current_employer: candidate.current_employer,
+                skills: candidate.skills,
+                salary_min: candidate.salary_min,
+                salary_max: candidate.salary_max,
+                experience: candidate.experience,
+                tags: candidate.tags,
+                notes: candidate.notes
+              }}
+              onOneLinerSelect={(oneLiner) => {
+                // Could be used to update candidate notes or create a summary
+                console.log('Selected one-liner:', oneLiner);
+              }}
+            />
+          </div>
         </div>
 
         {/* Sidebar */}
