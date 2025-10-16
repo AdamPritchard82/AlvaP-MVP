@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { api } from '../lib/api';
+import { offlineQueue } from '../lib/offlineQueue';
 
 interface FormData {
   firstName: string;
@@ -279,6 +280,16 @@ const CandidateNew: React.FC = () => {
     setLoading(true);
     
     try {
+      // Check if offline
+      if (!navigator.onLine) {
+        // Queue for offline processing
+        const actionId = offlineQueue.addAction('CREATE_CANDIDATE', formData);
+        console.log('Queued candidate creation for offline processing:', actionId);
+        toast.success('Candidate queued for creation when online!');
+        navigate('/candidates');
+        return;
+      }
+
       const result = await api.createCandidate(formData);
       
       if (result.success) {

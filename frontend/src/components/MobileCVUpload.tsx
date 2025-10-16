@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
-import { Camera, Upload, File, X, RotateCcw, CheckCircle, AlertCircle } from 'lucide-react';
+import { Camera, Upload, File, X, RotateCcw, CheckCircle, AlertCircle, Wifi, WifiOff } from 'lucide-react';
 import { api } from '../lib/api';
+import { offlineQueue } from '../lib/offlineQueue';
 
 interface MobileCVUploadProps {
   isOpen: boolean;
@@ -14,10 +15,25 @@ export default function MobileCVUpload({ isOpen, onClose, onUploadSuccess }: Mob
   const [errorMessage, setErrorMessage] = useState('');
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const maxRetries = 3;
+
+  // Set up offline/online listeners
+  React.useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   const handleFileSelect = (file: File) => {
     if (!file) return;
@@ -48,6 +64,19 @@ export default function MobileCVUpload({ isOpen, onClose, onUploadSuccess }: Mob
     setErrorMessage('');
 
     try {
+      if (isOffline) {
+        // Queue for offline processing
+        const actionId = offlineQueue.addAction('UPLOAD_CV', { file });
+        console.log('Queued CV upload for offline processing:', actionId);
+        
+        setUploadStatus('success');
+        setTimeout(() => {
+          onUploadSuccess({ message: 'CV queued for upload when online' });
+          handleClose();
+        }, 1500);
+        return;
+      }
+
       // Parse CV using the API
       const parseResult = await api.parseCV(file);
       
@@ -131,7 +160,15 @@ export default function MobileCVUpload({ isOpen, onClose, onUploadSuccess }: Mob
       <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-lg shadow-xl z-50 md:hidden max-h-[80vh] overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-900">Upload CV</h3>
+          <div className="flex items-center">
+            <h3 className="text-lg font-semibold text-gray-900">Upload CV</h3>
+            {isOffline && (
+              <div className="ml-3 flex items-center text-orange-600">
+                <WifiOff className="h-4 w-4 mr-1" />
+                <span className="text-xs font-medium">Offline</span>
+              </div>
+            )}
+          </div>
           <button
             onClick={handleClose}
             className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
@@ -202,8 +239,14 @@ export default function MobileCVUpload({ isOpen, onClose, onUploadSuccess }: Mob
                 className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center justify-center"
               >
                 <Upload className="h-4 w-4 mr-2" />
-                {uploading ? 'Uploading...' : 'Upload CV'}
+                {uploading ? 'Uploading...' : isOffline ? 'Queue for Upload' : 'Upload CV'}
               </button>
+              
+              {isOffline && (
+                <p className="text-xs text-orange-600 text-center mt-2">
+                  CV will be uploaded when you're back online
+                </p>
+              )}
             </div>
           )}
 
