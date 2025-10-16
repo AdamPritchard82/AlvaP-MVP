@@ -27,6 +27,39 @@ const { DotNetCvParser } = require('./parsers/dotnetCvParser');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+// WebSocket server
+const http = require('http');
+const server = http.createServer(app);
+const { WebSocketServer } = require('ws');
+const wss = new WebSocketServer({ server, path: '/ws' });
+
+// Track active websocket clients
+const wsClients = new Set();
+
+wss.on('connection', (socket) => {
+  wsClients.add(socket);
+  try {
+    socket.send(JSON.stringify({
+      type: 'SYSTEM_UPDATE',
+      data: { message: 'Connected to real-time updates' },
+      timestamp: Date.now(),
+      id: `system_${Date.now()}`
+    }));
+  } catch {}
+
+  socket.on('close', () => {
+    wsClients.delete(socket);
+  });
+});
+
+function broadcastWs(event) {
+  const payload = typeof event === 'string' ? event : JSON.stringify(event);
+  for (const client of wsClients) {
+    try {
+      client.send(payload);
+    } catch {}
+  }
+}
 
 // JWT secret
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
@@ -2027,12 +2060,24 @@ app.get('*', (req, res) => {
   return res.status(404).json({ ok: true, message: 'Frontend not served from backend. Use the frontend service.' });
 });
 
+// Test endpoint to broadcast a sample notification
+app.post('/api/notifications/test-broadcast', requireAuth, (req, res) => {
+  const sample = {
+    type: 'SYSTEM_UPDATE',
+    data: { message: 'This is a test broadcast from the server' },
+    timestamp: Date.now(),
+    id: `test_${Date.now()}`
+  };
+  broadcastWs(sample);
+  res.json({ success: true });
+});
+
 // Start server after database initialization
 async function startServer() {
   try {
     await initializeDatabase();
     
-    app.listen(PORT, '0.0.0.0', () => {
+    server.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`📁 Database: ${process.env.DATABASE_URL ? 'PostgreSQL (Railway)' : 'SQLite (local)'}`);
       console.log(`🔧 .NET Parser: ${dotNetParser ? 'enabled' : 'disabled'}`);
