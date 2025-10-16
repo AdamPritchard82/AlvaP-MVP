@@ -622,53 +622,81 @@ app.get('/api/billing/provider/status', (req, res) => {
 });
 
 // Account reset endpoint (for development/testing)
-app.post('/api/reset-account', async (req, res) => {
-  try {
-    const { email } = req.body;
-    
-    if (!email) {
-      return res.status(400).json({ success: false, error: 'Email required' });
+app.post('/api/reset-account', (req, res) => {
+  const { email } = req.body;
+  
+  if (!email) {
+    return res.status(400).json({ success: false, error: 'Email required' });
+  }
+  
+  console.log(`🔄 Resetting account for: ${email}`);
+  
+  const db = getDb();
+  
+  // Find user by email
+  db.query('SELECT id FROM users WHERE email = $1', [email], (err, userResult) => {
+    if (err) {
+      console.error('Error finding user:', err);
+      return res.status(500).json({ success: false, error: 'Database error' });
     }
-    
-    console.log(`🔄 Resetting account for: ${email}`);
-    
-    // Find user by email
-    const userResult = await db.query('SELECT id FROM users WHERE email = $1', [email]);
     
     if (userResult.rows.length === 0) {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
     
     const userId = userResult.rows[0].id;
+    console.log(`Found user ID: ${userId}`);
     
     // Delete in order to respect foreign key constraints
-    await db.query('DELETE FROM auth_sessions WHERE user_id = $1', [userId]);
-    await db.query('DELETE FROM audit_logs WHERE user_id = $1', [userId]);
-    await db.query('DELETE FROM candidates WHERE created_by = $1', [userId]);
-    
-    // Delete taxonomy data
-    await db.query('DELETE FROM taxonomy_skills WHERE taxonomy_id IN (SELECT id FROM taxonomies WHERE created_by = $1)', [userId]);
-    await db.query('DELETE FROM taxonomy_roles WHERE taxonomy_id IN (SELECT id FROM taxonomies WHERE created_by = $1)', [userId]);
-    await db.query('DELETE FROM taxonomies WHERE created_by = $1', [userId]);
-    
-    // Delete billing data
-    await db.query('DELETE FROM billing_invoices WHERE org_id IN (SELECT id FROM billing_orgs WHERE created_by = $1)', [userId]);
-    await db.query('DELETE FROM billing_orgs WHERE created_by = $1', [userId]);
-    
-    // Delete the user
-    await db.query('DELETE FROM users WHERE id = $1', [userId]);
-    
-    console.log(`✅ Account reset complete for: ${email}`);
-    
-    res.json({ 
-      success: true, 
-      message: 'Account reset successfully. You can now create a fresh account.' 
+    db.query('DELETE FROM auth_sessions WHERE user_id = $1', [userId], (err) => {
+      if (err) console.error('Error deleting sessions:', err);
     });
     
-  } catch (error) {
-    console.error('Error resetting account:', error);
-    res.status(500).json({ success: false, error: 'Failed to reset account' });
-  }
+    db.query('DELETE FROM audit_logs WHERE user_id = $1', [userId], (err) => {
+      if (err) console.error('Error deleting audit logs:', err);
+    });
+    
+    db.query('DELETE FROM candidates WHERE created_by = $1', [userId], (err) => {
+      if (err) console.error('Error deleting candidates:', err);
+    });
+    
+    // Delete taxonomy data
+    db.query('DELETE FROM taxonomy_skills WHERE taxonomy_id IN (SELECT id FROM taxonomies WHERE created_by = $1)', [userId], (err) => {
+      if (err) console.error('Error deleting taxonomy skills:', err);
+    });
+    
+    db.query('DELETE FROM taxonomy_roles WHERE taxonomy_id IN (SELECT id FROM taxonomies WHERE created_by = $1)', [userId], (err) => {
+      if (err) console.error('Error deleting taxonomy roles:', err);
+    });
+    
+    db.query('DELETE FROM taxonomies WHERE created_by = $1', [userId], (err) => {
+      if (err) console.error('Error deleting taxonomies:', err);
+    });
+    
+    // Delete billing data
+    db.query('DELETE FROM billing_invoices WHERE org_id IN (SELECT id FROM billing_orgs WHERE created_by = $1)', [userId], (err) => {
+      if (err) console.error('Error deleting billing invoices:', err);
+    });
+    
+    db.query('DELETE FROM billing_orgs WHERE created_by = $1', [userId], (err) => {
+      if (err) console.error('Error deleting billing orgs:', err);
+    });
+    
+    // Delete the user
+    db.query('DELETE FROM users WHERE id = $1', [userId], (err) => {
+      if (err) {
+        console.error('Error deleting user:', err);
+        return res.status(500).json({ success: false, error: 'Failed to delete user' });
+      }
+      
+      console.log(`✅ Account reset complete for: ${email}`);
+      
+      res.json({ 
+        success: true, 
+        message: 'Account reset successfully. You can now create a fresh account.' 
+      });
+    });
+  });
 });
 
 // Candidate soft delete endpoints
