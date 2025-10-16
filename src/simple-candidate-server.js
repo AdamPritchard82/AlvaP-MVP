@@ -647,54 +647,48 @@ app.post('/api/reset-account', (req, res) => {
     const userId = userResult.rows[0].id;
     console.log(`Found user ID: ${userId}`);
     
-    // Delete in order to respect foreign key constraints
-    db.query('DELETE FROM auth_sessions WHERE user_id = $1', [userId], (err) => {
-      if (err) console.error('Error deleting sessions:', err);
-    });
-    
-    db.query('DELETE FROM audit_logs WHERE user_id = $1', [userId], (err) => {
-      if (err) console.error('Error deleting audit logs:', err);
-    });
-    
-    db.query('DELETE FROM candidates WHERE created_by = $1', [userId], (err) => {
-      if (err) console.error('Error deleting candidates:', err);
-    });
-    
-    // Delete taxonomy data
-    db.query('DELETE FROM taxonomy_skills WHERE taxonomy_id IN (SELECT id FROM taxonomies WHERE created_by = $1)', [userId], (err) => {
-      if (err) console.error('Error deleting taxonomy skills:', err);
-    });
-    
-    db.query('DELETE FROM taxonomy_roles WHERE taxonomy_id IN (SELECT id FROM taxonomies WHERE created_by = $1)', [userId], (err) => {
-      if (err) console.error('Error deleting taxonomy roles:', err);
-    });
-    
-    db.query('DELETE FROM taxonomies WHERE created_by = $1', [userId], (err) => {
-      if (err) console.error('Error deleting taxonomies:', err);
-    });
-    
-    // Delete billing data
-    db.query('DELETE FROM billing_invoices WHERE org_id IN (SELECT id FROM billing_orgs WHERE created_by = $1)', [userId], (err) => {
-      if (err) console.error('Error deleting billing invoices:', err);
-    });
-    
-    db.query('DELETE FROM billing_orgs WHERE created_by = $1', [userId], (err) => {
-      if (err) console.error('Error deleting billing orgs:', err);
-    });
-    
-    // Delete the user
+    // Simple approach: just delete the user and let cascade handle the rest
+    // If cascade doesn't work, we'll handle it manually
     db.query('DELETE FROM users WHERE id = $1', [userId], (err) => {
       if (err) {
         console.error('Error deleting user:', err);
-        return res.status(500).json({ success: false, error: 'Failed to delete user' });
+        
+        // If cascade delete failed, try manual cleanup
+        console.log('Cascade delete failed, trying manual cleanup...');
+        
+        // Delete related data manually
+        db.query('DELETE FROM auth_sessions WHERE user_id = $1', [userId], (err) => {
+          if (err) console.error('Error deleting sessions:', err);
+        });
+        
+        db.query('DELETE FROM audit_logs WHERE user_id = $1', [userId], (err) => {
+          if (err) console.error('Error deleting audit logs:', err);
+        });
+        
+        db.query('DELETE FROM candidates WHERE created_by = $1', [userId], (err) => {
+          if (err) console.error('Error deleting candidates:', err);
+        });
+        
+        // Try to delete user again
+        db.query('DELETE FROM users WHERE id = $1', [userId], (err) => {
+          if (err) {
+            console.error('Error deleting user after cleanup:', err);
+            return res.status(500).json({ success: false, error: 'Failed to delete user' });
+          }
+          
+          console.log(`✅ Account reset complete for: ${email}`);
+          res.json({ 
+            success: true, 
+            message: 'Account reset successfully. You can now create a fresh account.' 
+          });
+        });
+      } else {
+        console.log(`✅ Account reset complete for: ${email}`);
+        res.json({ 
+          success: true, 
+          message: 'Account reset successfully. You can now create a fresh account.' 
+        });
       }
-      
-      console.log(`✅ Account reset complete for: ${email}`);
-      
-      res.json({ 
-        success: true, 
-        message: 'Account reset successfully. You can now create a fresh account.' 
-      });
     });
   });
 });
