@@ -26,6 +26,7 @@ import CSVImport from '../components/CSVImport';
 import ResponsiveCandidateList from '../components/ResponsiveCandidateList';
 import StickyActionBar from '../components/StickyActionBar';
 import MobileFilterDrawer from '../components/MobileFilterDrawer';
+import MobileCVUpload from '../components/MobileCVUpload';
 import toast from 'react-hot-toast';
 
 export default function Candidates() {
@@ -44,6 +45,7 @@ export default function Candidates() {
   const [deletingCandidate, setDeletingCandidate] = useState<string | null>(null);
   const [deletedCandidates, setDeletedCandidates] = useState<Set<string>>(new Set());
   const [showMobileFilters, setShowMobileFilters] = useState(false);
+  const [showMobileCVUpload, setShowMobileCVUpload] = useState(false);
   const { usage, isLimitReached, getUsagePercentage } = useUsage();
 
   useEffect(() => {
@@ -661,6 +663,16 @@ export default function Candidates() {
         </div>
       </MobileFilterDrawer>
 
+      {/* Mobile CV Upload */}
+      <MobileCVUpload
+        isOpen={showMobileCVUpload}
+        onClose={() => setShowMobileCVUpload(false)}
+        onUploadSuccess={(candidate) => {
+          loadCandidates();
+          toast.success('CV uploaded and candidate added successfully!');
+        }}
+      />
+
       {/* Sticky Action Bar for Mobile */}
       <StickyActionBar
         onSearchClick={() => {
@@ -671,6 +683,7 @@ export default function Candidates() {
           }
         }}
         onImportClick={() => setShowCSVImport(true)}
+        onCVUploadClick={() => setShowMobileCVUpload(true)}
       />
 
       {/* CSV Import Modal */}
