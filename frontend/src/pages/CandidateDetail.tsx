@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { api, Candidate } from '../lib/api';
 import { formatDate } from '../lib/utils';
-import { ArrowLeft, Edit, Mail, MailCheck, MailX, Send, Calendar, User, Building, Phone, DollarSign, Tag, FileText, AlertCircle, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Edit, Mail, MailCheck, MailX, Send, Calendar, User, Building, Phone, DollarSign, Tag, FileText, AlertCircle, CheckCircle, Share2 } from 'lucide-react';
 import AIOneLinerGenerator from '../components/AIOneLinerGenerator';
+import { NativeFeatures } from '../lib/nativeFeatures';
 import toast from 'react-hot-toast';
 
 export default function CandidateDetail() {
@@ -107,6 +108,29 @@ export default function CandidateDetail() {
     }
   };
 
+  const handleShareCandidate = async () => {
+    if (!candidate) return;
+    
+    try {
+      const success = await NativeFeatures.shareCandidate({
+        name: candidate.full_name,
+        title: candidate.current_title || 'Professional',
+        email: candidate.email,
+        phone: candidate.phone,
+        oneLiner: `Experienced ${candidate.current_title || 'professional'} with expertise in ${Object.keys(candidate.skills).filter(skill => candidate.skills[skill as keyof typeof candidate.skills]).join(', ')}`
+      });
+      
+      if (success) {
+        toast.success('Candidate shared successfully!');
+      } else {
+        toast.error('Share not available on this device');
+      }
+    } catch (error) {
+      console.error('Error sharing candidate:', error);
+      toast.error('Failed to share candidate');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -161,6 +185,13 @@ export default function CandidateDetail() {
             <Edit className="h-4 w-4 mr-2" />
             Edit
           </Link>
+          <button
+            onClick={handleShareCandidate}
+            className="btn btn-outline btn-md"
+          >
+            <Share2 className="h-4 w-4 mr-2" />
+            Share
+          </button>
           <button
             onClick={handleGeneratePortalLink}
             className="btn btn-primary btn-md"

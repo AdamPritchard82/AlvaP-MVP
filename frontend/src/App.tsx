@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
+import { NativeFeatures } from './lib/nativeFeatures';
 import ErrorBoundary from './components/ErrorBoundary';
 import Layout from './components/Layout';
 import { TaxonomyGuard } from './components/TaxonomyGuard';
@@ -136,6 +137,11 @@ function App() {
       </div>
     );
   }
+
+  useEffect(() => {
+    // Initialize native features on app start
+    NativeFeatures.initialize();
+  }, []);
 
   return (
     <ErrorBoundary>

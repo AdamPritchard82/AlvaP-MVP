@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">AlvaP</string>
+    <string name="title_activity_main">AlvaP</string>
+    <string name="package_name">com.door10.alvap</string>
+    <string name="custom_url_scheme">com.door10.alvap</string>
+</resources>
