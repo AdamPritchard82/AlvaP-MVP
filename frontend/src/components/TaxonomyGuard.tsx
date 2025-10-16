@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '../lib/api';
-import { OnboardingWizard } from './OnboardingWizard';
+import FocusSetupWizard from './FocusSetupWizard';
 
 // Feature flag for taxonomy editor
 const TAXONOMY_EDITOR_ENABLED = process.env.REACT_APP_TAXONOMY_EDITOR_ENABLED !== 'false';
@@ -26,21 +26,21 @@ export function TaxonomyGuard({ children }: TaxonomyGuardProps) {
     }
 
     try {
-      const response = await api.getActiveTaxonomy();
+      const response = await api.getActiveFocus();
       if (response.success) {
-        setHasActiveTaxonomy(response.hasActiveTaxonomy);
-        // Only show wizard if explicitly no taxonomy exists, not on API errors
-        if (!response.hasActiveTaxonomy) {
+        setHasActiveTaxonomy(response.hasActiveFocus);
+        // Only show wizard if explicitly no focus exists, not on API errors
+        if (!response.hasActiveFocus) {
           setShowWizard(true);
         }
       } else {
-        // If API returns success: false, assume no taxonomy
+        // If API returns success: false, assume no focus
         setHasActiveTaxonomy(false);
         setShowWizard(true);
       }
     } catch (error) {
-      console.error('Error checking taxonomy status:', error);
-      // If there's an error, don't block access - just assume no taxonomy
+      console.error('Error checking focus status:', error);
+      // If there's an error, don't block access - just assume no focus
       setHasActiveTaxonomy(false);
       // Don't show wizard on API errors to avoid blocking access
       // setShowWizard(true);
@@ -65,7 +65,7 @@ export function TaxonomyGuard({ children }: TaxonomyGuardProps) {
   }
 
   if (showWizard) {
-    return <OnboardingWizard onComplete={handleWizardComplete} />;
+    return <FocusSetupWizard isOpen={true} onClose={() => setShowWizard(false)} onComplete={handleWizardComplete} />;
   }
 
   return <>{children}</>;

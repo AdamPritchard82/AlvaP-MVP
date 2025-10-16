@@ -717,6 +717,222 @@ app.get('/api/taxonomy/active', requireAuth, (req, res) => {
   });
 });
 
+// Focus Configuration endpoints (formerly taxonomy)
+app.get('/api/focus/active', requireAuth, (req, res) => {
+  const db = getDb();
+  
+  db.query('SELECT * FROM taxonomies WHERE created_by = $1 ORDER BY created_at DESC LIMIT 1', [req.user.userId], (err, result) => {
+    if (err) {
+      console.error('Error fetching active focus:', err);
+      return res.status(500).json({ success: false, error: 'Database error' });
+    }
+    
+    if (result.rows.length === 0) {
+      // Return empty focus structure for new users
+      return res.json({
+        success: true,
+        industries: [],
+        roles: [],
+        hasActiveFocus: false
+      });
+    }
+    
+    const taxonomy = result.rows[0];
+    
+    // Get roles for this taxonomy (industries are stored in the taxonomy name/description)
+    db.query('SELECT * FROM taxonomy_roles WHERE taxonomy_id = $1', [taxonomy.id], (err, rolesResult) => {
+      if (err) {
+        console.error('Error fetching focus roles:', err);
+        return res.status(500).json({ success: false, error: 'Database error' });
+      }
+      
+      // Parse industries from taxonomy name or description
+      const industries = taxonomy.industries ? JSON.parse(taxonomy.industries) : [];
+      const roles = rolesResult.rows.map(role => role.name);
+      
+      res.json({
+        success: true,
+        industries: industries,
+        roles: roles,
+        hasActiveFocus: true
+      });
+    });
+  });
+});
+
+app.post('/api/admin/focus', requireAuth, (req, res) => {
+  const { industries, roles } = req.body;
+  const db = getDb();
+  
+  if (!industries || !Array.isArray(industries) || industries.length === 0) {
+    return res.status(400).json({ success: false, error: 'Industries are required' });
+  }
+  
+  if (!roles || !Array.isArray(roles) || roles.length === 0) {
+    return res.status(400).json({ success: false, error: 'Roles are required' });
+  }
+  
+  const taxonomyId = uuidv4();
+  const taxonomyName = `Focus: ${industries.join(', ')}`;
+  
+  // Create taxonomy record
+  db.query(
+    'INSERT INTO taxonomies (id, name, created_by, industries) VALUES ($1, $2, $3, $4)',
+    [taxonomyId, taxonomyName, req.user.userId, JSON.stringify(industries)],
+    (err) => {
+      if (err) {
+        console.error('Error creating focus taxonomy:', err);
+        return res.status(500).json({ success: false, error: 'Database error' });
+      }
+      
+      // Insert roles
+      const roleInserts = roles.map((role, index) => 
+        db.query(
+          'INSERT INTO taxonomy_roles (id, taxonomy_id, name, sort_order) VALUES ($1, $2, $3, $4)',
+          [uuidv4(), taxonomyId, role, index]
+        )
+      );
+      
+      Promise.all(roleInserts)
+        .then(() => {
+          res.json({
+            success: true,
+            message: 'Focus configuration created successfully'
+          });
+        })
+        .catch((err) => {
+          console.error('Error creating focus roles:', err);
+          res.status(500).json({ success: false, error: 'Database error' });
+        });
+    }
+  );
+});
+
+app.post('/api/focus/roles', requireAuth, (req, res) => {
+  const { role } = req.body;
+  const db = getDb();
+  
+  if (!role || typeof role !== 'string') {
+    return res.status(400).json({ success: false, error: 'Role name is required' });
+  }
+  
+  // Get the user's active taxonomy
+  db.query('SELECT id FROM taxonomies WHERE created_by = $1 ORDER BY created_at DESC LIMIT 1', [req.user.userId], (err, result) => {
+    if (err) {
+      console.error('Error fetching active taxonomy:', err);
+      return res.status(500).json({ success: false, error: 'Database error' });
+    }
+    
+    if (result.rows.length === 0) {
+      return res.status(400).json({ success: false, error: 'No active focus configuration found' });
+    }
+    
+    const taxonomyId = result.rows[0].id;
+    
+    // Insert new role
+    db.query(
+      'INSERT INTO taxonomy_roles (id, taxonomy_id, name, sort_order) VALUES ($1, $2, $3, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM taxonomy_roles WHERE taxonomy_id = $2))',
+      [uuidv4(), taxonomyId, role],
+      (err) => {
+        if (err) {
+          console.error('Error adding focus role:', err);
+          return res.status(500).json({ success: false, error: 'Database error' });
+        }
+        
+        res.json({
+          success: true,
+          message: 'Role added successfully'
+        });
+      }
+    );
+  });
+});
+
+app.delete('/api/focus/roles/:roleId', requireAuth, (req, res) => {
+  const { roleId } = req.params;
+  const db = getDb();
+  
+  // Check if role is in use by candidates
+  db.query('SELECT COUNT(*) as count FROM candidates WHERE tags @> $1', [JSON.stringify([roleId])], (err, result) => {
+    if (err) {
+      console.error('Error checking role usage:', err);
+      return res.status(500).json({ success: false, error: 'Database error' });
+    }
+    
+    const usageCount = parseInt(result.rows[0].count);
+    if (usageCount > 0) {
+      return res.status(400).json({ 
+        success: false, 
+        error: `Cannot delete role: it is currently used by ${usageCount} candidate(s)` 
+      });
+    }
+    
+    // Delete the role
+    db.query('DELETE FROM taxonomy_roles WHERE id = $1', [roleId], (err) => {
+      if (err) {
+        console.error('Error deleting focus role:', err);
+        return res.status(500).json({ success: false, error: 'Database error' });
+      }
+      
+      res.json({
+        success: true,
+        message: 'Role deleted successfully'
+      });
+    });
+  });
+});
+
+app.get('/api/focus/presets', (req, res) => {
+  // Return industry-role presets
+  const presets = [
+    {
+      industry: "Public Affairs",
+      roles: ["Policy Advisor", "Government Relations Manager", "Public Affairs Director", "Regulatory Affairs Specialist", "Stakeholder Engagement Manager", "Political Campaign Manager", "Lobbyist", "Public Policy Analyst"]
+    },
+    {
+      industry: "Communications", 
+      roles: ["Communications Manager", "PR Director", "Media Relations Specialist", "Content Marketing Manager", "Brand Manager", "Social Media Manager", "Internal Communications Lead", "Crisis Communications Specialist"]
+    },
+    {
+      industry: "Campaigns",
+      roles: ["Campaign Manager", "Field Organizer", "Digital Campaign Specialist", "Volunteer Coordinator", "Fundraising Manager", "Political Strategist", "Election Campaign Director", "Grassroots Coordinator"]
+    },
+    {
+      industry: "Policy",
+      roles: ["Policy Analyst", "Research Director", "Legislative Assistant", "Policy Research Manager", "Think Tank Researcher", "Policy Advisor", "Regulatory Affairs Manager", "Government Affairs Specialist"]
+    },
+    {
+      industry: "Healthcare",
+      roles: ["Healthcare Policy Advisor", "Medical Affairs Manager", "Regulatory Affairs Specialist", "Health Communications Manager", "Patient Advocacy Manager", "Healthcare Lobbyist", "Clinical Research Manager", "Healthcare Consultant"]
+    },
+    {
+      industry: "Technology",
+      roles: ["Tech Policy Advisor", "Government Relations Manager", "Regulatory Affairs Specialist", "Public Affairs Manager", "Tech Communications Lead", "Policy Research Manager", "Digital Strategy Manager", "Tech Lobbyist"]
+    },
+    {
+      industry: "Finance",
+      roles: ["Financial Policy Advisor", "Regulatory Affairs Manager", "Government Relations Specialist", "Financial Communications Manager", "Compliance Manager", "Financial Lobbyist", "Policy Research Analyst", "Regulatory Compliance Specialist"]
+    },
+    {
+      industry: "Energy",
+      roles: ["Energy Policy Advisor", "Regulatory Affairs Manager", "Government Relations Specialist", "Environmental Policy Manager", "Energy Communications Lead", "Sustainability Manager", "Energy Lobbyist", "Climate Policy Analyst"]
+    },
+    {
+      industry: "Education",
+      roles: ["Education Policy Advisor", "Government Relations Manager", "Education Communications Lead", "Policy Research Manager", "Academic Affairs Manager", "Education Lobbyist", "Student Affairs Manager", "Curriculum Policy Specialist"]
+    },
+    {
+      industry: "Non-Profit",
+      roles: ["Advocacy Manager", "Policy Director", "Government Relations Specialist", "Communications Manager", "Program Manager", "Community Outreach Manager", "Policy Research Analyst", "Advocacy Campaign Manager"]
+    }
+  ];
+  
+  res.json({
+    success: true,
+    presets: presets
+  });
+});
+
 app.get('/api/events/unread-count', requireAuth, (req, res) => {
   // For now, return 0 unread events since we don't have events implemented yet
   res.json({

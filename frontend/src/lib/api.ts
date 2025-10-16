@@ -936,6 +936,49 @@ class ApiClient {
   async restoreCandidate(id: string) {
     return this.post(`/candidates/${id}/restore`);
   }
+
+  // Focus Configuration methods (formerly taxonomy)
+  async getActiveFocus(): Promise<{
+    success: boolean;
+    industries: string[];
+    roles: string[];
+    hasActiveFocus: boolean;
+  }> {
+    return this.request('/focus/active');
+  }
+
+  async createFocusConfiguration(data: {
+    industries: string[];
+    roles: string[];
+  }): Promise<{ success: boolean; message: string }> {
+    return this.request('/admin/focus', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  }
+
+  async addFocusRole(role: string): Promise<{ success: boolean; message: string }> {
+    return this.request('/focus/roles', {
+      method: 'POST',
+      body: JSON.stringify({ role })
+    });
+  }
+
+  async removeFocusRole(roleId: string): Promise<{ success: boolean; message: string }> {
+    return this.request(`/focus/roles/${roleId}`, {
+      method: 'DELETE'
+    });
+  }
+
+  async getFocusPresets(): Promise<{
+    success: boolean;
+    presets: Array<{
+      industry: string;
+      roles: string[];
+    }>;
+  }> {
+    return this.request('/focus/presets');
+  }
 }
 
 export const api = new ApiClient();
