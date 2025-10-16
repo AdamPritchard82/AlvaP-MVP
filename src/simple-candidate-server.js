@@ -2149,22 +2149,6 @@ app.post('/api/candidates', (req, res) => {
   }
 });
 
-// Serve frontend (only if built assets exist). In Railway, frontend is a separate service.
-const frontendIndexPath = path.join(__dirname, '../frontend/dist/index.html');
-let loggedMissingFrontend = false;
-app.get('*', (req, res) => {
-  try {
-    if (fs.existsSync(frontendIndexPath)) {
-      return res.sendFile(frontendIndexPath);
-    }
-  } catch {}
-  if (!loggedMissingFrontend) {
-    loggedMissingFrontend = true;
-    console.warn('Frontend dist not found. Skipping static serve for wildcard routes.');
-  }
-  return res.status(404).json({ ok: true, message: 'Frontend not served from backend. Use the frontend service.' });
-});
-
 // Test endpoint to broadcast a sample notification
 app.post('/api/notifications/test-broadcast', requireAuth, (req, res) => {
   const sample = {
@@ -2243,6 +2227,23 @@ app.delete('/api/account/delete', requireAuth, (req, res) => {
   
   // Start the deletion process
   deleteCandidates();
+});
+
+// Serve frontend (only if built assets exist). In Railway, frontend is a separate service.
+// This must be LAST to avoid catching API routes
+const frontendIndexPath = path.join(__dirname, '../frontend/dist/index.html');
+let loggedMissingFrontend = false;
+app.get('*', (req, res) => {
+  try {
+    if (fs.existsSync(frontendIndexPath)) {
+      return res.sendFile(frontendIndexPath);
+    }
+  } catch {}
+  if (!loggedMissingFrontend) {
+    loggedMissingFrontend = true;
+    console.warn('Frontend dist not found. Skipping static serve for wildcard routes.');
+  }
+  return res.status(404).json({ ok: true, message: 'Frontend not served from backend. Use the frontend service.' });
 });
 
 // Start server after database initialization
