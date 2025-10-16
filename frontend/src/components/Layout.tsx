@@ -257,6 +257,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   <button
                     ref={toggleRef}
                     onClick={() => {
+                      console.log('User menu toggle clicked, current state:', userMenuOpen);
                       setUserMenuOpen(!userMenuOpen);
                     }}
                     className="flex items-center p-2 text-gray-400 hover:text-gray-500"
@@ -279,6 +280,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                       </Link>
                       <button
                         onClick={() => {
+                          console.log('Logout button clicked');
                           setUserMenuOpen(false);
                           logout();
                         }}
@@ -319,25 +321,38 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </main>
       </div>
       
-      {/* Admin Footer Badge */}
-      {billingInfo?.isAdmin && (
-        <div className="fixed bottom-4 left-4 bg-white rounded-lg shadow-lg border border-gray-200 px-4 py-2 text-sm">
-          <div className="flex items-center space-x-4">
-            {billingInfo.trialDays && (
-              <span className="text-orange-600 font-medium">
-                Trial: {billingInfo.trialDays} days
-              </span>
-            )}
-            <span className="text-gray-500">•</span>
-            <Link 
-              to="/settings/billing" 
-              className="text-blue-600 hover:text-blue-800 font-medium"
-            >
-              Plan: {billingInfo.plan}
-            </Link>
-          </div>
+      {/* Top-right user info and logout */}
+      <div className="fixed top-4 right-4 bg-white rounded-lg shadow-lg border border-gray-200 px-4 py-2 text-sm z-50">
+        <div className="flex items-center space-x-4">
+          {billingInfo?.isAdmin && (
+            <>
+              {billingInfo.trialDays && (
+                <span className="text-orange-600 font-medium">
+                  Trial: {billingInfo.trialDays} days
+                </span>
+              )}
+              <span className="text-gray-500">•</span>
+              <Link 
+                to="/settings/billing" 
+                className="text-blue-600 hover:text-blue-800 font-medium"
+              >
+                Plan: {billingInfo.plan}
+              </Link>
+              <span className="text-gray-500">•</span>
+            </>
+          )}
+          <span className="text-gray-600">{user?.name || 'Loading...'}</span>
+          <button
+            onClick={() => {
+              console.log('Top-right logout button clicked');
+              logout();
+            }}
+            className="text-red-600 hover:text-red-800 font-medium"
+          >
+            Sign Out
+          </button>
         </div>
-      )}
+      </div>
 
       {/* Welcome Modal */}
       <WelcomeModal 
