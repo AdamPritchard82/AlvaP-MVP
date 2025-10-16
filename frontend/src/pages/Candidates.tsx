@@ -25,6 +25,7 @@ import UpgradePrompt, { UsageLimitPrompt } from '../components/UpgradePrompt';
 import CSVImport from '../components/CSVImport';
 import ResponsiveCandidateList from '../components/ResponsiveCandidateList';
 import StickyActionBar from '../components/StickyActionBar';
+import MobileFilterDrawer from '../components/MobileFilterDrawer';
 import toast from 'react-hot-toast';
 
 export default function Candidates() {
@@ -42,6 +43,7 @@ export default function Candidates() {
   const [showCSVImport, setShowCSVImport] = useState(false);
   const [deletingCandidate, setDeletingCandidate] = useState<string | null>(null);
   const [deletedCandidates, setDeletedCandidates] = useState<Set<string>>(new Set());
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
   const { usage, isLimitReached, getUsagePercentage } = useUsage();
 
   useEffect(() => {
@@ -254,19 +256,32 @@ export default function Candidates() {
       {/* Search and Filters */}
       <div className="card p-6">
         <form onSubmit={handleSearch} className="space-y-4">
-          {/* Mobile: Prominent search bar */}
+          {/* Mobile: Prominent search bar with filter button */}
           <div className="block md:hidden">
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                <Search className="h-6 w-6 text-gray-400" />
+            <div className="flex space-x-3">
+              <div className="flex-1 relative">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <Search className="h-6 w-6 text-gray-400" />
+                </div>
+                <input
+                  type="text"
+                  placeholder="Search candidates..."
+                  className="w-full pl-12 pr-4 py-4 text-lg border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
               </div>
-              <input
-                type="text"
-                placeholder="Search candidates..."
-                className="w-full pl-12 pr-4 py-4 text-lg border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
+              <button
+                onClick={() => setShowMobileFilters(true)}
+                className="px-4 py-4 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center"
+              >
+                <Filter className="h-6 w-6 mr-2" />
+                {hasActiveFilters && (
+                  <span className="bg-blue-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center ml-1">
+                    {selectedTags.length + selectedSkills.length + (searchTerm ? 1 : 0) + (salaryMin ? 1 : 0) + (salaryMax ? 1 : 0)}
+                  </span>
+                )}
+              </button>
             </div>
           </div>
 
@@ -523,6 +538,128 @@ export default function Candidates() {
           />
         )}
       </div>
+
+      {/* Mobile Filter Drawer */}
+      <MobileFilterDrawer
+        isOpen={showMobileFilters}
+        onClose={() => setShowMobileFilters(false)}
+        onApplyFilters={() => {
+          // Filters are already applied via useEffect
+        }}
+        onClearFilters={clearFilters}
+        activeFilterCount={selectedTags.length + selectedSkills.length + (searchTerm ? 1 : 0) + (salaryMin ? 1 : 0) + (salaryMax ? 1 : 0)}
+      >
+        {/* Mobile Filter Content */}
+        <div className="space-y-6">
+          {/* Salary Range */}
+          <div>
+            <h4 className="text-sm font-medium text-gray-900 mb-3 flex items-center">
+              <DollarSign className="h-4 w-4 mr-2" />
+              Salary Range
+            </h4>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Min Salary</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <span className="text-gray-500 text-sm">£</span>
+                  </div>
+                  <input
+                    type="number"
+                    value={salaryMin}
+                    onChange={(e) => setSalaryMin(e.target.value ? Number(e.target.value) : '')}
+                    min="10000"
+                    max="200000"
+                    step="10000"
+                    className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    placeholder="10000"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">Max Salary</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <span className="text-gray-500 text-sm">£</span>
+                  </div>
+                  <input
+                    type="number"
+                    value={salaryMax}
+                    onChange={(e) => setSalaryMax(e.target.value ? Number(e.target.value) : '')}
+                    min="10000"
+                    max="200000"
+                    step="10000"
+                    className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    placeholder="200000"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Skills */}
+          <div>
+            <h4 className="text-sm font-medium text-gray-900 mb-3">Skills</h4>
+            <div className="grid grid-cols-2 gap-2">
+              {['communications', 'campaigns', 'policy', 'publicAffairs'].map(skill => (
+                <button
+                  key={skill}
+                  onClick={() => {
+                    if (selectedSkills.includes(skill)) {
+                      setSelectedSkills(selectedSkills.filter(s => s !== skill));
+                    } else {
+                      setSelectedSkills([...selectedSkills, skill]);
+                    }
+                  }}
+                  className={`p-3 text-left border rounded-lg transition-colors ${
+                    selectedSkills.includes(skill)
+                      ? 'border-blue-500 bg-blue-50 text-blue-700'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium capitalize">{skill}</span>
+                    {selectedSkills.includes(skill) && (
+                      <Check className="h-4 w-4 text-blue-600" />
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Tags */}
+          {allTags.length > 0 && (
+            <div>
+              <h4 className="text-sm font-medium text-gray-900 mb-3 flex items-center">
+                <Tag className="h-4 w-4 mr-2" />
+                Tags
+              </h4>
+              <div className="flex flex-wrap gap-2">
+                {allTags.map(tag => (
+                  <button
+                    key={tag}
+                    onClick={() => {
+                      if (selectedTags.includes(tag)) {
+                        setSelectedTags(selectedTags.filter(t => t !== tag));
+                      } else {
+                        setSelectedTags([...selectedTags, tag]);
+                      }
+                    }}
+                    className={`px-3 py-2 text-sm border rounded-full transition-colors ${
+                      selectedTags.includes(tag)
+                        ? 'border-blue-500 bg-blue-50 text-blue-700'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </MobileFilterDrawer>
 
       {/* Sticky Action Bar for Mobile */}
       <StickyActionBar
