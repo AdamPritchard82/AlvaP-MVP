@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { api } from '../lib/api';
 import { offlineQueue } from '../lib/offlineQueue';
+import { aiTagLearning } from '../lib/aiTagLearning';
+import SmartTagSuggestions from '../components/SmartTagSuggestions';
 
 interface FormData {
   firstName: string;
@@ -293,6 +295,20 @@ const CandidateNew: React.FC = () => {
       const result = await api.createCandidate(formData);
       
       if (result.success) {
+        // Learn from this candidate creation
+        const context = {
+          skills: Object.keys(formData.skills).filter(skill => formData.skills[skill as keyof typeof formData.skills] > 0),
+          title: formData.currentTitle,
+          industry: 'Unknown', // Could be enhanced to detect industry
+          salaryRange: `${formData.salaryMin}-${formData.salaryMax}`,
+          experience: 'Unknown' // Could be enhanced to extract from notes
+        };
+        
+        // Learn from each tag used
+        formData.tags.forEach(tag => {
+          aiTagLearning.learnFromTagUsage(tag, context);
+        });
+        
         toast.success('Candidate created successfully!');
         navigate('/candidates');
       } else {
@@ -689,6 +705,80 @@ const CandidateNew: React.FC = () => {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Enter any additional notes about the candidate"
                 />
+              </div>
+
+              {/* Tags Section with AI Suggestions */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Tags
+                </label>
+                <div className="space-y-4">
+                  {/* Tag Input */}
+                  <div className="flex space-x-2">
+                    <input
+                      type="text"
+                      placeholder="Add a tag..."
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          const input = e.target as HTMLInputElement;
+                          const tag = input.value.trim();
+                          if (tag && !formData.tags.includes(tag)) {
+                            setFormData(prev => ({
+                              ...prev,
+                              tags: [...prev.tags, tag]
+                            }));
+                            input.value = '';
+                          }
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const input = document.querySelector('input[placeholder="Add a tag..."]') as HTMLInputElement;
+                        const tag = input.value.trim();
+                        if (tag && !formData.tags.includes(tag)) {
+                          setFormData(prev => ({
+                            ...prev,
+                            tags: [...prev.tags, tag]
+                          }));
+                          input.value = '';
+                        }
+                      }}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                    >
+                      Add
+                    </button>
+                  </div>
+
+                  {/* AI Tag Suggestions */}
+                  <SmartTagSuggestions
+                    context={{
+                      skills: Object.keys(formData.skills).filter(skill => formData.skills[skill as keyof typeof formData.skills] > 0),
+                      title: formData.currentTitle,
+                      industry: 'Unknown',
+                      salaryRange: `${formData.salaryMin}-${formData.salaryMax}`,
+                      experience: 'Unknown'
+                    }}
+                    existingTags={formData.tags}
+                    onTagSelect={(tag) => {
+                      if (!formData.tags.includes(tag)) {
+                        setFormData(prev => ({
+                          ...prev,
+                          tags: [...prev.tags, tag]
+                        }));
+                      }
+                    }}
+                    onTagRemove={(tag) => {
+                      setFormData(prev => ({
+                        ...prev,
+                        tags: prev.tags.filter(t => t !== tag)
+                      }));
+                    }}
+                  />
+                </div>
               </div>
 
               <div className="flex items-center">
