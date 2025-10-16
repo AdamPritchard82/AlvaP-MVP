@@ -113,7 +113,7 @@ export default function MobileCVUpload({ isOpen, onClose, onUploadSuccess }: Mob
     cameraInputRef.current?.click();
   };
 
-  const handleFileSelect = () => {
+  const handleFileSelectClick = () => {
     fileInputRef.current?.click();
   };
 
@@ -161,7 +161,7 @@ export default function MobileCVUpload({ isOpen, onClose, onUploadSuccess }: Mob
 
                 {/* File Option */}
                 <button
-                  onClick={handleFileSelect}
+                  onClick={handleFileSelectClick}
                   className="flex flex-col items-center p-6 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors"
                 >
                   <File className="h-8 w-8 text-gray-400 mb-2" />
