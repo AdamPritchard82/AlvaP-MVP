@@ -2233,13 +2233,42 @@ app.delete('/api/account/delete', requireAuth, (req, res) => {
 const frontendDistPath = path.join(__dirname, '../frontend/dist');
 if (fs.existsSync(frontendDistPath)) {
   console.log('📁 Serving frontend static files from:', frontendDistPath);
-  // Serve static files with proper MIME types - only specific paths
-  app.use('/assets', express.static(path.join(frontendDistPath, 'assets')));
-  app.use('/icons', express.static(path.join(frontendDistPath, 'icons')));
-  app.use('/manifest.json', express.static(path.join(frontendDistPath, 'manifest.json')));
-  app.use('/sw.js', express.static(path.join(frontendDistPath, 'sw.js')));
-  app.use('/icon.svg', express.static(path.join(frontendDistPath, 'icon.svg')));
-  app.use('/favicon.ico', express.static(path.join(frontendDistPath, 'favicon.ico')));
+  
+  // Serve static files with proper MIME types and cache headers
+  app.use('/assets', (req, res, next) => {
+    res.setHeader('Cache-Control', 'public, max-age=31536000'); // 1 year for assets
+    res.setHeader('Content-Type', 'application/javascript');
+    next();
+  }, express.static(path.join(frontendDistPath, 'assets')));
+  
+  app.use('/icons', (req, res, next) => {
+    res.setHeader('Cache-Control', 'public, max-age=31536000');
+    next();
+  }, express.static(path.join(frontendDistPath, 'icons')));
+  
+  app.use('/manifest.json', (req, res, next) => {
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Content-Type', 'application/json');
+    next();
+  }, express.static(path.join(frontendDistPath, 'manifest.json')));
+  
+  app.use('/sw.js', (req, res, next) => {
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Content-Type', 'application/javascript');
+    next();
+  }, express.static(path.join(frontendDistPath, 'sw.js')));
+  
+  app.use('/icon.svg', (req, res, next) => {
+    res.setHeader('Cache-Control', 'public, max-age=31536000');
+    res.setHeader('Content-Type', 'image/svg+xml');
+    next();
+  }, express.static(path.join(frontendDistPath, 'icon.svg')));
+  
+  app.use('/favicon.ico', (req, res, next) => {
+    res.setHeader('Cache-Control', 'public, max-age=31536000');
+    res.setHeader('Content-Type', 'image/x-icon');
+    next();
+  }, express.static(path.join(frontendDistPath, 'favicon.ico')));
 }
 
 // Serve frontend (only if built assets exist). In Railway, frontend is a separate service.
@@ -2261,6 +2290,10 @@ app.get('*', (req, res) => {
   
   try {
     if (fs.existsSync(frontendIndexPath)) {
+      // Add cache-busting headers for HTML
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
       return res.sendFile(frontendIndexPath);
     }
   } catch {}
