@@ -14,7 +14,8 @@ import {
   BarChart3,
   Settings,
   ChevronDown,
-  Bell
+  Bell,
+  Trash2
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNotifications } from '../contexts/NotificationContext';
@@ -22,6 +23,7 @@ import { api } from '../lib/api';
 import TrialBanner from './TrialBanner';
 import NotificationCenter from './NotificationCenter';
 import WelcomeModal from './WelcomeModal';
+import AccountDeletionModal from './AccountDeletionModal';
 
 // Feature flag for taxonomy editor
 const TAXONOMY_EDITOR_ENABLED = process.env.REACT_APP_TAXONOMY_EDITOR_ENABLED !== 'false';
@@ -45,6 +47,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showAccountDeletion, setShowAccountDeletion] = useState(false);
   const [billingInfo, setBillingInfo] = useState<{
     plan: string;
     trialDays: number | null;
@@ -207,6 +210,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                       <LogOut className="h-4 w-4 mr-3" />
                       Sign Out
                     </button>
+                    <button
+                      onClick={() => {
+                        setUserMenuOpen(false);
+                        setShowAccountDeletion(true);
+                      }}
+                      className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                    >
+                      <Trash2 className="h-4 w-4 mr-3" />
+                      Delete Account
+                    </button>
                   </div>
                 )}
               </div>
@@ -293,6 +306,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                       >
                         <LogOut className="h-4 w-4 mr-3" />
                         Sign Out
+                      </button>
+                      <button
+                        onClick={() => {
+                          setUserMenuOpen(false);
+                          setShowAccountDeletion(true);
+                        }}
+                        className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                      >
+                        <Trash2 className="h-4 w-4 mr-3" />
+                        Delete Account
                       </button>
                     </div>
                   )}
@@ -383,6 +406,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <NotificationCenter
         isOpen={showNotifications}
         onClose={() => setShowNotifications(false)}
+      />
+
+      {/* Account Deletion Modal */}
+      <AccountDeletionModal
+        isOpen={showAccountDeletion}
+        onClose={() => setShowAccountDeletion(false)}
       />
     </div>
   );

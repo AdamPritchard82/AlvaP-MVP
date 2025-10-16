@@ -2177,6 +2177,74 @@ app.post('/api/notifications/test-broadcast', requireAuth, (req, res) => {
   res.json({ success: true });
 });
 
+// Account deletion endpoint
+app.delete('/api/account/delete', requireAuth, (req, res) => {
+  const userId = req.user.userId;
+  const userEmail = req.user.email;
+  
+  console.log(`🗑️ User ${userEmail} (${userId}) requesting account deletion`);
+  
+  const db = getDb();
+  
+  // Delete all user data: candidates, taxonomies, sessions
+  const deleteCandidates = () => {
+    db.query('DELETE FROM candidates WHERE created_by = $1', [userId], (err) => {
+      if (err) {
+        console.error('Error deleting candidates:', err);
+        return res.status(500).json({ success: false, error: 'Database error' });
+      }
+      console.log('✅ Deleted candidates');
+      deleteTaxonomies();
+    });
+  };
+  
+  const deleteTaxonomies = () => {
+    db.query('DELETE FROM taxonomy_roles WHERE taxonomy_id IN (SELECT id FROM taxonomies WHERE created_by = $1)', [userId], (err) => {
+      if (err) {
+        console.error('Error deleting taxonomy roles:', err);
+        return res.status(500).json({ success: false, error: 'Database error' });
+      }
+      console.log('✅ Deleted taxonomy roles');
+      
+      db.query('DELETE FROM taxonomies WHERE created_by = $1', [userId], (err) => {
+        if (err) {
+          console.error('Error deleting taxonomies:', err);
+          return res.status(500).json({ success: false, error: 'Database error' });
+        }
+        console.log('✅ Deleted taxonomies');
+        deleteSessions();
+      });
+    });
+  };
+  
+  const deleteSessions = () => {
+    db.query('DELETE FROM auth_sessions WHERE user_id = $1', [userId], (err) => {
+      if (err) {
+        console.error('Error deleting sessions:', err);
+        return res.status(500).json({ success: false, error: 'Database error' });
+      }
+      console.log('✅ Deleted sessions');
+      
+      // Finally delete the user
+      db.query('DELETE FROM users WHERE id = $1', [userId], (err) => {
+        if (err) {
+          console.error('Error deleting user:', err);
+          return res.status(500).json({ success: false, error: 'Database error' });
+        }
+        
+        console.log(`✅ Account completely deleted for: ${userEmail}`);
+        res.json({ 
+          success: true, 
+          message: 'Account and all data deleted successfully'
+        });
+      });
+    });
+  };
+  
+  // Start the deletion process
+  deleteCandidates();
+});
+
 // Start server after database initialization
 async function startServer() {
   try {

@@ -985,6 +985,13 @@ class ApiClient {
   }> {
     return this.request('/focus/presets');
   }
+
+  // Account management
+  async deleteAccount(): Promise<{ success: boolean; message?: string; error?: string }> {
+    return this.request('/account/delete', {
+      method: 'DELETE'
+    });
+  }
 }
 
 export const api = new ApiClient();
