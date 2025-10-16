@@ -513,6 +513,20 @@ app.get('/api/billing/summary', requireAuth, async (req, res) => {
     const orgId = req.user.orgId || 'default';
     const summary = await pricing.getBillingSummary(orgId);
     
+    // Check for trial ending soon (7 days or less)
+    if (summary.trialDays && summary.trialDays <= 7 && summary.trialDays > 0) {
+      broadcastWs({
+        type: 'TRIAL_ENDING',
+        data: {
+          daysLeft: summary.trialDays,
+          plan: summary.plan,
+          isAdmin: summary.isAdmin
+        },
+        timestamp: Date.now(),
+        id: `trial_ending_${orgId}_${Date.now()}`
+      });
+    }
+    
     res.json({
       success: true,
       data: summary
@@ -1642,6 +1656,23 @@ app.post('/api/candidates/parse-cv', upload.single('file'), async (req, res) => 
     const duration = Date.now() - startTime;
     console.log(`✅ CV parsing completed in ${duration}ms`);
     
+    // Broadcast parsing complete notification
+    const candidateName = parsedData.firstName && parsedData.lastName 
+      ? `${parsedData.firstName} ${parsedData.lastName}`.trim()
+      : originalname;
+    
+    broadcastWs({
+      type: 'PARSING_COMPLETE',
+      data: {
+        candidateName: candidateName,
+        fileName: originalname,
+        duration: duration,
+        parser: 'dotnet'
+      },
+      timestamp: Date.now(),
+      id: `parsing_complete_${Date.now()}`
+    });
+    
     res.json({
       success: true,
       data: parsedData,
@@ -1971,6 +2002,21 @@ app.get('/api/skills/:skill/bands/:band/candidates', (req, res) => {
       };
       
       const candidates = result.rows.map(mapRow);
+      
+      // Broadcast new match notification if there are candidates and it's the first page
+      if (candidates.length > 0 && page === 1) {
+        broadcastWs({
+          type: 'NEW_MATCH',
+          data: {
+            count: candidates.length,
+            skill: skill,
+            band: band
+          },
+          timestamp: Date.now(),
+          id: `new_match_${skill}_${band}_${Date.now()}`
+        });
+      }
+      
       res.json({
         success: true,
         candidates,
@@ -2014,9 +2060,25 @@ app.post('/api/candidates', (req, res) => {
           return res.status(500).json({ error: 'Database error' });
         }
         
+        const candidateId = result.rows[0].id;
+        const candidateName = fullName;
+        
+        // Broadcast candidate created notification
+        broadcastWs({
+          type: 'CANDIDATE_MOVED',
+          data: {
+            candidateId: candidateId,
+            candidateName: candidateName,
+            action: 'created',
+            newStatus: 'New Candidate'
+          },
+          timestamp: Date.now(),
+          id: `candidate_created_${candidateId}`
+        });
+        
         res.json({
           success: true,
-          id: result.rows[0].id,
+          id: candidateId,
           message: 'Candidate created successfully'
         });
       }
