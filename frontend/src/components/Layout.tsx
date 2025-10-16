@@ -321,8 +321,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </main>
       </div>
       
-      {/* Top-right user info and logout */}
-      <div className="fixed top-4 right-4 bg-white rounded-lg shadow-lg border border-gray-200 px-4 py-2 text-sm z-50">
+      {/* Top-center user info and logout */}
+      <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-white rounded-lg shadow-lg border border-gray-200 px-4 py-2 text-sm z-50">
         <div className="flex items-center space-x-4">
           {billingInfo?.isAdmin && (
             <>
