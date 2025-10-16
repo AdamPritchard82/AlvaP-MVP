@@ -128,27 +128,29 @@ const JobsPipeline: React.FC<JobsPipelineProps> = ({ onCreateJob }) => {
 
   return (
     <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
+      {/* Mobile-optimized header */}
+      <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-6 space-y-4 md:space-y-0">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Jobs Pipeline</h1>
-          <p className="text-gray-600">Manage your recruitment pipeline</p>
+          <h1 className="text-xl md:text-2xl font-bold text-gray-900">Jobs Pipeline</h1>
+          <p className="text-sm md:text-base text-gray-600">Manage your recruitment pipeline</p>
         </div>
         <button
           onClick={onCreateJob}
-          className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          className="flex items-center justify-center px-4 py-3 md:py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors w-full md:w-auto touch-manipulation"
         >
           <Plus className="w-4 h-4 mr-2" />
-          New Job
+          <span className="text-sm md:text-base">New Job</span>
         </button>
       </div>
 
       <DragDropContext onDragEnd={handleDragEnd}>
-        <div className="flex space-x-4 overflow-x-auto pb-4">
+        {/* Mobile: Horizontal scrollable lanes */}
+        <div className="flex space-x-3 overflow-x-auto pb-4 scrollbar-hide">
           {statusColumns.map(column => {
             const columnJobs = getJobsByStatus(column.id);
             
             return (
-              <div key={column.id} className="flex-shrink-0 w-80">
+              <div key={column.id} className="flex-shrink-0 w-72 md:w-80">
                 <div className={`rounded-lg border-2 ${column.color} p-4`}>
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="font-semibold text-gray-800">{column.title}</h3>
@@ -173,7 +175,7 @@ const JobsPipeline: React.FC<JobsPipelineProps> = ({ onCreateJob }) => {
                                 ref={provided.innerRef}
                                 {...provided.draggableProps}
                                 {...provided.dragHandleProps}
-                                className={`mb-3 p-4 bg-white rounded-lg shadow-sm border hover:shadow-md transition-all cursor-move ${
+                                className={`mb-3 p-3 md:p-4 bg-white rounded-lg shadow-sm border hover:shadow-md transition-all cursor-move touch-manipulation ${
                                   snapshot.isDragging ? 'shadow-lg rotate-2' : ''
                                 }`}
                                 onClick={() => window.location.href = `/jobs/${job.id}`}
@@ -185,28 +187,28 @@ const JobsPipeline: React.FC<JobsPipelineProps> = ({ onCreateJob }) => {
                                   <Calendar className="w-4 h-4 text-gray-400 flex-shrink-0 ml-2" />
                                 </div>
                                 
-                                <div className="space-y-2 text-xs text-gray-600">
+                                <div className="space-y-1.5 md:space-y-2 text-xs text-gray-600">
                                   <div className="flex items-center">
-                                    <Building className="w-3 h-3 mr-1" />
-                                    <span>{job.clientPublicName || job.company}</span>
+                                    <Building className="w-3 h-3 mr-1 flex-shrink-0" />
+                                    <span className="truncate">{job.clientPublicName || job.company}</span>
                                   </div>
                                   
                                   <div className="flex items-center">
-                                    <DollarSign className="w-3 h-3 mr-1" />
-                                    <span>{formatSalary(job.salaryMin, job.salaryMax)}</span>
+                                    <DollarSign className="w-3 h-3 mr-1 flex-shrink-0" />
+                                    <span className="truncate">{formatSalary(job.salaryMin, job.salaryMax)}</span>
                                   </div>
                                   
                                   {job.location && (
                                     <div className="flex items-center">
-                                      <Briefcase className="w-3 h-3 mr-1" />
-                                      <span>{job.location}</span>
+                                      <Briefcase className="w-3 h-3 mr-1 flex-shrink-0" />
+                                      <span className="truncate">{job.location}</span>
                                     </div>
                                   )}
                                   
                                   {getSkillsText(job.requiredSkills) && (
-                                    <div className="flex items-center">
-                                      <Tag className="w-3 h-3 mr-1" />
-                                      <span className="truncate">{getSkillsText(job.requiredSkills)}</span>
+                                    <div className="flex items-start">
+                                      <Tag className="w-3 h-3 mr-1 flex-shrink-0 mt-0.5" />
+                                      <span className="truncate text-xs leading-tight">{getSkillsText(job.requiredSkills)}</span>
                                     </div>
                                   )}
                                 </div>
