@@ -768,6 +768,33 @@ app.get('/api/matches', requireAuth, (req, res) => {
   });
 });
 
+// Force logout endpoint (for development/testing)
+app.post('/api/force-logout', (req, res) => {
+  const { email } = req.body;
+  
+  if (!email) {
+    return res.status(400).json({ success: false, error: 'Email required' });
+  }
+  
+  console.log(`🔄 Force logging out: ${email}`);
+  
+  const db = getDb();
+  
+  // Delete all sessions for this user
+  db.query('DELETE FROM auth_sessions WHERE user_id IN (SELECT id FROM users WHERE email = $1)', [email], (err) => {
+    if (err) {
+      console.error('Error deleting sessions:', err);
+      return res.status(500).json({ success: false, error: 'Database error' });
+    }
+    
+    console.log(`✅ Force logout complete for: ${email}`);
+    res.json({ 
+      success: true, 
+      message: 'All sessions cleared. Please refresh and login again.' 
+    });
+  });
+});
+
 // Candidate soft delete endpoints
 app.delete('/api/candidates/:id', requireAuth, async (req, res) => {
   try {
