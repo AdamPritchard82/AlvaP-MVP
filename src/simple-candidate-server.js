@@ -2229,6 +2229,13 @@ app.delete('/api/account/delete', requireAuth, (req, res) => {
   deleteCandidates();
 });
 
+// Serve frontend static assets
+const frontendDistPath = path.join(__dirname, '../frontend/dist');
+if (fs.existsSync(frontendDistPath)) {
+  console.log('📁 Serving frontend static files from:', frontendDistPath);
+  app.use(express.static(frontendDistPath));
+}
+
 // Serve frontend (only if built assets exist). In Railway, frontend is a separate service.
 // This must be LAST to avoid catching API routes
 const frontendIndexPath = path.join(__dirname, '../frontend/dist/index.html');
