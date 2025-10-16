@@ -40,10 +40,9 @@ export function TaxonomyGuard({ children }: TaxonomyGuardProps) {
       }
     } catch (error) {
       console.error('Error checking focus status:', error);
-      // If there's an error, don't block access - just assume no focus
+      // If there's an error, assume no focus and show wizard
       setHasActiveTaxonomy(false);
-      // Don't show wizard on API errors to avoid blocking access
-      // setShowWizard(true);
+      setShowWizard(true);
     } finally {
       setLoading(false);
     }

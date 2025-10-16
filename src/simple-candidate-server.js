@@ -694,20 +694,63 @@ app.post('/api/reset-account', (req, res) => {
     const userId = userResult.rows[0].id;
     console.log(`Found user ID: ${userId}`);
     
-    // Instead of deleting, just change the email to free up the original email
-    const newEmail = `${email}.old.${Date.now()}`;
-    db.query('UPDATE users SET email = $1 WHERE id = $2', [newEmail, userId], (err) => {
-      if (err) {
-        console.error('Error updating user email:', err);
-        return res.status(500).json({ success: false, error: 'Failed to reset account' });
-      }
-      
-      console.log(`✅ Account email changed from ${email} to ${newEmail}`);
-      res.json({ 
-        success: true, 
-        message: 'Account reset successfully. You can now create a fresh account with the original email.' 
+    // Delete all user data: candidates, taxonomies, sessions
+    const deleteCandidates = () => {
+      db.query('DELETE FROM candidates WHERE created_by = $1', [userId], (err) => {
+        if (err) {
+          console.error('Error deleting candidates:', err);
+          return res.status(500).json({ success: false, error: 'Database error' });
+        }
+        console.log('✅ Deleted candidates');
+        deleteTaxonomies();
       });
-    });
+    };
+    
+    const deleteTaxonomies = () => {
+      db.query('DELETE FROM taxonomy_roles WHERE taxonomy_id IN (SELECT id FROM taxonomies WHERE created_by = $1)', [userId], (err) => {
+        if (err) {
+          console.error('Error deleting taxonomy roles:', err);
+          return res.status(500).json({ success: false, error: 'Database error' });
+        }
+        console.log('✅ Deleted taxonomy roles');
+        
+        db.query('DELETE FROM taxonomies WHERE created_by = $1', [userId], (err) => {
+          if (err) {
+            console.error('Error deleting taxonomies:', err);
+            return res.status(500).json({ success: false, error: 'Database error' });
+          }
+          console.log('✅ Deleted taxonomies');
+          deleteSessions();
+        });
+      });
+    };
+    
+    const deleteSessions = () => {
+      db.query('DELETE FROM auth_sessions WHERE user_id = $1', [userId], (err) => {
+        if (err) {
+          console.error('Error deleting sessions:', err);
+          return res.status(500).json({ success: false, error: 'Database error' });
+        }
+        console.log('✅ Deleted sessions');
+        
+        // Finally delete the user
+        db.query('DELETE FROM users WHERE id = $1', [userId], (err) => {
+          if (err) {
+            console.error('Error deleting user:', err);
+            return res.status(500).json({ success: false, error: 'Database error' });
+          }
+          
+          console.log(`✅ Account completely reset for: ${email}`);
+          res.json({ 
+            success: true, 
+            message: 'Account completely reset. All data deleted. You can now register with the original email.'
+          });
+        });
+      });
+    };
+    
+    // Start the deletion process
+    deleteCandidates();
   });
 });
 
