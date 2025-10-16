@@ -2229,10 +2229,13 @@ app.delete('/api/account/delete', requireAuth, (req, res) => {
   deleteCandidates();
 });
 
-// Serve frontend static assets
+// Serve frontend static assets (must be before wildcard route)
 const frontendDistPath = path.join(__dirname, '../frontend/dist');
 if (fs.existsSync(frontendDistPath)) {
   console.log('📁 Serving frontend static files from:', frontendDistPath);
+  // Serve static files with proper MIME types
+  app.use('/assets', express.static(path.join(frontendDistPath, 'assets')));
+  app.use('/icons', express.static(path.join(frontendDistPath, 'icons')));
   app.use(express.static(frontendDistPath));
 }
 
@@ -2240,7 +2243,19 @@ if (fs.existsSync(frontendDistPath)) {
 // This must be LAST to avoid catching API routes
 const frontendIndexPath = path.join(__dirname, '../frontend/dist/index.html');
 let loggedMissingFrontend = false;
+
+// Only catch non-API, non-asset routes
 app.get('*', (req, res) => {
+  // Skip API routes
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({ error: 'API endpoint not found' });
+  }
+  
+  // Skip asset routes
+  if (req.path.startsWith('/assets/') || req.path.startsWith('/icons/') || req.path.endsWith('.js') || req.path.endsWith('.css') || req.path.endsWith('.png') || req.path.endsWith('.svg')) {
+    return res.status(404).json({ error: 'Asset not found' });
+  }
+  
   try {
     if (fs.existsSync(frontendIndexPath)) {
       return res.sendFile(frontendIndexPath);
